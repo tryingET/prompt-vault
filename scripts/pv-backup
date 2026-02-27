@@ -1,0 +1,216 @@
+#!/usr/bin/env bash
+# pv-backup - Backup and restore the vault
+# Usage: pv-backup <command> [args]
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+VAULT_DIR="${VAULT_DIR:-$SCRIPT_DIR/../prompt-vault-db}"
+BACKUP_DIR="${BACKUP_DIR:-$SCRIPT_DIR/../backups}"
+
+cmd="${1:-help}"
+shift || true
+
+case "$cmd" in
+    create)
+        mkdir -p "$BACKUP_DIR"
+        
+        TIMESTAMP=$(date +%Y%m%d-%H%M%S)
+        BACKUP_FILE="$BACKUP_DIR/prompt-vault-$TIMESTAMP.tar.gz"
+        
+        echo "Creating backup..."
+        
+        # Export data
+        cd "$VAULT_DIR"
+        
+        # Create temp directory for backup contents
+        TEMP_DIR=$(mktemp -d)
+        
+        # Export all tables as SQL
+        mkdir -p "$TEMP_DIR/sql"
+        for table in prompt_templates skills skill_assets executions feedback collections changelog; do
+            dolt sql -q "SELECT * FROM $table" -r csv > "$TEMP_DIR/sql/$table.csv" 2>/dev/null || true
+        done
+        
+        # Export schema
+        dolt schema show > "$TEMP_DIR/schema.sql" 2>/dev/null || true
+        
+        # Copy dolt data
+        cp -r .dolt "$TEMP_DIR/" 2>/dev/null || true
+        
+        # Create archive
+        tar -czf "$BACKUP_FILE" -C "$TEMP_DIR" .
+        rm -rf "$TEMP_DIR"
+        
+        # Calculate size
+        SIZE=$(du -h "$BACKUP_FILE" | cut -f1)
+        
+        echo "✓ Backup created: $BACKUP_FILE ($SIZE)"
+        ;;
+        
+    list)
+        echo "=== Available Backups ==="
+        if [ -d "$BACKUP_DIR" ]; then
+            ls -lth "$BACKUP_DIR"/*.tar.gz 2>/dev/null || echo "No backups found"
+        else
+            echo "No backup directory"
+        fi
+        ;;
+        
+    restore)
+        backup_file="${1:-}"
+        
+        if [ -z "$backup_file" ]; then
+            echo "Available backups:"
+            ls -1 "$BACKUP_DIR"/*.tar.gz 2>/dev/null | xargs -n1 basename
+            echo ""
+            echo "Usage: pv-backup restore <backup-file>"
+            exit 1
+        fi
+        
+        # Resolve path
+        if [[ "$backup_file" != /* ]]; then
+            backup_file="$BACKUP_DIR/$backup_file"
+        fi
+        
+        if [ ! -f "$backup_file" ]; then
+            echo "Error: Backup not found: $backup_file"
+            exit 1
+        fi
+        
+        echo "Warning: This will replace all data in the vault!"
+        read -p "Continue? (yes/no): " confirm
+        
+        if [ "$confirm" != "yes" ]; then
+            echo "Aborted"
+            exit 0
+        fi
+        
+        echo "Restoring from: $backup_file"
+        
+        # Create temp directory
+        TEMP_DIR=$(mktemp -d)
+        tar -xzf "$backup_file" -C "$TEMP_DIR"
+        
+        # Restore to vault
+        cd "$VAULT_DIR"
+        
+        # Backup current state first
+        "$SCRIPT_DIR/pv-backup" create
+        
+        # Clear and restore
+        rm -rf .dolt
+        cp -r "$TEMP_DIR/.dolt" .
+        
+        rm -rf "$TEMP_DIR"
+        
+        echo "✓ Restored from backup"
+        echo "Run 'pv import' if you need to sync with pi format"
+        ;;
+        
+    schedule)
+        # Create cron job for daily backups
+        echo "Setting up daily backup at 2 AM..."
+        
+        CRON_JOB="0 2 * * * $SCRIPT_DIR/pv-backup create >> $BACKUP_DIR/backup.log 2>&1"
+        
+        # Check if already exists
+        if crontab -l 2>/dev/null | grep -q "pv-backup create"; then
+            echo "Backup schedule already exists"
+        else
+            (crontab -l 2>/dev/null; echo "$CRON_JOB") | crontab -
+            echo "✓ Daily backup scheduled"
+        fi
+        ;;
+        
+    unschedule)
+        echo "Removing backup schedule..."
+        crontab -l 2>/dev/null | grep -v "pv-backup create" | crontab -
+        echo "✓ Backup schedule removed"
+        ;;
+        
+    prune)
+        days="${1:-30}"
+        echo "Removing backups older than $days days..."
+        
+        count=0
+        if [ -d "$BACKUP_DIR" ]; then
+            for file in "$BACKUP_DIR"/*.tar.gz; do
+                [ -f "$file" ] || continue
+                if find "$file" -mtime +$days | grep -q .; then
+                    rm "$file"
+                    ((count++)) || true
+                    echo "  Removed: $(basename $file)"
+                fi
+            done
+        fi
+        
+        echo "✓ Removed $count old backups"
+        ;;
+        
+    verify)
+        backup_file="${1:-}"
+        
+        if [ -z "$backup_file" ]; then
+            echo "Verifying all backups..."
+            for file in "$BACKUP_DIR"/*.tar.gz; do
+                [ -f "$file" ] || continue
+                echo -n "  $(basename $file): "
+                if tar -tzf "$file" > /dev/null 2>&1; then
+                    echo -e "\033[32mOK\033[0m"
+                else
+                    echo -e "\033[31mCORRUPT\033[0m"
+                fi
+            done
+        else
+            if [[ "$backup_file" != /* ]]; then
+                backup_file="$BACKUP_DIR/$backup_file"
+            fi
+            
+            echo "Verifying: $backup_file"
+            if tar -tzf "$backup_file" > /dev/null 2>&1; then
+                echo "✓ Backup is valid"
+            else
+                echo "✗ Backup is corrupt"
+                exit 1
+            fi
+        fi
+        ;;
+        
+    cloud-sync)
+        # Sync backups to cloud storage (requires rclone or similar)
+        echo "Cloud sync requires rclone. Checking..."
+        
+        if ! command -v rclone &> /dev/null; then
+            echo "rclone not found. Install with: curl https://rclone.org/install.sh | sudo bash"
+            exit 1
+        fi
+        
+        remote="${1:-prompt-vault-backup}"
+        
+        echo "Syncing to remote: $remote"
+        rclone sync "$BACKUP_DIR" "$remote:" -P
+        echo "✓ Synced to cloud"
+        ;;
+        
+    help|*)
+        cat << 'EOF'
+Usage: pv-backup <command> [args]
+
+Commands:
+  create              Create a new backup
+  list                List available backups
+  restore <file>      Restore from backup
+  schedule            Set up daily backups (cron)
+  unschedule          Remove backup schedule
+  prune [days]        Remove backups older than N days (default: 30)
+  verify [file]       Verify backup integrity
+  cloud-sync [remote] Sync to cloud via rclone
+
+Examples:
+  pv-backup create              # Create backup
+  pv-backup list                # List backups
+  pv-backup restore 2024-01-15  # Restore specific backup
+  pv-backup schedule            # Enable daily backups
+EOF
+        ;;
+esac

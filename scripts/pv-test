@@ -1,0 +1,244 @@
+#!/usr/bin/env bash
+# pv-test - Run tests on the vault
+# Usage: pv-test [test-name]
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+VAULT_DIR="${VAULT_DIR:-$SCRIPT_DIR/../prompt-vault-db}"
+
+# Colors
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+CYAN='\033[0;36m'
+NC='\033[0m'
+
+passed=0
+failed=0
+skipped=0
+
+pass() { echo -e "${GREEN}✓${NC} $1"; ((passed++)) || true; }
+fail() { echo -e "${RED}✗${NC} $1"; ((failed++)) || true; }
+skip() { echo -e "${YELLOW}○${NC} $1"; ((skipped++)) || true; }
+
+test_vault_exists() {
+    echo -e "\n${CYAN}Test: Vault exists${NC}"
+    
+    if [ -d "$VAULT_DIR/.dolt" ]; then
+        pass "Vault directory exists"
+    else
+        fail "Vault directory missing - run: pv init"
+    fi
+}
+
+test_database_schema() {
+    echo -e "\n${CYAN}Test: Database schema${NC}"
+    
+    cd "$VAULT_DIR"
+    
+    required_tables="prompt_templates skills executions feedback collections"
+    
+    for table in $required_tables; do
+        if dolt sql -q "SELECT 1 FROM $table LIMIT 1" 2>/dev/null; then
+            pass "Table '$table' exists"
+        else
+            fail "Table '$table' missing"
+        fi
+    done
+}
+
+test_templates() {
+    echo -e "\n${CYAN}Test: Templates${NC}"
+    
+    cd "$VAULT_DIR"
+    
+    count=$(dolt sql -r csv -q "SELECT COUNT(*) FROM prompt_templates WHERE status = 'active'" | tail -1)
+    
+    if [ "$count" -gt 0 ]; then
+        pass "$count active templates found"
+        
+        # Check each template has required fields
+        dolt sql -r csv -q "SELECT name FROM prompt_templates WHERE status = 'active'" | tail -n +2 | while read name; do
+            [ -z "$name" ] && continue
+            
+            desc=$(dolt sql -r csv -q "SELECT CHAR_LENGTH(description) FROM prompt_templates WHERE name = '$name'" | tail -1)
+            content=$(dolt sql -r csv -q "SELECT CHAR_LENGTH(content) FROM prompt_templates WHERE name = '$name'" | tail -1)
+            
+            if [ "$desc" -gt 0 ] && [ "$content" -gt 0 ]; then
+                pass "Template '$name' has description and content"
+            else
+                fail "Template '$name' missing description or content"
+            fi
+        done
+    else
+        skip "No templates found - run: pv import"
+    fi
+}
+
+test_skills() {
+    echo -e "\n${CYAN}Test: Skills${NC}"
+    
+    cd "$VAULT_DIR"
+    
+    count=$(dolt sql -r csv -q "SELECT COUNT(*) FROM skills WHERE status = 'active'" | tail -1)
+    
+    if [ "$count" -gt 0 ]; then
+        pass "$count active skills found"
+    else
+        skip "No skills found - run: pv import"
+    fi
+}
+
+test_collections() {
+    echo -e "\n${CYAN}Test: Collections${NC}"
+    
+    cd "$VAULT_DIR"
+    
+    count=$(dolt sql -r csv -q "SELECT COUNT(*) FROM collections" | tail -1)
+    
+    if [ "$count" -gt 0 ]; then
+        pass "$count collections found"
+    else
+        skip "No collections - create with: pv collection create"
+    fi
+}
+
+test_cli_commands() {
+    echo -e "\n${CYAN}Test: CLI commands${NC}"
+    
+    cd "$SCRIPT_DIR"
+    
+    commands=(
+        "templates"
+        "skills"
+        "stats"
+        "search test"
+        "lint --help"
+        "backup list"
+        "analytics overview"
+        "quality low 100"
+    )
+    
+    for cmd in "${commands[@]}"; do
+        if ./pv $cmd >/dev/null 2>&1; then
+            pass "pv $cmd"
+        else
+            fail "pv $cmd"
+        fi
+    done
+}
+
+ test_import_export() {
+    echo -e "\n${CYAN}Test: Import/Export${NC}"
+    
+    cd "$SCRIPT_DIR"
+    
+    # Test export
+    if ./pv-export-formats jsonl /tmp/test-export.jsonl >/dev/null 2>&1; then
+        if [ -f /tmp/test-export.jsonl ] && [ -s /tmp/test-export.jsonl ]; then
+            pass "Export to JSONL works"
+            rm -f /tmp/test-export.jsonl
+        else
+            fail "Export file empty or missing"
+        fi
+    else
+        fail "Export to JSONL failed"
+    fi
+}
+
+ test_version_control() {
+    echo -e "\n${CYAN}Test: Version control${NC}"
+    
+    cd "$VAULT_DIR"
+    
+    # Check branches exist
+    branches=$(dolt branch -a | wc -l)
+    if [ "$branches" -ge 1 ]; then
+        pass "$branches branches exist"
+    else
+        fail "No branches found"
+    fi
+    
+    # Check can view log
+    if dolt log -n 1 >/dev/null 2>&1; then
+        pass "Can view commit log"
+    else
+        fail "Cannot view commit log"
+    fi
+}
+
+test_backups() {
+    echo -e "\n${CYAN}Test: Backups${NC}"
+    
+    backup_dir="$SCRIPT_DIR/../backups"
+    
+    if [ -d "$backup_dir" ]; then
+        count=$(ls -1 "$backup_dir"/*.tar.gz 2>/dev/null | wc -l)
+        if [ "$count" -gt 0 ]; then
+            pass "$count backups exist"
+        else
+            skip "No backups - run: pv backup create"
+        fi
+    else
+        skip "No backup directory"
+    fi
+}
+
+test_script_permissions() {
+    echo -e "\n${CYAN}Test: Script permissions${NC}"
+    
+    cd "$SCRIPT_DIR"
+    
+    for script in pv-*.bash pv pv-*; do
+        if [ -f "$script" ]; then
+            if [ -x "$script" ]; then
+                pass "$script is executable"
+            else
+                fail "$script is not executable"
+            fi
+        fi
+    done
+}
+
+# Run tests
+echo "╔════════════════════════════════════════════════════════════════╗"
+echo "║                    PROMPT VAULT TESTS                          ║"
+echo "╚════════════════════════════════════════════════════════════════╝"
+
+test="${1:-all}"
+
+case "$test" in
+    all)
+        test_vault_exists
+        test_database_schema
+        test_templates
+        test_skills
+        test_collections
+        test_cli_commands
+        test_import_export
+        test_version_control
+        test_backups
+        test_script_permissions
+        ;;
+    vault) test_vault_exists ;;
+    schema) test_database_schema ;;
+    templates) test_templates ;;
+    skills) test_skills ;;
+    cli) test_cli_commands ;;
+    export) test_import_export ;;
+    vc) test_version_control ;;
+    *)
+        echo "Unknown test: $test"
+        echo "Available: all, vault, schema, templates, skills, cli, export, vc"
+        exit 1
+        ;;
+esac
+
+# Summary
+echo ""
+echo "════════════════════════════════════════════════════════════════"
+echo -e "Summary: ${GREEN}$passed passed${NC}, ${RED}$failed failed${NC}, ${YELLOW}$skipped skipped${NC}"
+echo "════════════════════════════════════════════════════════════════"
+
+[ $failed -gt 0 ] && exit 1
+exit 0

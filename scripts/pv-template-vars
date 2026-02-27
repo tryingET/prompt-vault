@@ -1,0 +1,163 @@
+#!/usr/bin/env bash
+# pv-template-vars - Extract and analyze template variables
+# Usage: pv-template-vars <command> [args]
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+VAULT_DIR="${VAULT_DIR:-$SCRIPT_DIR/../prompt-vault-db}"
+
+cd "$VAULT_DIR"
+
+cmd="${1:-list}"
+shift || true
+
+extract_vars() {
+    local content="$1"
+    echo "$content" | grep -oE '\$[0-9]+|\$@|\$ARGUMENTS|\${@:[0-9]+(:[0-9]+)?}' | sort -u || true
+}
+
+case "$cmd" in
+    list)
+        name="${1:-}"
+        if [ -z "$name" ]; then
+            echo "=== All Template Variables ==="
+            dolt sql -r csv -q "SELECT name FROM prompt_templates WHERE status = 'active' ORDER BY name" | tail -n +2 | while read tname; do
+                [ -z "$tname" ] && continue
+                # Use tabular format to avoid CSV issues with multi-line content
+                content=$(dolt sql -q "SELECT content FROM prompt_templates WHERE name = '$tname' ORDER BY version DESC LIMIT 1" 2>/dev/null)
+                vars=$(extract_vars "$content")
+                if [ -n "$vars" ]; then
+                    echo "$tname: $(echo $vars | tr '\n' ' ')"
+                fi
+            done
+        else
+            content=$(dolt sql -q "SELECT content FROM prompt_templates WHERE name = '$name' AND status = 'active' ORDER BY version DESC LIMIT 1" 2>/dev/null)
+            echo "Variables in '$name':"
+            extract_vars "$content"
+        fi
+        ;;
+    
+    validate)
+        name="${1:-}"
+        if [ -z "$name" ]; then
+            echo "Validating all templates..."
+            dolt sql -r csv -q "SELECT name FROM prompt_templates WHERE status = 'active'" | tail -n +2 | while read tname; do
+                [ -z "$tname" ] && continue
+                content=$(dolt sql -r csv -q "SELECT content FROM prompt_templates WHERE name = '$tname' LIMIT 1" | tail -1)
+                
+                # Check for common issues
+                issues=""
+                
+                # Unescaped $ (not a variable)
+                if echo "$content" | grep -qE '\$[^0-9@{ARGUMENTS}]'; then
+                    issues="$issues UNESCAPED_DOLLAR"
+                fi
+                
+                # Gap in positional args (has $1 and $3 but not $2)
+                positions=$(echo "$content" | grep -oE '\$[0-9]+' | grep -oE '[0-9]+' | sort -n | uniq)
+                max=$(echo "$positions" | tail -1)
+                for i in $(seq 1 "$max"); do
+                    if ! echo "$positions" | grep -q "^$i$"; then
+                        issues="$issues MISSING_ARG$i"
+                    fi
+                done
+                
+                if [ -n "$issues" ]; then
+                    echo "⚠ $tname:$issues"
+                else
+                    echo "✓ $tname"
+                fi
+            done
+        else
+            content=$(dolt sql -r csv -q "SELECT content FROM prompt_templates WHERE name = '$name' AND status = 'active' LIMIT 1" | tail -1)
+            echo "Variables:"
+            extract_vars "$content"
+            echo ""
+            echo "Usage example:"
+            echo "  /$name arg1 arg2 ..."
+        fi
+        ;;
+    
+    document)
+        name="${1:-}"
+        [ -z "$name" ] && { echo "Usage: pv-template-vars document <name>" >&2; exit 1; }
+        
+        content=$(dolt sql -r csv -q "SELECT content FROM prompt_templates WHERE name = '$name' AND status = 'active' LIMIT 1" | tail -1)
+        desc=$(dolt sql -r csv -q "SELECT description FROM prompt_templates WHERE name = '$name' LIMIT 1" | tail -1)
+        vars=$(extract_vars "$content")
+        
+        echo "## $name"
+        echo ""
+        echo "$desc"
+        echo ""
+        echo "### Arguments"
+        echo ""
+        
+        # Document each variable
+        for var in $vars; do
+            case "$var" in
+                '$@'|'$ARGUMENTS')
+                    echo "- \`$var\` - All arguments joined"
+                    ;;
+                '${@:'*)
+                    echo "- \`$var\` - Argument slice"
+                    ;;
+                *)
+                    num=$(echo "$var" | tr -d '$')
+                    echo "- \`$var\` - Positional argument $num"
+                    ;;
+            esac
+        done
+        
+        echo ""
+        echo "### Example"
+        echo ""
+        echo "\`\`\`"
+        echo "/$name <args>"
+        echo "\`\`\`"
+        ;;
+    
+    usage)
+        # Show usage patterns
+        name="${1:-}"
+        [ -z "$name" ] && { echo "Usage: pv-template-vars usage <name>" >&2; exit 1; }
+        
+        content=$(dolt sql -r csv -q "SELECT content FROM prompt_templates WHERE name = '$name' AND status = 'active' LIMIT 1" | tail -1)
+        vars=$(extract_vars "$content")
+        
+        echo "/$name"
+        
+        # Build usage string
+        for var in $vars; do
+            case "$var" in
+                '$@'|'$ARGUMENTS')
+                    echo "  $name <args...>"
+                    ;;
+                '${@:'*)
+                    echo "  $name <arg1> [arg2] ..."
+                    ;;
+                *)
+                    echo "  $name ${var}"
+                    ;;
+            esac
+        done | head -5
+        ;;
+    
+    help|*)
+        cat << 'EOF'
+Usage: pv-template-vars <command> [args]
+
+Commands:
+  list [name]        List variables in template(s)
+  validate [name]    Validate variable patterns
+  document <name>    Generate variable documentation
+  usage <name>       Show usage patterns
+
+Examples:
+  pv-template-vars list              # All templates
+  pv-template-vars list preflight    # Specific template
+  pv-template-vars validate
+  pv-template-vars document review
+EOF
+        ;;
+esac

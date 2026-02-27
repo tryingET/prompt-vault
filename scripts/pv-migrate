@@ -1,0 +1,139 @@
+#!/usr/bin/env bash
+# pv-migrate - Run database migrations
+# Usage: pv-migrate [up|down|status|create]
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+VAULT_DIR="${VAULT_DIR:-$SCRIPT_DIR/../prompt-vault-db}"
+MIGRATIONS_DIR="$SCRIPT_DIR/../migrations"
+
+cd "$VAULT_DIR"
+
+cmd="${1:-status}"
+
+case "$cmd" in
+    status)
+        echo "=== Migration Status ==="
+        
+        # Check if migrations table exists
+        EXISTS=$(dolt sql -r csv -q "SHOW TABLES LIKE 'schema_migrations'" 2>/dev/null | tail -1)
+        
+        if [ "$EXISTS" != "schema_migrations" ]; then
+            echo "No migrations run yet"
+            echo ""
+            echo "Available migrations:"
+            ls -1 "$MIGRATIONS_DIR"/*.sql 2>/dev/null | xargs -n1 basename || echo "  (none)"
+            exit 0
+        fi
+        
+        dolt sql -q "SELECT * FROM schema_migrations ORDER BY id" -r tabular
+        ;;
+
+    up)
+        # Create migrations table if needed
+        dolt sql -q "
+            CREATE TABLE IF NOT EXISTS schema_migrations (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                filename VARCHAR(255) NOT NULL UNIQUE,
+                applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                checksum VARCHAR(64)
+            )
+        " 2>/dev/null || true
+        
+        echo "=== Running migrations ==="
+        
+        for migration in $(ls -1 "$MIGRATIONS_DIR"/*.sql 2>/dev/null | sort); do
+            filename=$(basename "$migration")
+            
+            # Check if already applied
+            APPLIED=$(dolt sql -r csv -q "
+                SELECT COUNT(*) FROM schema_migrations WHERE filename = '$filename'
+            " | tail -1)
+            
+            if [ "$APPLIED" != "0" ]; then
+                echo "  ✓ $filename (already applied)"
+                continue
+            fi
+            
+            echo "  Running: $filename"
+            
+            # Calculate checksum
+            CHECKSUM=$(sha256sum "$migration" | cut -d' ' -f1)
+            
+            # Run migration
+            if dolt sql < "$migration" 2>&1; then
+                dolt sql -q "
+                    INSERT INTO schema_migrations (filename, checksum)
+                    VALUES ('$filename', '$CHECKSUM')
+                "
+                dolt add .
+                dolt commit -m "Migration: $filename"
+                echo "  ✓ Applied $filename"
+            else
+                echo "  ✗ Failed: $filename"
+                exit 1
+            fi
+        done
+        
+        echo ""
+        echo "Migrations complete"
+        ;;
+
+    create)
+        name="${1:-}"
+        [ -z "$name" ] && { echo "Usage: pv-migrate create <name>" >&2; exit 1; }
+        
+        # Get next number
+        NEXT=$(ls -1 "$MIGRATIONS_DIR"/*.sql 2>/dev/null | wc -l)
+        NEXT=$((NEXT + 1))
+        NUM=$(printf "%03d" $NEXT)
+        
+        filename="${NUM}-${name}.sql"
+        filepath="$MIGRATIONS_DIR/$filename"
+        
+        cat > "$filepath" << 'EOF'
+-- Migration: <description>
+-- Run: dolt sql < migrations/<filename>
+
+-- Add your SQL here
+
+
+-- Commit migration
+SELECT 'Migration complete' AS status;
+EOF
+        
+        echo "Created: $filepath"
+        ${EDITOR:-nano} "$filepath"
+        ;;
+
+    rollback)
+        # Rollback last migration
+        LAST=$(dolt sql -r csv -q "
+            SELECT filename FROM schema_migrations ORDER BY id DESC LIMIT 1
+        " | tail -1)
+        
+        if [ -z "$LAST" ]; then
+            echo "No migrations to rollback"
+            exit 0
+        fi
+        
+        echo "Rolling back: $LAST"
+        echo "This requires manual SQL to reverse the changes."
+        echo "After reversing, run:"
+        echo "  dolt sql -q \"DELETE FROM schema_migrations WHERE filename = '$LAST'\""
+        echo "  dolt commit -m \"Rollback: $LAST\""
+        ;;
+
+    *)
+        cat >&2 << 'EOF'
+Usage: pv-migrate <command>
+
+Commands:
+  status    Show migration status
+  up        Run all pending migrations
+  create    Create new migration file
+  rollback  Rollback last migration (manual)
+EOF
+        exit 1
+        ;;
+esac

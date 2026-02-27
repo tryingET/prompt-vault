@@ -1,0 +1,161 @@
+#!/usr/bin/env bash
+# pv-diff - Enhanced diff visualization
+# Usage: pv-diff <from> <to> [options]
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+VAULT_DIR="${VAULT_DIR:-$SCRIPT_DIR/../prompt-vault-db}"
+
+cd "$VAULT_DIR"
+
+from="${1:-HEAD~1}"
+to="${2:-HEAD}"
+type="${3:-all}"
+
+# Colors
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+CYAN='\033[0;36m'
+NC='\033[0m'
+
+show_table_diff() {
+    local table="$1"
+    echo -e "${CYAN}=== $table ===${NC}"
+    
+    # Get diff stats
+    dolt diff "$from" "$to" "$table" 2>/dev/null | head -50
+    echo ""
+}
+
+show_template_diff() {
+    local name="$1"
+    local from_version="$2"
+    local to_version="$3"
+    
+    echo -e "${CYAN}Template: $name${NC}"
+    echo ""
+    
+    # Get content at each version
+    from_content=$(dolt sql -r csv -q "SELECT content FROM prompt_templates WHERE name = '$name' AND version = $from_version" 2>/dev/null | tail -1 || echo "")
+    to_content=$(dolt sql -r csv -q "SELECT content FROM prompt_templates WHERE name = '$name' AND version = $to_version" 2>/dev/null | tail -1 || echo "")
+    
+    if [ -n "$from_content" ] && [ -n "$to_content" ]; then
+        # Use diff to show changes
+        diff -u <(echo "$from_content") <(echo "$to_content") 2>/dev/null | head -100 || echo "(no changes)"
+    fi
+    echo ""
+}
+
+case "$type" in
+    all)
+        echo -e "${CYAN}Prompt Vault Diff: $from..$to${NC}"
+        echo ""
+        
+        # Show commit info
+        echo "From commit:"
+        dolt log -n 1 "$from" 2>/dev/null | head -6
+        echo ""
+        echo "To commit:"
+        dolt log -n 1 "$to" 2>/dev/null | head -6
+        echo ""
+        
+        # Show table diffs
+        for table in prompt_templates skills collections executions feedback; do
+            if dolt diff "$from" "$to" "$table" 2>/dev/null | grep -q .; then
+                show_table_diff "$table"
+            fi
+        done
+        ;;
+    
+    templates)
+        show_table_diff "prompt_templates"
+        ;;
+    
+    skills)
+        show_table_diff "skills"
+        ;;
+    
+    template)
+        name="${4:-}"
+        [ -z "$name" ] && { echo "Usage: pv-diff <from> <to> template <name>" >&2; exit 1; }
+        
+        # Find versions at each commit
+        from_ver=$(dolt sql -r csv -q "SELECT MAX(version) FROM prompt_templates AS OF '$from' WHERE name = '$name'" 2>/dev/null | tail -1)
+        to_ver=$(dolt sql -r csv -q "SELECT MAX(version) FROM prompt_templates AS OF '$to' WHERE name = '$name'" 2>/dev/null | tail -1)
+        
+        show_template_diff "$name" "$from_ver" "$to_ver"
+        ;;
+    
+    stats)
+        echo -e "${CYAN}Diff Statistics: $from..$to${NC}"
+        echo ""
+        
+        dolt diff --stat "$from" "$to" 2>/dev/null
+        ;;
+    
+    summary)
+        echo -e "${CYAN}Summary: $from..$to${NC}"
+        echo ""
+        
+        # Count changes
+        local template_changes=$(dolt diff "$from" "$to" prompt_templates 2>/dev/null | grep -c "^---\|^+++" || echo 0)
+        local skill_changes=$(dolt diff "$from" "$to" skills 2>/dev/null | grep -c "^---\|^+++" || echo 0)
+        
+        echo "Changes:"
+        echo "  Templates: $template_changes modifications"
+        echo "  Skills: $skill_changes modifications"
+        echo ""
+        
+        # List changed items
+        echo "Modified templates:"
+        dolt diff "$from" "$to" prompt_templates 2>/dev/null | grep -E "name.*\|" | head -10 || echo "  (none)"
+        echo ""
+        echo "Modified skills:"
+        dolt diff "$from" "$to" skills 2>/dev/null | grep -E "name.*\|" | head -10 || echo "  (none)"
+        ;;
+    
+    json)
+        # Output as JSON for programmatic use
+        echo "{"
+        echo "  \"from\": \"$from\","
+        echo "  \"to\": \"$to\","
+        echo "  \"tables\": {"
+        
+        first=true
+        for table in prompt_templates skills collections; do
+            if dolt diff "$from" "$to" "$table" 2>/dev/null | grep -q .; then
+                [ "$first" = false ] && echo ","
+                first=false
+                echo -n "    \"$table\": \"changed\""
+            fi
+        done
+        
+        echo ""
+        echo "  }"
+        echo "}"
+        ;;
+    
+    help|*)
+        cat << 'EOF'
+Usage: pv-diff <from> <to> [type]
+
+Compare two versions of the vault.
+
+Types:
+  all           Show all table diffs (default)
+  templates     Show prompt_templates diff only
+  skills        Show skills diff only
+  template <n>  Show specific template diff
+  stats         Show diff statistics
+  summary       Show summary of changes
+  json          Output as JSON
+
+Examples:
+  pv-diff HEAD~1 HEAD           # Last commit vs current
+  pv-diff main experiment/x     # Compare branches
+  pv-diff HEAD~5 HEAD summary   # Summary of last 5 commits
+  pv-diff HEAD~1 HEAD template preflight  # Specific template
+EOF
+        ;;
+esac

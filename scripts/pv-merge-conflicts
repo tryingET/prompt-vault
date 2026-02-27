@@ -1,0 +1,136 @@
+#!/usr/bin/env bash
+# pv-merge-conflicts - Resolve merge conflicts in vault
+# Usage: pv-merge-conflicts <command> [args]
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+VAULT_DIR="${VAULT_DIR:-$SCRIPT_DIR/../prompt-vault-db}"
+
+cd "$VAULT_DIR"
+
+cmd="${1:-list}"
+shift || true
+
+case "$cmd" in
+    list)
+        echo "=== Checking for conflicts ==="
+        
+        conflicts=$(dolt conflicts ls 2>/dev/null)
+        
+        if [ -z "$conflicts" ]; then
+            echo "No conflicts found"
+        else
+            echo "$conflicts"
+        fi
+        ;;
+    
+    show)
+        table="${1:-prompt_templates}"
+        
+        echo "=== Conflicts in $table ==="
+        dolt conflicts cat "$table" 2>/dev/null || echo "No conflicts in $table"
+        ;;
+    
+    resolve-ours)
+        table="${1:-prompt_templates}"
+        
+        dolt conflicts resolve "$table" --ours
+        echo "✓ Resolved $table using ours (current branch)"
+        ;;
+    
+    resolve-theirs)
+        table="${1:-prompt_templates}"
+        
+        dolt conflicts resolve "$table" --theirs
+        echo "✓ Resolved $table using theirs (merging branch)"
+        ;;
+    
+    resolve-manual)
+        table="${1:-prompt_templates}"
+        
+        echo "Manual resolution for $table"
+        echo ""
+        echo "1. View conflicts: dolt conflicts cat $table"
+        echo "2. Edit directly with SQL or:"
+        echo "   dolt conflicts resolve $table --manual"
+        echo ""
+        echo "After manual edits:"
+        echo "   dolt add $table"
+        echo "   dolt commit -m 'Resolve conflicts in $table'"
+        ;;
+    
+    auto-resolve)
+        # Automatically resolve conflicts based on version numbers
+        table="${1:-prompt_templates}"
+        
+        echo "Auto-resolving conflicts in $table..."
+        
+        # Get conflict count
+        conflicts=$(dolt conflicts cat "$table" 2>/dev/null | wc -l)
+        
+        if [ "$conflicts" -eq 0 ]; then
+            echo "No conflicts to resolve"
+            exit 0
+        fi
+        
+        echo "Found $conflicts conflict entries"
+        echo ""
+        echo "Options:"
+        echo "  1. Use ours (current branch) - higher priority"
+        echo "  2. Use theirs (incoming) - keep newer changes"
+        echo "  3. Abort"
+        echo ""
+        read -p "Choose (1/2/3): " choice
+        
+        case "$choice" in
+            1) 
+                dolt conflicts resolve "$table" --ours
+                echo "✓ Resolved using ours"
+                ;;
+            2)
+                dolt conflicts resolve "$table" --theirs
+                echo "✓ Resolved using theirs"
+                ;;
+            *)
+                echo "Aborted"
+                exit 1
+                ;;
+        esac
+        ;;
+    
+    diff-conflict)
+        table="${1:-prompt_templates}"
+        name="${2:-}"
+        
+        if [ -z "$name" ]; then
+            echo "=== All conflicts in $table ==="
+            dolt conflicts cat "$table" 2>/dev/null
+        else
+            echo "=== Conflict for $name in $table ==="
+            dolt sql -q "
+                SELECT * FROM dolt_conflicts_$table 
+                WHERE name = '$name'
+            " -r tabular 2>/dev/null || echo "No conflict found"
+        fi
+        ;;
+    
+    help|*)
+        cat << 'EOF'
+Usage: pv-merge-conflicts <command> [args]
+
+Commands:
+  list                          List all conflicts
+  show [table]                  Show conflicts in table
+  resolve-ours [table]          Use current branch version
+  resolve-theirs [table]        Use incoming branch version
+  resolve-manual [table]        Guide for manual resolution
+  auto-resolve [table]          Interactive resolution
+  diff-conflict [table] [name]  Show specific conflict
+
+Examples:
+  pv-merge-conflicts list
+  pv-merge-conflicts show prompt_templates
+  pv-merge-conflicts resolve-ours prompt_templates
+EOF
+        ;;
+esac

@@ -1,0 +1,171 @@
+#!/usr/bin/env bash
+# pv-batch - Batch operations on templates/skills
+# Usage: pv-batch <command> [args]
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+VAULT_DIR="${VAULT_DIR:-$SCRIPT_DIR/../prompt-vault-db}"
+
+cd "$VAULT_DIR"
+
+cmd="${1:-help}"
+shift || true
+
+case "$cmd" in
+    status)
+        # Set status on multiple items
+        status="${1:-}"
+        names="${@:2}"
+        
+        [ -z "$status" ] && { echo "Usage: pv-batch status <active|draft|deprecated> <name...>" >&2; exit 1; }
+        
+        for name in $names; do
+            dolt sql -q "UPDATE prompt_templates SET status = '$status' WHERE name = '$name'" 2>/dev/null && \
+                echo "✓ Template '$name' -> $status" || \
+                echo "✗ Template '$name' not found"
+        done
+        ;;
+    
+    tag)
+        # Add tag to description
+        tag="${1:-}"
+        names="${@:2}"
+        
+        [ -z "$tag" ] && { echo "Usage: pv-batch tag <tag> <name...>" >&2; exit 1; }
+        
+        for name in $names; do
+            current=$(dolt sql -r csv -q "SELECT tags FROM prompt_templates WHERE name = '$name'" | tail -1)
+            if [ -z "$current" ] || [ "$current" = "NULL" ]; then
+                new_tags="[\"$tag\"]"
+            else
+                new_tags=$(echo "$current" | jq --arg t "$tag" '. + [$t]' 2>/dev/null || echo "$current")
+            fi
+            dolt sql -q "UPDATE prompt_templates SET tags = '$new_tags' WHERE name = '$name'" 2>/dev/null && \
+                echo "✓ Tagged '$name' with '$tag'"
+        done
+        ;;
+    
+    untag)
+        # Remove tag from description
+        tag="${1:-}"
+        names="${@:2}"
+        
+        [ -z "$tag" ] && { echo "Usage: pv-batch untag <tag> <name...>" >&2; exit 1; }
+        
+        for name in $names; do
+            current=$(dolt sql -r csv -q "SELECT tags FROM prompt_templates WHERE name = '$name'" | tail -1)
+            if [ -n "$current" ] && [ "$current" != "NULL" ]; then
+                new_tags=$(echo "$current" | jq --arg t "$tag" 'del(.[] | select(. == $t))' 2>/dev/null || echo "$current")
+                dolt sql -q "UPDATE prompt_templates SET tags = '$new_tags' WHERE name = '$name'" 2>/dev/null && \
+                    echo "✓ Removed tag '$tag' from '$name'"
+            fi
+        done
+        ;;
+    
+    find-missing)
+        # Find templates missing certain fields
+        field="${1:-description}"
+        
+        echo "Templates missing $field:"
+        dolt sql -q "
+            SELECT name FROM prompt_templates 
+            WHERE $field IS NULL OR $field = '' OR CHAR_LENGTH($field) < 5
+            ORDER BY name
+        " -r tabular
+        ;;
+    
+    find-short)
+        # Find templates with short content
+        min_len="${1:-100}"
+        
+        echo "Templates with content < $min_len chars:"
+        dolt sql -q "
+            SELECT name, CHAR_LENGTH(content) as len 
+            FROM prompt_templates 
+            WHERE CHAR_LENGTH(content) < $min_len AND status = 'active'
+            ORDER BY len
+        " -r tabular
+        ;;
+    
+    find-unused)
+        # Find templates with no executions
+        echo "Templates with no executions:"
+        dolt sql -q "
+            SELECT t.name
+            FROM prompt_templates t
+            LEFT JOIN executions e ON e.entity_type = 'template' AND e.entity_id = t.id
+            WHERE t.status = 'active' AND e.id IS NULL
+            ORDER BY t.name
+        " -r tabular
+        ;;
+    
+    find-low-rated)
+        # Find templates with low ratings
+        threshold="${1:-3}"
+        
+        echo "Templates with avg rating < $threshold:"
+        dolt sql -q "
+            SELECT t.name, AVG(f.rating) as avg_rating, COUNT(f.id) as ratings
+            FROM prompt_templates t
+            JOIN executions e ON e.entity_type = 'template' AND e.entity_id = t.id
+            JOIN feedback f ON f.execution_id = e.id
+            WHERE t.status = 'active'
+            GROUP BY t.id
+            HAVING AVG(f.rating) < $threshold
+            ORDER BY avg_rating
+        " -r tabular
+        ;;
+    
+    export-query)
+        # Export results of a query to file
+        query="${1:-}"
+        output="${2:-batch-export.csv}"
+        
+        [ -z "$query" ] && { echo "Usage: pv-batch export-query <query> [output]" >&2; exit 1; }
+        
+        dolt sql -q "$query" -r csv > "$output"
+        echo "✓ Exported to $output"
+        ;;
+    
+    stats)
+        echo "=== Batch Statistics ==="
+        echo ""
+        echo "Templates by status:"
+        dolt sql -q "SELECT status, COUNT(*) as count FROM prompt_templates GROUP BY status" -r tabular
+        echo ""
+        echo "Skills by status:"
+        dolt sql -q "SELECT status, COUNT(*) as count FROM skills GROUP BY status" -r tabular
+        echo ""
+        echo "Executions by type:"
+        dolt sql -q "SELECT entity_type, COUNT(*) as count FROM executions GROUP BY entity_type" -r tabular
+        ;;
+    
+    help|*)
+        cat << 'EOF'
+Usage: pv-batch <command> [args]
+
+Status Management:
+  status <status> <names...>    Set status on multiple items
+  tag <tag> <names...>          Add tag to multiple items
+  untag <tag> <names...>        Remove tag from multiple items
+
+Discovery:
+  find-missing [field]          Find items missing a field
+  find-short [min-len]          Find items with short content
+  find-unused                   Find items with no executions
+  find-low-rated [threshold]    Find items with low ratings
+
+Export:
+  export-query <query> [file]   Export query results
+
+Other:
+  stats                         Show batch statistics
+
+Examples:
+  pv-batch status deprecated old-template-1 old-template-2
+  pv-batch tag review preflight commit
+  pv-batch find-missing description
+  pv-batch find-short 100
+EOF
+        ;;
+esac

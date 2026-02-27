@@ -1,0 +1,16 @@
+# Prompt Vault Configuration
+vault:
+  name: prompt-vault
+  version: 1.0.0
+
+export:
+  templates_dir: ~/.pi/agent/prompts
+  skills_dir: ~/.pi/agent/skills
+  
+sync:
+  auto_export: false
+  watch: false
+
+metrics:
+  track_executions: true
+  retention_days: 90

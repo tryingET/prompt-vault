@@ -1,0 +1,18 @@
+# User's vault database (created by pv init)
+prompt-vault-db/.dolt/
+prompt-vault-db/.doltcfg/
+
+# Keep the schema and config
+!prompt-vault-db/vault.yaml
+
+# Backups
+backups/
+
+# Editor
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db

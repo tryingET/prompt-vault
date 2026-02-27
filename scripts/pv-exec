@@ -1,0 +1,106 @@
+#!/usr/bin/env bash
+# pv-exec - Execute a prompt template with tracking
+# Usage: pv-exec <template-name> [args...] [--model <model>]
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+VAULT_DIR="${VAULT_DIR:-$SCRIPT_DIR/../prompt-vault-db}"
+
+# Parse args
+TEMPLATE="${1:-}"
+shift || true
+
+MODEL=""
+ARGS=()
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        --model|-m)
+            MODEL="$2"
+            shift 2
+            ;;
+        --*)
+            echo "Unknown option: $1" >&2
+            exit 1
+            ;;
+        *)
+            ARGS+=("$1")
+            shift
+            ;;
+    esac
+done
+
+if [ -z "$TEMPLATE" ]; then
+    echo "Usage: pv-exec <template-name> [args...] [--model <model>]" >&2
+    exit 1
+fi
+
+MODEL="${MODEL:-claude-3-sonnet}"
+ARGS_JSON=$(printf '%s\n' "${ARGS[@]}" | jq -Rs 'split("\n") | map(select(length > 0))')
+
+cd "$VAULT_DIR"
+
+# Get template ID and content
+RESULT=$(dolt sql -r csv -q "
+    SELECT id, content, version 
+    FROM prompt_templates 
+    WHERE name = '$TEMPLATE' AND status = 'active' 
+    ORDER BY version DESC LIMIT 1
+")
+
+if [ -z "$RESULT" ] || [ "$RESULT" = "id,content,version" ]; then
+    echo "Error: Template '$TEMPLATE' not found or not active" >&2
+    exit 1
+fi
+
+TEMPLATE_ID=$(echo "$RESULT" | tail -1 | cut -d',' -f1)
+TEMPLATE_VERSION=$(echo "$RESULT" | tail -1 | cut -d',' -f3)
+
+# Get template content
+CONTENT=$(dolt sql -r csv -q "
+    SELECT content FROM prompt_templates 
+    WHERE name = '$TEMPLATE' AND status = 'active' 
+    ORDER BY version DESC LIMIT 1
+" | tail -1 | sed "s/''/'/g")
+
+# Substitute variables
+for i in "${!ARGS[@]}"; do
+    pos=$((i + 1))
+    CONTENT=$(echo "$CONTENT" | sed "s/\$$pos/${ARGS[$i]}/g")
+done
+CONTENT=$(echo "$CONTENT" | sed "s/\$@/${ARGS[*]}/g")
+CONTENT=$(echo "$CONTENT" | sed "s/\$ARGUMENTS/${ARGS[*]}/g")
+
+# Time execution
+START=$(date +%s%3N)
+
+# Output the prompt (in real usage, this would go to the LLM)
+echo "=== Executing template: $TEMPLATE (v$TEMPLATE_VERSION) ==="
+echo "Model: $MODEL"
+echo "Args: ${ARGS[*]}"
+echo ""
+echo "--- Prompt ---"
+echo "$CONTENT"
+echo "--- End Prompt ---"
+echo ""
+
+# Simulate execution (replace with actual LLM call)
+# In production, you'd call pi or another LLM here
+SUCCESS=true
+OUTPUT_TOKENS=0
+INPUT_TOKENS=0
+
+END=$(date +%s%3N)
+LATENCY=$((END - START))
+
+# Log execution
+EXEC_ID=$(dolt sql -r csv -q "
+    INSERT INTO executions (entity_type, entity_id, entity_version, input_args, model, latency_ms, success, input_tokens, output_tokens)
+    VALUES ('template', $TEMPLATE_ID, $TEMPLATE_VERSION, '$ARGS_JSON', '$MODEL', $LATENCY, $SUCCESS, $INPUT_TOKENS, $OUTPUT_TOKENS);
+    SELECT LAST_INSERT_ID();
+" | tail -1)
+
+echo "=== Execution logged ==="
+echo "Execution ID: $EXEC_ID"
+echo "Latency: ${LATENCY}ms"
+echo ""
+echo "Rate this execution: pv-rate $EXEC_ID <1-5> [notes]"

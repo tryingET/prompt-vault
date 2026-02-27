@@ -1,0 +1,340 @@
+#!/usr/bin/env bash
+# pv-scaffold - Generate template/skill scaffolds
+# Usage: pv-scaffold <type> <name> [options]
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+VAULT_DIR="${VAULT_DIR:-$SCRIPT_DIR/../prompt-vault-db}"
+
+type="${1:-help}"
+name="${2:-}"
+shift 2 || true
+
+scaffold_template() {
+    local name="$1"
+    local category="${2:-general}"
+    
+    cat << EOF
+---
+description: TODO: Add description (50-150 chars recommended)
+---
+
+# $name
+
+TODO: Add prompt instructions here.
+
+## Inputs
+
+- \$1 - First argument description
+- \$@ - All arguments
+
+## Output
+
+Describe expected output format.
+
+## Example
+
+\`\`\`
+/$name example-arg
+\`\`\`
+
+## Prompt
+
+You are a specialized assistant for $category tasks.
+
+Context: \$@
+
+Instructions:
+1. Analyze the input
+2. Apply best practices for $category
+3. Provide structured output
+
+Output format:
+- Section 1: Analysis
+- Section 2: Recommendations
+- Section 3: Action items
+EOF
+}
+
+scaffold_skill() {
+    local name="$1"
+    local category="${2:-general}"
+    
+    cat << EOF
+---
+name: $name
+description: TODO: Add description (50-150 chars, required by Agent Skills spec)
+license: MIT
+compatibility: pi >= 1.0
+---
+
+# $name
+
+TODO: Add skill description here.
+
+## When to Use
+
+Use this skill when:
+- Condition 1
+- Condition 2
+- Condition 3
+
+## Setup
+
+\`\`\`bash
+# One-time setup commands
+cd /path/to/skill
+npm install  # or other dependencies
+\`\`\`
+
+## Usage
+
+### Basic Usage
+
+\`\`\`bash
+./scripts/main.sh <args>
+\`\`\`
+
+### Advanced Usage
+
+\`\`\`bash
+./scripts/main.sh --option value
+\`\`\`
+
+## Examples
+
+### Example 1: Basic
+
+\`\`\`bash
+./scripts/main.sh "input"
+\`\`\`
+
+### Example 2: With Options
+
+\`\`\`bash
+./scripts/main.sh --verbose --format json "input"
+\`\`\`
+
+## Configuration
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| \`--option\` | \`default\` | Description |
+
+## Files
+
+\`\`\`
+$name/
+├── SKILL.md          # This file
+├── scripts/
+│   └── main.sh       # Main script
+└── references/
+    └── advanced.md   # Advanced documentation
+\`\`\`
+
+## Troubleshooting
+
+### Common Issues
+
+**Issue: Something doesn't work**
+Solution: Check configuration
+
+## See Also
+
+- Related skill 1
+- Related skill 2
+EOF
+}
+
+scaffold_collection() {
+    local name="$1"
+    local description="$2"
+    
+    cat << EOF
+Collection: $name
+Description: $description
+
+To add items to this collection:
+  pv collection add-template $name <template-name>
+  pv collection add-skill $name <skill-name>
+
+To export:
+  pv collection export $name
+
+To show contents:
+  pv collection show $name
+EOF
+}
+
+scaffold_script() {
+    local name="$1"
+    local type="${2:-helper}"
+    
+    cat << 'EOF'
+#!/usr/bin/env bash
+# Script: <name>
+# Purpose: <description>
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Configuration
+CONFIG_FILE="${CONFIG_FILE:-$SCRIPT_DIR/config.sh}"
+
+# Functions
+log() { echo "[$(date +%H:%M:%S)] $*"; }
+error() { echo "[$(date +%H:%M:%S)] ERROR: $*" >&2; exit 1; }
+
+# Main
+main() {
+    local arg="${1:-}"
+    
+    [ -z "$arg" ] && error "Usage: $0 <arg>"
+    
+    log "Processing: $arg"
+    # Add logic here
+}
+
+main "$@"
+EOF
+}
+
+scaffold_reference() {
+    local name="$1"
+    local topic="${2:-api}"
+    
+    cat << EOF
+# $name Reference
+
+## Overview
+
+This reference document covers $topic for $name.
+
+## Quick Reference
+
+| Command | Description |
+|---------|-------------|
+| \`command1\` | Description |
+| \`command2\` | Description |
+
+## Detailed Reference
+
+### Section 1
+
+Content here.
+
+### Section 2
+
+Content here.
+
+## Examples
+
+\`\`\`bash
+# Example command
+command --option value
+\`\`\`
+
+## See Also
+
+- Related documentation
+EOF
+}
+
+case "$type" in
+    template)
+        [ -z "$name" ] && { echo "Usage: pv-scaffold template <name> [category]" >&2; exit 1; }
+        category="${1:-general}"
+        scaffold_template "$name" "$category"
+        ;;
+    
+    skill)
+        [ -z "$name" ] && { echo "Usage: pv-scaffold skill <name> [category]" >&2; exit 1; }
+        category="${1:-general}"
+        scaffold_skill "$name" "$category"
+        ;;
+    
+    collection)
+        [ -z "$name" ] && { echo "Usage: pv-scaffold collection <name> <description>" >&2; exit 1; }
+        desc="${1:-Collection of prompts}"
+        scaffold_collection "$name" "$desc"
+        ;;
+    
+    script)
+        [ -z "$name" ] && { echo "Usage: pv-scaffold script <name> [type]" >&2; exit 1; }
+        scaffold_script "$name" "${1:-helper}"
+        ;;
+    
+    reference)
+        [ -z "$name" ] && { echo "Usage: pv-scaffold reference <name> [topic]" >&2; exit 1; }
+        scaffold_reference "$name" "${1:-api}"
+        ;;
+    
+    create)
+        # Create actual files
+        create_type="${1:-}"
+        create_name="${2:-}"
+        [ -z "$create_type" ] || [ -z "$create_name" ] && { 
+            echo "Usage: pv-scaffold create <template|skill|script|reference> <name>" >&2
+            exit 1
+        }
+        
+        case "$create_type" in
+            template)
+                cd "$VAULT_DIR"
+                scaffold_template "$create_name" > /tmp/scaffold.md
+                ${EDITOR:-nano} /tmp/scaffold.md
+                
+                # Parse and insert
+                desc=$(sed -n 's/^description: *//p' /tmp/scaffold.md)
+                content=$(sed '1,/^---$/d' /tmp/scaffold.md | sed '1,/^---$/d')
+                escaped_content=$(echo "$content" | sed "s/'/''/g")
+                escaped_desc=$(echo "$desc" | sed "s/'/''/g")
+                
+                dolt sql -q "
+                    INSERT INTO prompt_templates (name, description, content, status)
+                    VALUES ('$create_name', '$escaped_desc', '$escaped_content', 'draft')
+                "
+                echo "✓ Created template '$create_name' (draft)"
+                echo "Activate with: pv activate template $create_name"
+                ;;
+            
+            skill)
+                mkdir -p "/tmp/$create_name/scripts" "/tmp/$create_name/references"
+                scaffold_skill "$create_name" > "/tmp/$create_name/SKILL.md"
+                ${EDITOR:-nano} "/tmp/$create_name/SKILL.md"
+                echo "✓ Created skill scaffold at /tmp/$create_name/"
+                echo "Move to: ~/.pi/agent/skills/$create_name/"
+                ;;
+            
+            *)
+                echo "Only template and skill creation supported" >&2
+                exit 1
+                ;;
+        esac
+        ;;
+    
+    help|*)
+        cat << 'EOF'
+Usage: pv-scaffold <type> <name> [options]
+
+Generate scaffolds for prompts and skills.
+
+Types:
+  template <name> [category]   Generate template scaffold
+  skill <name> [category]      Generate skill scaffold (SKILL.md)
+  collection <name> <desc>     Generate collection description
+  script <name> [type]         Generate bash script scaffold
+  reference <name> [topic]     Generate reference doc scaffold
+
+Create (writes to vault):
+  create template <name>       Create and edit new template
+  create skill <name>          Create skill directory structure
+
+Examples:
+  pv-scaffold template code-review
+  pv-scaffold skill pdf-processor
+  pv-scaffold create template my-review
+  pv-scaffold script process.sh
+EOF
+        ;;
+esac

@@ -1,0 +1,695 @@
+#!/usr/bin/env bash
+# pv - Prompt Vault CLI
+# Unified interface for managing versioned prompt templates and skills
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+VERSION="1.0.0"
+
+# Source shared library
+source "$SCRIPT_DIR/pv-lib.sh"
+
+cmd_init() {
+    export VAULT_DIR
+    "$SCRIPT_DIR/init-vault.sh" "$@"
+}
+
+cmd_import() {
+    ensure_vault
+    export VAULT_DIR
+    "$SCRIPT_DIR/import-from-pi.sh" "$@"
+}
+
+cmd_export() {
+    ensure_vault
+    export VAULT_DIR
+    "$SCRIPT_DIR/export-to-pi.sh" "$@"
+}
+
+cmd_templates() {
+    ensure_vault
+    echo "=== Prompt Templates ==="
+    dolt sql -q "
+        SELECT name, description, status, version 
+        FROM prompt_templates 
+        ORDER BY name
+    " -r tabular
+}
+
+cmd_skills() {
+    ensure_vault
+    echo "=== Skills ==="
+    dolt sql -q "
+        SELECT name, description, status, version 
+        FROM skills 
+        ORDER BY name
+    " -r tabular
+}
+
+cmd_new_template() {
+    ensure_vault
+    local name="${1:-}"
+    [ -z "$name" ] && { error "Usage: pv new-template <name>"; exit 1; }
+    
+    info "Creating template: $name"
+    
+    # Get description
+    echo -n "Description: "
+    read -r description
+    
+    echo "Content (Ctrl+D to finish):"
+    content=$(cat)
+    
+    local escaped_content=$(echo "$content" | sed "s/'/''/g")
+    local escaped_desc=$(echo "$description" | sed "s/'/''/g")
+    
+    dolt sql -q "
+        INSERT INTO prompt_templates (name, description, content, status)
+        VALUES ('$name', '$escaped_desc', '$escaped_content', 'draft')
+    "
+    
+    success "Created template '$name' (draft)"
+    info "Edit with: pv edit-template $name"
+    info "Activate with: pv activate template $name"
+}
+
+cmd_new_skill() {
+    ensure_vault
+    local name="${1:-}"
+    [ -z "$name" ] && { error "Usage: pv new-skill <name>"; exit 1; }
+    
+    info "Creating skill: $name"
+    
+    echo -n "Description: "
+    read -r description
+    
+    echo -n "License [MIT]: "
+    read -r license
+    license=${license:-MIT}
+    
+    echo -n "Compatibility: "
+    read -r compatibility
+    
+    echo "README content (Ctrl+D to finish):"
+    readme=$(cat)
+    
+    local escaped_readme=$(echo "$readme" | sed "s/'/''/g")
+    local escaped_desc=$(echo "$description" | sed "s/'/''/g")
+    
+    dolt sql -q "
+        INSERT INTO skills (name, description, readme, license, compatibility, status)
+        VALUES ('$name', '$escaped_desc', '$escaped_readme', '$license', '$compatibility', 'draft')
+    "
+    
+    success "Created skill '$name' (draft)"
+    info "Activate with: pv activate skill $name"
+}
+
+cmd_edit_template() {
+    ensure_vault
+    local name="${1:-}"
+    [ -z "$name" ] && { error "Usage: pv edit-template <name>"; exit 1; }
+    
+    # Export to temp file
+    local tmp_file=$(mktemp --suffix=.md)
+    dolt sql -r csv -q "SELECT content FROM prompt_templates WHERE name = '$name' AND status = 'active' ORDER BY version DESC LIMIT 1" | tail -1 | sed "s/''/'/g" > "$tmp_file"
+    
+    # Open editor
+    ${EDITOR:-nano} "$tmp_file"
+    
+    # Read back and update
+    local content=$(cat "$tmp_file")
+    local escaped_content=$(echo "$content" | sed "s/'/''/g")
+    
+    dolt sql -q "CALL create_template_version('$name', (SELECT description FROM prompt_templates WHERE name = '$name' LIMIT 1), '$escaped_content', NULL)"
+    
+    rm "$tmp_file"
+    success "Updated template '$name'"
+}
+
+cmd_activate() {
+    ensure_vault
+    local type="${1:-}"
+    local name="${2:-}"
+    
+    [ -z "$type" ] || [ -z "$name" ] && { error "Usage: pv activate <template|skill> <name>"; exit 1; }
+    
+    if [ "$type" = "template" ]; then
+        dolt sql -q "UPDATE prompt_templates SET status = 'active' WHERE name = '$name'"
+    elif [ "$type" = "skill" ]; then
+        dolt sql -q "UPDATE skills SET status = 'active' WHERE name = '$name'"
+    else
+        error "Type must be 'template' or 'skill'"
+        exit 1
+    fi
+    
+    success "Activated $type '$name'"
+}
+
+cmd_deprecate() {
+    ensure_vault
+    local type="${1:-}"
+    local name="${2:-}"
+    
+    [ -z "$type" ] || [ -z "$name" ] && { error "Usage: pv deprecate <template|skill> <name>"; exit 1; }
+    
+    if [ "$type" = "template" ]; then
+        dolt sql -q "UPDATE prompt_templates SET status = 'deprecated' WHERE name = '$name'"
+    elif [ "$type" = "skill" ]; then
+        dolt sql -q "UPDATE skills SET status = 'deprecated' WHERE name = '$name'"
+    fi
+    
+    success "Deprecated $type '$name'"
+}
+
+cmd_branch() {
+    ensure_vault
+    local branch_name="${1:-}"
+    [ -z "$branch_name" ] && { error "Usage: pv branch <name>"; exit 1; }
+    
+    dolt checkout -b "$branch_name"
+    success "Created branch: $branch_name"
+}
+
+cmd_merge() {
+    ensure_vault
+    local branch_name="${1:-}"
+    [ -z "$branch_name" ] && { error "Usage: pv merge <branch>"; exit 1; }
+    
+    dolt merge "$branch_name"
+    success "Merged branch: $branch_name"
+}
+
+cmd_log() {
+    ensure_vault
+    local type="${1:-}"
+    local name="${2:-}"
+    
+    if [ -n "$type" ] && [ -n "$name" ]; then
+        if [ "$type" = "template" ]; then
+            dolt log -n 10 -- "*prompt_templates*"
+        else
+            dolt log -n 10 -- "*skills*"
+        fi
+    else
+        dolt log -n 10
+    fi
+}
+
+cmd_diff() {
+    ensure_vault
+    local from="${1:-HEAD~1}"
+    local to="${2:-HEAD}"
+    
+    dolt diff "$from" "$to"
+}
+
+cmd_stats() {
+    ensure_vault
+    local name="${1:-}"
+    
+    if [ -n "$name" ]; then
+        dolt sql -q "CALL template_stats('$name')" -r tabular
+    else
+        echo "=== Overall Statistics ==="
+        dolt sql -q "
+            SELECT 
+                'Templates' as type,
+                COUNT(*) as total,
+                SUM(CASE WHEN status = 'active' THEN 1 ELSE 0 END) as active,
+                SUM(CASE WHEN status = 'draft' THEN 1 ELSE 0 END) as draft
+            FROM prompt_templates
+            UNION ALL
+            SELECT 
+                'Skills',
+                COUNT(*),
+                SUM(CASE WHEN status = 'active' THEN 1 ELSE 0 END),
+                SUM(CASE WHEN status = 'draft' THEN 1 ELSE 0 END)
+            FROM skills
+        " -r tabular
+    fi
+}
+
+cmd_show() {
+    ensure_vault
+    local type="${1:-}"
+    local name="${2:-}"
+    local version="${3:-}"
+    
+    [ -z "$type" ] || [ -z "$name" ] && { error "Usage: pv show <template|skill> <name> [version]"; exit 1; }
+    
+    if [ "$type" = "template" ]; then
+        if [ -n "$version" ]; then
+            dolt sql -q "SELECT * FROM prompt_templates WHERE name = '$name' AND version = $version" -r tabular
+        else
+            dolt sql -q "SELECT name, description, status, version, created_at, updated_at FROM prompt_templates WHERE name = '$name' AND status = 'active' ORDER BY version DESC LIMIT 1" -r tabular
+            echo ""
+            echo "Content:"
+            dolt sql -r csv -q "SELECT content FROM prompt_templates WHERE name = '$name' AND status = 'active' ORDER BY version DESC LIMIT 1" | tail -1
+        fi
+    elif [ "$type" = "skill" ]; then
+        dolt sql -q "SELECT * FROM skills WHERE name = '$name' AND status = 'active' ORDER BY version DESC LIMIT 1" -r tabular
+    fi
+}
+
+cmd_history() {
+    ensure_vault
+    local type="${1:-template}"
+    local name="${2:-}"
+    
+    if [ -z "$name" ]; then
+        error "Usage: pv history <template|skill> <name>"
+        exit 1
+    fi
+    
+    local table="prompt_templates"
+    [ "$type" = "skill" ] && table="skills"
+    
+    echo "=== History: $type '$name' ==="
+    echo ""
+    
+    # Get current state
+    local current=$(dolt sql -r json -q "
+        SELECT id, version, status, updated_at 
+        FROM $table 
+        WHERE name = '$name' 
+        LIMIT 1
+    " 2>/dev/null)
+    
+    if [ -z "$current" ] || [ "$(echo "$current" | jq -r '.rows | length')" -eq 0 ]; then
+        error "$type '$name' not found"
+        exit 1
+    fi
+    
+    local entity_id=$(echo "$current" | jq -r '.rows[0].id')
+    local current_version=$(echo "$current" | jq -r '.rows[0].version')
+    
+    # Get changelog entries
+    echo "Changelog:"
+    dolt sql -q "
+        SELECT change_type, old_version, new_version, summary, author, created_at 
+        FROM changelog 
+        WHERE entity_type = '$type' AND entity_id = $entity_id
+        ORDER BY created_at DESC
+    " -r tabular 2>/dev/null || echo "  No changelog entries"
+    
+    echo ""
+    echo "Dolt commits affecting this $type:"
+    
+    # Find commits that touched this table
+    dolt log --oneline -- "$table" 2>/dev/null | head -10
+    
+    echo ""
+    echo "Current: version $current_version"
+}
+
+cmd_rollback() {
+    ensure_vault
+    local type="${1:-}"
+    local name="${2:-}"
+    local commit_ref="${3:-}"
+    
+    [ -z "$type" ] || [ -z "$name" ] || [ -z "$commit_ref" ] && { 
+        error "Usage: pv rollback <template|skill> <name> <commit-ref>"
+        error "  commit-ref: HEAD~1, HEAD~3, or commit hash"
+        exit 1
+    }
+    
+    local table="prompt_templates"
+    [ "$type" = "skill" ] && table="skills"
+    
+    # Get content from the specified commit
+    local content=$(dolt sql -r csv -q "SELECT content FROM $table AS OF '$commit_ref' WHERE name = '$name'" 2>/dev/null | tail -1)
+    
+    if [ -z "$content" ]; then
+        error "$type '$name' not found at $commit_ref"
+        exit 1
+    fi
+    
+    local desc=$(dolt sql -r csv -q "SELECT description FROM $table AS OF '$commit_ref' WHERE name = '$name'" 2>/dev/null | tail -1)
+    
+    # Escape for SQL
+    local escaped=$(echo "$content" | sed "s/'/''/g")
+    local escaped_desc=""
+    [ -n "$desc" ] && escaped_desc=$(echo "$desc" | sed "s/'/''/g")
+    
+    # Update current version
+    if [ "$type" = "template" ]; then
+        dolt sql -q "UPDATE prompt_templates SET content = '$escaped', description = '$escaped_desc' WHERE name = '$name'"
+    else
+        dolt sql -q "UPDATE skills SET readme = '$escaped', description = '$escaped_desc' WHERE name = '$name'"
+    fi
+    
+    success "Rolled back $type '$name' to state at $commit_ref"
+    info "Commit with: pv commit 'Rollback $name to $commit_ref'"
+}
+
+cmd_commit() {
+    ensure_vault
+    local message="${1:-Update}"
+    
+    dolt add .
+    dolt commit -m "$message"
+    success "Committed: $message"
+}
+
+cmd_status() {
+    ensure_vault
+    dolt status
+}
+
+cmd_sql() {
+    ensure_vault
+    dolt sql "$@"
+}
+
+cmd_push() {
+    ensure_vault
+    local remote="${1:-origin}"
+    dolt push "$remote" main
+    success "Pushed to $remote"
+}
+
+cmd_pull() {
+    ensure_vault
+    local remote="${1:-origin}"
+    dolt pull "$remote"
+    success "Pulled from $remote"
+}
+
+cmd_clone() {
+    local remote="${1:-}"
+    [ -z "$remote" ] && { error "Usage: pv clone <remote-url>"; exit 1; }
+    
+    cd "$(dirname "$VAULT_DIR")"
+    dolt clone "$remote" prompt-vault-db
+    success "Cloned vault from $remote"
+}
+
+cmd_watch() {
+    ensure_vault
+    local debounce_sec="${1:-2}"
+    local last_hash=""
+    local pending=0
+    
+    info "Watching for changes... (Ctrl+C to stop)"
+    info "Auto-exporting to pi format (debounce: ${debounce_sec}s)"
+    
+    # Track content hash for smarter detection
+    get_content_hash() {
+        dolt sql -r csv -q "
+            SELECT MD5(CONCAT(
+                (SELECT GROUP_CONCAT(content ORDER BY name) FROM prompt_templates WHERE status = 'active'),
+                (SELECT GROUP_CONCAT(readme ORDER BY name) FROM skills WHERE status = 'active')
+            ))
+        " 2>/dev/null | tail -1
+    }
+    
+    last_hash=$(get_content_hash)
+    
+    while true; do
+        sleep 1
+        
+        # Check for dolt working tree changes
+        if ! dolt diff --quiet 2>/dev/null; then
+            pending=1
+        fi
+        
+        # Debounce: wait for stability
+        if [ "$pending" -eq 1 ]; then
+            sleep "$debounce_sec"
+            
+            # Check if still stable after debounce period
+            if dolt diff --quiet 2>/dev/null; then
+                pending=0
+            fi
+            
+            # Check if content actually changed
+            local current_hash=$(get_content_hash)
+            if [ "$current_hash" != "$last_hash" ]; then
+                info "Content changed, exporting..."
+                cmd_export > /dev/null
+                last_hash="$current_hash"
+                success "Exported ($(date +%H:%M:%S))"
+            else
+                # Only schema/structure changed, no export needed
+                info "Non-content change detected, skipping export"
+            fi
+            
+            pending=0
+        fi
+    done
+}
+
+cmd_search() {
+    ensure_vault
+    export VAULT_DIR
+    "$SCRIPT_DIR/pv-search" "$@"
+}
+
+cmd_exec() {
+    ensure_vault
+    export VAULT_DIR
+    "$SCRIPT_DIR/pv-exec" "$@"
+}
+
+cmd_rate() {
+    ensure_vault
+    export VAULT_DIR
+    "$SCRIPT_DIR/pv-rate" "$@"
+}
+
+cmd_analytics() {
+    ensure_vault
+    export VAULT_DIR
+    "$SCRIPT_DIR/pv-analytics" "$@"
+}
+
+cmd_collection() {
+    ensure_vault
+    export VAULT_DIR
+    "$SCRIPT_DIR/pv-collection" "$@"
+}
+
+cmd_migrate() {
+    ensure_vault
+    export VAULT_DIR
+    "$SCRIPT_DIR/pv-migrate" "$@"
+}
+
+cmd_lint() {
+    ensure_vault
+    export VAULT_DIR
+    "$SCRIPT_DIR/pv-lint" "$@"
+}
+
+cmd_backup() {
+    ensure_vault
+    export VAULT_DIR
+    "$SCRIPT_DIR/pv-backup" "$@"
+}
+
+cmd_integrate() {
+    ensure_vault
+    export VAULT_DIR
+    "$SCRIPT_DIR/pv-integrate" "$@"
+}
+
+cmd_tui() {
+    ensure_vault
+    export VAULT_DIR
+    "$SCRIPT_DIR/pv-tui" "$@"
+}
+
+cmd_quality() {
+    ensure_vault
+    export VAULT_DIR
+    "$SCRIPT_DIR/pv-quality" "$@"
+}
+
+cmd_scaffold() {
+    export VAULT_DIR
+    "$SCRIPT_DIR/pv-scaffold" "$@"
+}
+
+cmd_hooks() {
+    export VAULT_DIR
+    "$SCRIPT_DIR/pv-hooks" "$@"
+}
+
+cmd_quick() {
+    ensure_vault
+    export VAULT_DIR
+    "$SCRIPT_DIR/pv-quick" "$@"
+}
+
+cmd_vars() {
+    ensure_vault
+    export VAULT_DIR
+    "$SCRIPT_DIR/pv-template-vars" "$@"
+}
+
+cmd_export_formats() {
+    ensure_vault
+    export VAULT_DIR
+    "$SCRIPT_DIR/pv-export-formats" "$@"
+}
+
+cmd_enhanced_diff() {
+    ensure_vault
+    export VAULT_DIR
+    "$SCRIPT_DIR/pv-diff" "$@"
+}
+
+cmd_tag() {
+    ensure_vault
+    export VAULT_DIR
+    "$SCRIPT_DIR/pv-tag" "$@"
+}
+
+usage() {
+    cat << 'EOF'
+Prompt Vault CLI - Version-controlled prompt templates and skills
+
+Usage: pv <command> [args]
+
+Setup:
+  init                     Initialize a new vault
+  clone <url>              Clone from DoltHub
+  migrate up               Run database migrations
+  hooks install            Install git hooks
+
+Import/Export:
+  import                   Import from pi templates/skills
+  export                   Export to pi format
+  export-fmt <format>      Export to various formats (md,json,ts,py)
+  watch                    Watch and auto-export changes
+
+Templates:
+  templates                List all templates
+  new-template <name>      Create new template
+  edit-template <name>     Edit template
+  show template <name>     Show template content
+  history template <name>  Show version history
+  vars [name]              List template variables
+
+Skills:
+  skills                   List all skills
+  new-skill <name>         Create new skill
+  show skill <name>        Show skill details
+  history skill <name>     Show version history
+
+Collections:
+  collection list          List all collections
+  collection create <n>    Create new collection
+  collection show <n>      Show collection contents
+  collection add-template  Add template to collection
+
+Search & Analytics:
+  search <query>           Search templates and skills
+  stats [name]             Usage statistics
+  analytics [cmd]          Detailed analytics
+  quality [cmd]            Quality scores and dashboard
+  exec <template> [args]   Execute template with tracking
+  rate <id> <rating>       Rate an execution
+
+Quality & Tools:
+  lint [name]              Lint templates/skills
+  backup <cmd>             Backup/restore operations
+  scaffold <type> <name>   Generate scaffolds
+
+Integration:
+  integrate <cmd>          Export to external formats
+  tui                      Interactive terminal UI
+  quick                    Quick actions menu
+
+Version Control:
+  branch <name>            Create experimental branch
+  merge <branch>           Merge branch to current
+  log [type] [name]        View commit history
+  diff [from] [to]         Compare versions
+  rollback <t|s> <n> <v>   Rollback to version
+
+Status:
+  status                   Working directory status
+  commit [message]         Commit changes
+  activate <t|s> <name>    Set status to active
+  deprecate <t|s> <name>   Set status to deprecated
+
+Tags & Releases:
+  tag list                 List all release tags
+  tag release <version>    Create release tag
+  tag status               Show current tag status
+  tag changelog            Generate changelog
+
+Remote:
+  push [remote]            Push to DoltHub
+  pull [remote]            Pull from DoltHub
+
+Advanced:
+  sql <query>              Run SQL directly
+
+Examples:
+  pv init                          # Initialize vault
+  pv import                        # Import existing templates
+  pv search review                 # Search for "review"
+  pv vars                          # Show all template variables
+  pv quality dashboard             # View quality scores
+  pv scaffold template my-review   # Generate template scaffold
+  pv lint                          # Lint all templates
+  pv backup create                 # Create backup
+  pv integrate langchain           # Export for LangChain
+  pv tui                           # Interactive browser
+  pv quick                         # Quick actions menu
+  pv export-fmt typescript         # Export to TypeScript
+EOF
+}
+
+# Main
+case "${1:-}" in
+    init) cmd_init "${@:2}" ;;
+    import) cmd_import "${@:2}" ;;
+    export) cmd_export "${@:2}" ;;
+    export-fmt) shift; cmd_export_formats "$@" ;;
+    templates) cmd_templates "${@:2}" ;;
+    skills) cmd_skills "${@:2}" ;;
+    new-template) cmd_new_template "${@:2}" ;;
+    new-skill) cmd_new_skill "${@:2}" ;;
+    edit-template) cmd_edit_template "${@:2}" ;;
+    show) cmd_show "${@:2}" ;;
+    history) cmd_history "${@:2}" ;;
+    branch) cmd_branch "${@:2}" ;;
+    merge) cmd_merge "${@:2}" ;;
+    log) cmd_log "${@:2}" ;;
+    diff) shift; cmd_enhanced_diff "$@" ;;
+    rollback) cmd_rollback "${@:2}" ;;
+    status) cmd_status "${@:2}" ;;
+    commit) cmd_commit "${@:2}" ;;
+    activate) cmd_activate "${@:2}" ;;
+    deprecate) cmd_deprecate "${@:2}" ;;
+    stats) cmd_stats "${@:2}" ;;
+    push) cmd_push "${@:2}" ;;
+    pull) cmd_pull "${@:2}" ;;
+    clone) cmd_clone "${@:2}" ;;
+    watch) cmd_watch "${@:2}" ;;
+    sql) shift; cmd_sql "$@" ;;
+    search) shift; cmd_search "$@" ;;
+    exec) shift; cmd_exec "$@" ;;
+    rate) shift; cmd_rate "$@" ;;
+    analytics) shift; cmd_analytics "$@" ;;
+    collection) shift; cmd_collection "$@" ;;
+    migrate) shift; cmd_migrate "$@" ;;
+    lint) shift; cmd_lint "$@" ;;
+    backup) shift; cmd_backup "$@" ;;
+    integrate) shift; cmd_integrate "$@" ;;
+    tui) shift; cmd_tui "$@" ;;
+    quality) shift; cmd_quality "$@" ;;
+    scaffold) shift; cmd_scaffold "$@" ;;
+    hooks) shift; cmd_hooks "$@" ;;
+    quick) shift; cmd_quick "$@" ;;
+    vars) shift; cmd_vars "$@" ;;
+    tag) shift; cmd_tag "$@" ;;
+    -h|--help|help) usage ;;
+    -v|--version) echo "pv version $VERSION" ;;
+    *) usage; exit 1 ;;
+esac
