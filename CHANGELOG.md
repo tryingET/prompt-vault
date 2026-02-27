@@ -1,71 +1,149 @@
 # Changelog
 
-All notable changes to Prompt Vault will be documented in this file.
-
-The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
+All notable changes to prompt-vault are documented here.
 
 ## [1.1.0] - 2026-02-27
 
-### Added
-- **vault-client extension** for pi with `/vault:name`, `/vaults`, `/route`, `/vault-search`, `/vault-stats` commands
-- **Schema versioning** with `schema_version` table for migration tracking
-- **`pv cleanup`** command to remove old execution logs (with `--dry-run` preview)
-- **`pv migrate`** command for schema migration management
-- **docs/CRYSTALLIZED.md** documenting patterns, anti-patterns, and lessons learned
-- **migrations/** directory for future database migrations
-- **Adversarial test cases** for SQL escaping (commas, quotes, unicode, backslashes, nulls)
-- **Environment variable** `VAULT_DIR` for configurable vault location
+### Deep Review Session
+
+Applied full adversarial stack (INVERSION + TELESCOPIC + NEXUS + AUDIT + BLAST RADIUS + ESCAPE HATCH + KNOWLEDGE CRYSTALLIZATION).
 
 ### Fixed
-- **CRITICAL: CSV parsing bug** — Switched to JSON output in vault-client to prevent silent data corruption on content with commas/quotes
-- **CRITICAL: Schema versioning** — Added `schema_version` table to enable safe schema migrations
-- **HIGH: SQL escaping** — Proper handling of backslash-quote sequences and null bytes in `sql_escape()`
-- **HIGH: Template validation** — Added size limits and validation at import time
 
-### Changed
-- vault-client extension rewritten to use `dolt sql -r json` instead of CSV
-- `pv-lib.sh` improved with better SQL escaping and `sql_decode_base64()` function
-- `pv-migrate` rewritten to use `schema_version` table
-- `import-cognitive-tools.sh` improved with validation, proper escaping, and tag extraction
-- README.md updated with Pi integration and maintenance sections
+#### Critical
+- **CSV parser silent corruption** — Switched vault-client from CSV to JSON output (`dolt sql -r json`). The naive `line.split(",")` parser corrupted any content containing commas, quotes, or newlines. ([#critical](docs/CRYSTALLIZED.md#anti-patterns-found))
 
-### Security
-- Improved SQL escaping prevents injection through backslash-quote sequences
-- Null byte removal prevents potential issues with malformed input
+- **No schema versioning** — Added `schema_version` table to track migrations. Without this, schema changes would corrupt existing databases with no recovery path.
 
-## [1.0.0] - 2026-02-27
+#### High
+- **Incomplete SQL escaping** — Fixed `sql_escape()` in pv-lib.sh to handle backslash-quote sequences (`\'`) and null bytes (`\x00`). Previous implementation only handled single quotes.
+
+- **No template validation** — Added validation at import time with size limits (1MB max) and proper escaping.
+
+#### Medium
+- **No execution cleanup** — Added `pv cleanup` command to remove old execution logs.
+
+- **Hardcoded paths** — Made `VAULT_DIR` configurable via environment variable in vault-client extension.
 
 ### Added
-- Initial release of Prompt Vault
-- Dolt-based versioned storage for prompt templates and skills
-- **48 templates** imported (28 cognitive tools, 20 task templates)
-- **Core CLI commands**: `init`, `import`, `export`, `templates`, `skills`, `search`
-- **Version control**: `branch`, `merge`, `diff`, `rollback`, `history`, `tag`
-- **Execution tracking**: `exec`, `rate`, `stats`, `analytics`
-- **Quality tools**: `lint`, `quality`, `scaffold`
-- **Integration**: `export-fmt`, `integrate`, `watch`
-- **Backup/restore**: `backup create`, `backup list`, `backup restore`
-- **TUI**: Interactive terminal UI via `pv tui`
-- **Schema**: 6 tables (prompt_templates, skills, skill_assets, executions, feedback, collections, changelog)
-- **Verification**: 33 automated checks via `verify.sh`
-- **Documentation**: README.md, SKILL.md, WORKFLOWS.md, COMPARISON.md
 
-### Schema
+- **`pv cleanup` command** — Remove execution logs older than N days
+  ```bash
+  ./scripts/pv cleanup 30           # Delete executions older than 30 days
+  ./scripts/pv cleanup 30 --dry-run # Preview what would be deleted
+  ```
+
+- **Schema version tracking** — New `schema_version` table with migration support
+  ```bash
+  ./scripts/pv migrate status       # Check current schema version
+  ./scripts/pv migrate up           # Run pending migrations
+  ./scripts/pv migrate create <name> # Create new migration file
+  ```
+
+- **`migrations/` directory** — For future database migrations
+
+- **Adversarial test cases** — Tests for edge cases: commas, unicode, backslash-quote, null bytes, long strings
+
+- **docs/CRYSTALLIZED.md** — Patterns, anti-patterns, heuristics, and lessons learned from development
+
+### Changed
+
+- **vault-client extension** — Complete rewrite with:
+  - JSON parsing instead of CSV (prevents silent corruption)
+  - Proper SQL escaping (handles all edge cases)
+  - Schema version checking on load
+  - Configurable `VAULT_DIR` via environment variable
+  - Better error logging
+
+- **import-cognitive-tools.sh** — Improved with:
+  - Template validation (size limits)
+  - Proper SQL escaping via `sql_escape()`
+  - Tag extraction from content
+  - Import statistics reporting
+
+- **pv-migrate** — Rewritten to use `schema_version` table instead of separate `schema_migrations` table
+
+- **pv-lib.sh** — Enhanced `sql_escape()` to handle:
+  - Backslash escaping (`\` → `\\`)
+  - Null byte removal
+  - Added `sql_decode_base64()` for round-trip testing
+
+- **README.md** — Added Pi Integration and Maintenance sections
+
+- **SKILL.md** — Added cleanup and migrate commands to essentials
+
+### Documentation
+
+- **docs/CRYSTALLIZED.md** — New file documenting:
+  - Patterns discovered (Dolt as app DB, JSON over CSV, schema versioning)
+  - Anti-patterns found (naive CSV parsing, error swallowing, hardcoded paths)
+  - Surprises (test data too tame, Dolt commit errors common)
+  - Heuristics validated
+  - Caveats and breaking conditions
+  - Codification actions for contributors
+
+### Files Changed
+
 ```
-prompt_templates: id, name, content, description, type, tags, version, status
-skills:           id, name, description, readme, compatibility, license, status
-skill_assets:     id, skill_id, path, content, binary_content
-executions:       id, entity_type, entity_id, latency_ms, success, model, tokens
-feedback:         id, execution_id, rating, notes, issues
-collections:      id, name, description, template_ids, skill_ids
-changelog:        id, entity_type, entity_id, change_type, summary
+schema/schema.sql                 +18  (schema_version table)
+scripts/import-cognitive-tools.sh +107 (validation, escaping)
+scripts/pv                        +62  (cleanup command)
+scripts/pv-lib.sh                 +14  (better escaping)
+scripts/pv-migrate                +68  (schema_version support)
+tests/pv-lib.bats                 +40  (adversarial tests)
+docs/CRYSTALLIZED.md              +145 (new)
+migrations/.gitkeep               (new)
+README.md                         +14  (integration, maintenance)
+SKILL.md                          +4   (cleanup, migrate)
+next_session_prompt.md            updated
+
+~/.pi/.../vault-client/index.ts   rewritten (393 lines)
+```
+
+### Rollback
+
+```bash
+# If extension breaks pi
+rm -rf ~/.pi/agent/extensions/vault-client
+
+# If vault corrupted
+cd prompt-vault-db && dolt reset --hard HEAD~1
+
+# Full reset
+rm -rf prompt-vault-db && ./scripts/pv init && ./scripts/import-cognitive-tools.sh
 ```
 
 ---
 
-## Version Summary
+## [1.0.0] - 2026-02-27
 
-| Version | Date | Highlights |
-|---------|------|------------|
-| 1.1.0 | 2026-02-27 | Deep review fixes, schema versioning, cleanup command |
-| 1.0.0 | 2026-02-27 | Initial release with 48 templates, full CLI, pi extension |
+### Initial Release
+
+- Dolt-backed prompt template storage
+- 48 templates (28 cognitive, 20 task)
+- Pi integration via vault-client extension
+- CLI with 30+ commands
+- Execution tracking and feedback
+- Branch/merge for A/B testing
+- Export to multiple formats
+- Verification suite (33 checks)
+
+### Pi Commands
+
+- `/vaults` — List all templates
+- `/vault:name` — Load template
+- `/route <context>` — Get tool recommendation
+- `/vault-stats` — Show usage statistics
+
+### CLI Commands
+
+- `pv init` — Initialize vault
+- `pv import` — Import from pi templates
+- `pv templates` — List templates
+- `pv search` — Search content
+- `pv branch/merge` — A/B testing
+- `pv exec` — Execute with tracking
+- `pv rate` — Rate execution
+- `pv stats` — Usage statistics
+- `pv export` — Export to pi format
+- `pv backup` — Backup/restore
