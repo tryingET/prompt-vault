@@ -9,11 +9,13 @@
 
 -- Core entity: reusable prompt templates
 -- Variables use pi syntax: $1, $2, $@, ${@:N}
+-- Types: cognitive (epistemic frameworks), task (domain-specific), session (state)
 CREATE TABLE IF NOT EXISTS prompt_templates (
     id INT AUTO_INCREMENT PRIMARY KEY,
     name VARCHAR(64) NOT NULL UNIQUE,        -- kebab-case identifier
     description VARCHAR(1024),                -- shown in listings
     content TEXT NOT NULL,                    -- the actual prompt
+    type ENUM('cognitive', 'task', 'session') DEFAULT 'task',  -- categorization
     variables JSON,                           -- extracted ["$1", "$@"]
     tags JSON,                                -- ["code-review", "security"]
     version INT DEFAULT 1,                    -- increments on edit
@@ -22,7 +24,8 @@ CREATE TABLE IF NOT EXISTS prompt_templates (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     INDEX idx_name (name),
-    INDEX idx_status (status)
+    INDEX idx_status (status),
+    INDEX idx_type (type)
 );
 
 -- Complex multi-file capabilities (Agent Skills spec)

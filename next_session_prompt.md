@@ -1,168 +1,110 @@
-# Next Session: Prompt Classification & Schema Evolution
+# Next Session: Vault Extension for Pi
 
-## Current State
+## Completed
 
-**In vault (templates):**
-- 18 pi templates from `~/.pi/agent/prompts/`
-- Invocation via `/template-name` in pi
-- Schema: name, description, content, tags, version, status
+**Schema evolution:**
+- Added `type` column: `cognitive` | `task` | `session`
+- Updated schema.sql with new column
 
-**Available but not imported:**
+**Imported cognitive tools:**
+- 22 triggers from `~/steve/prompts/triggers/`
+- 1 standalone: `transcendent-iteration`
+- Total: 23 cognitive tools
 
-```
-~/steve/prompts/
-├── prompt-snippets.md        (66KB - cognitive frameworks)
-├── active-snippets.md        (4KB - quick invocations)
-├── operating-modes.md        (15KB - reasoning frameworks)
-├── transcendent-iteration.md (4KB)
-├── fcos-model-first-convergence.md (4KB)
-├── unsung-foundations.md     (4KB)
-└── triggers/                 (24 files, ~4KB total)
-    ├── inversion.md
-    ├── telescopic.md
-    ├── nexus.md
-    ├── elevate.md
-    ├── first-principles.md
-    ├── audit.md
-    ├── blast-radius.md
-    └── ... (17 more)
-```
+**Imported task prompts:**
+- 18 existing pi templates
+- 2 new: `unsung-foundations`, `fcos-model-first-convergence`
+- Total: 20 task templates
+
+**Cleanup performed:**
+- `active-snippets.md` → deleted (redundant with INDEX.md)
+- `next-session.md` → moved to diary
+- `operating-modes.md` → already cleaned
+- `prompt-snippets.md` → kept as master reference (not imported)
+
+**CLI updated:**
+- `pv templates` now shows type column
+- `import-cognitive-tools.sh` script created
 
 ---
 
-## The Classification Problem
+## Remaining: Vault Extension for Pi
 
-**What's the difference between:**
+**The gap:** Pi currently reads templates from flat files (`~/.pi/agent/prompts/`). Vault has templates in Dolt DB with versioning, metrics, and A/B testing capability — but no direct connection.
 
-| Type | Current Location | Invocation | Structure |
-|------|-----------------|------------|-----------|
-| Template | `~/.pi/agent/prompts/*.md` | `/name` in pi | Frontmatter + content |
-| Snippet | `~/steve/prompts/prompt-snippets.md` | Manual copy | Named blocks with explanation |
-| Trigger | `~/steve/prompts/triggers/*.md` | Manual copy | Short directive + output format |
-| Operating Mode | `~/steve/prompts/operating-modes.md` | Manual copy | Framework definition |
+**What's needed:**
 
-**Questions:**
+```typescript
+// ~/.pi/agent/extensions/vault-client/index.ts
+export default function (pi: ExtensionAPI) {
+  // 1. Register /vault:name command
+  pi.on("input", async (event, ctx) => {
+    if (!event.text.startsWith("/vault:")) return { action: "continue" };
+    
+    const name = event.text.slice(7).trim();
+    const template = await queryVault(name);
+    
+    if (!template) {
+      ctx.ui.notify(`Template not found: ${name}`, "error");
+      return { action: "handled" };
+    }
+    
+    // Return content for LLM to process
+    return { action: "transform", text: template.content };
+  });
 
-1. Should snippets become templates? (invocable via `/inversion`, `/nexus`)
-2. Should triggers be a separate table? (lighter weight, different usage pattern)
-3. Should operating modes be templates or a new category?
-4. What about the 66KB prompt-snippets.md master file?
+  // 2. Track executions
+  pi.on("tool_result", async (event, ctx) => {
+    // Log to vault.executions table
+  });
+}
+```
+
+**Features:**
+- `/vault:inversion` — query vault directly
+- `/vault --type cognitive` — list by type
+- Execution tracking (tokens, latency, model)
+- A/B testing via branches
 
 ---
 
-## Proposed Schema Evolution
+## Architecture Decision
 
-### Option A: Single Table, Type Column
+| Option | Pros | Cons |
+|--------|------|------|
+| **Direct query** | Real-time, no sync | Requires MySQL client |
+| **Export on change** | Simple, works offline | Stale possible |
+| **Hybrid** | Best of both | More complex |
 
-```sql
-ALTER TABLE prompt_templates
-ADD COLUMN type ENUM('template', 'snippet', 'trigger', 'mode') DEFAULT 'template';
-
-ALTER TABLE prompt_templates
-ADD COLUMN invocation_style ENUM('slash', 'inline', 'framework') DEFAULT 'slash';
-```
-
-### Option B: Separate Tables
-
-```sql
--- Lightweight invocable snippets
-CREATE TABLE prompt_snippets (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    name VARCHAR(64) NOT NULL UNIQUE,
-    shorthand VARCHAR(32),           -- 'inversion', 'nexus', etc.
-    directive TEXT NOT NULL,         -- the actual prompt text
-    explanation TEXT,                -- why it works
-    tags JSON,
-    status ENUM('draft', 'active', 'deprecated') DEFAULT 'active'
-);
-
--- Full frameworks (operating modes)
-CREATE TABLE prompt_frameworks (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    name VARCHAR(64) NOT NULL UNIQUE,
-    trigger_context TEXT,            -- when to use
-    framework TEXT NOT NULL,         -- full framework content
-    output_format TEXT,
-    tags JSON,
-    status ENUM('draft', 'active', 'deprecated') DEFAULT 'active'
-);
-```
-
-### Option C: Tag-Based Classification
-
-Keep single table, use tags for querying:
-
-```bash
-./pv templates --tag snippet
-./pv templates --tag trigger
-./pv templates --tag framework
-./pv templates --tag mode
-```
-
----
-
-## Analysis Needed
-
-1. **Inventory all prompts** — List everything in `~/steve/prompts/` with metadata
-2. **Determine invocation patterns** — How does each type get used?
-3. **Map relationships** — Do snippets reference templates? Do modes include snippets?
-4. **Consider access patterns** — Query by tag? By type? Full-text search?
-
----
-
-## Potential New Category: Cognitive Tools
-
-The snippets/triggers are different from templates:
-
-| Templates | Cognitive Tools |
-|-----------|-----------------|
-| Domain-specific | Domain-agnostic |
-| Produces output | Shifts perspective |
-| Linear execution | Epistemic framework |
-| `/review`, `/commit` | `/inversion`, `/nexus` |
-
-Could add:
-
-```sql
-CREATE TABLE cognitive_tools (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    name VARCHAR(64) NOT NULL UNIQUE,
-    shorthand VARCHAR(32),
-    category ENUM('inversion', 'analysis', 'synthesis', 'validation', 'planning'),
-    directive TEXT NOT NULL,
-    rationale TEXT,
-    example_usage TEXT,
-    tags JSON,
-    status ENUM('draft', 'active', 'deprecated') DEFAULT 'active'
-);
-```
-
-Then:
-
-```bash
-./pv tools                    # List cognitive tools
-./pv tools --category analysis
-./pv show tool inversion
-./pv search "assumption"
-```
+**Recommendation:** Hybrid
+- `pv export` generates flat files for pi's existing template system
+- Extension queries vault for metrics, search, and A/B testing
+- Flat files are cache, vault is source of truth
 
 ---
 
 ## Actions
 
-- [ ] Inventory `~/steve/prompts/` with metadata
-- [ ] Inventory `~/steve/prompts/triggers/` with metadata
-- [ ] Decide: single table vs multiple tables
-- [ ] Update schema if needed
-- [ ] Write import script for snippets/triggers
-- [ ] Update CLI to support new categories
-- [ ] Test queries: by type, by tag, full-text
+- [ ] Build vault-client extension for pi
+- [ ] Add `/vault:name` command
+- [ ] Add execution tracking hook
+- [ ] Add `--type` filter to pv CLI
+- [ ] Document workflow: edit in vault → export → use in pi
 
 ---
 
-## Open Questions
+## Quick Reference
 
-1. Should the 66KB master file be the source of truth, or individual trigger files?
-2. How do we handle snippet relationships (nexus depends on first-principles)?
-3. Should tools have a "requires" field for dependencies?
-4. Export format: how do cognitive tools differ from templates in export?
+```bash
+# Vault operations
+cd /home/tryinget/programming/prompt-vault
+./scripts/pv templates              # List all
+./scripts/pv show template inversion # View one
+./scripts/pv search "shadow"        # Search content
+
+# Import more tools
+./scripts/import-cognitive-tools.sh
+
+# Export to pi (when extension built)
+./scripts/pv export
+```

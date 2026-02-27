@@ -30,9 +30,9 @@ cmd_templates() {
     ensure_vault
     echo "=== Prompt Templates ==="
     dolt sql -q "
-        SELECT name, description, status, version 
+        SELECT name, type, status, version 
         FROM prompt_templates 
-        ORDER BY name
+        ORDER BY type, name
     " -r tabular
 }
 
