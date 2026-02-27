@@ -557,6 +557,63 @@ cmd_tag() {
     "$SCRIPT_DIR/pv-tag" "$@"
 }
 
+cmd_cleanup() {
+    ensure_vault
+    local days="${1:-30}"
+    local dry_run="${2:-}"
+    
+    echo "=== Execution Log Cleanup ==="
+    
+    # Count records to delete
+    local count=$(dolt sql -r csv -q "
+        SELECT COUNT(*) FROM executions 
+        WHERE created_at < DATE_SUB(NOW(), INTERVAL $days DAY)
+    " | tail -1)
+    
+    # Count total records
+    local total=$(dolt sql -r csv -q "SELECT COUNT(*) FROM executions" | tail -1)
+    
+    echo "Total executions: $total"
+    echo "Older than $days days: $count"
+    
+    if [ "$dry_run" = "--dry-run" ]; then
+        echo ""
+        echo "(dry-run mode - no changes made)"
+        echo "To actually delete: pv cleanup $days"
+        return 0
+    fi
+    
+    if [ "$count" -eq 0 ]; then
+        success "No records to clean up"
+        return 0
+    fi
+    
+    echo ""
+    info "Deleting $count old execution records..."
+    
+    # Delete old executions (cascades to feedback)
+    dolt sql -q "
+        DELETE FROM executions 
+        WHERE created_at < DATE_SUB(NOW(), INTERVAL $days DAY)
+    "
+    
+    # Also clean orphaned feedback
+    dolt sql -q "
+        DELETE FROM feedback 
+        WHERE execution_id NOT IN (SELECT id FROM executions)
+    " 2>/dev/null || true
+    
+    # Commit
+    dolt add -A
+    dolt commit -m "Cleanup: removed $count executions older than $days days" 2>/dev/null || true
+    
+    success "Cleaned up $count old records"
+    
+    # Show new total
+    local new_total=$(dolt sql -r csv -q "SELECT COUNT(*) FROM executions" | tail -1)
+    echo "Remaining executions: $new_total"
+}
+
 usage() {
     cat << 'EOF'
 Prompt Vault CLI - Version-controlled prompt templates and skills
@@ -636,6 +693,10 @@ Remote:
   push [remote]            Push to DoltHub
   pull [remote]            Pull from DoltHub
 
+Maintenance:
+  cleanup [days]           Remove old execution logs (default: 30 days)
+  cleanup N --dry-run      Preview what would be deleted
+
 Advanced:
   sql <query>              Run SQL directly
 
@@ -699,6 +760,7 @@ case "${1:-}" in
     quick) shift; cmd_quick "$@" ;;
     vars) shift; cmd_vars "$@" ;;
     tag) shift; cmd_tag "$@" ;;
+    cleanup) shift; cmd_cleanup "$@" ;;
     -h|--help|help) usage ;;
     -v|--version) echo "pv version $VERSION" ;;
     *) usage; exit 1 ;;

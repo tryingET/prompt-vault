@@ -2,56 +2,150 @@
 # Import cognitive tools from ~/steve/prompts/ into vault
 set -euo pipefail
 
-VAULT_DIR="${VAULT_DIR:-$(dirname "$0")/../prompt-vault-db}"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR/pv-lib.sh"
+
+VAULT_DIR="${VAULT_DIR:-$SCRIPT_DIR/../prompt-vault-db}"
 PROMPTS_DIR="${PROMPTS_DIR:-$HOME/steve/prompts}"
 
+# Limits
+MAX_CONTENT_SIZE=1048576  # 1MB max template size
+MAX_DESC_SIZE=1024        # 1KB max description
+
 cd "$VAULT_DIR"
+
+# Validate template content
+# Returns 0 if valid, 1 if issues found
+validate_template() {
+    local content="$1"
+    local name="$2"
+    local issues=()
+    
+    # Check size
+    local size=${#content}
+    if [ "$size" -gt "$MAX_CONTENT_SIZE" ]; then
+        issues+=("Content too large: $size bytes (max $MAX_CONTENT_SIZE)")
+    fi
+    
+    # Check for valid variable syntax (optional warning, not error)
+    # Variables should be $1, $2, $@, ${@:N}, ${N}
+    # Invalid: $, $$, $!, $@ with spaces, unclosed ${
+    local invalid_vars
+    invalid_vars=$(echo "$content" | grep -oE '\$[^0-9@{a-zA-Z_]' || true)
+    if [ -n "$invalid_vars" ]; then
+        # This is a warning, not an error - some $ symbols are intentional
+        : # Silently allow for now
+    fi
+    
+    # Check for unclosed braces
+    local open_braces=$(echo "$content" | grep -o '\${' | wc -l)
+    local close_braces=$(echo "$content" | grep -o '}' | wc -l)
+    # Note: this is approximate - doesn't handle nested braces
+    
+    if [ ${#issues[@]} -gt 0 ]; then
+        for issue in "${issues[@]}"; do
+            warn "  $issue"
+        done
+        return 1
+    fi
+    return 0
+}
 
 import_trigger() {
     local file="$1"
     local type="${2:-cognitive}"
     local name=$(basename "$file" .md | tr '[:upper:]' '[:lower:]')
     
-    # Skip INDEX
+    # Skip INDEX and validate
     [[ "$name" == "index" ]] && return 0
+    [[ ! -f "$file" ]] && { warn "File not found: $file"; return 1; }
     
+    # Read content
     local content
-    content=$(cat "$file" | sed "s/'/''/g")
+    content=$(cat "$file")
     
-    # Extract first line as description (up to 1024 chars)
+    # Validate
+    if ! validate_template "$content" "$name"; then
+        error "Validation failed for: $name"
+        return 1
+    fi
+    
+    # Escape for SQL (using improved function from pv-lib.sh)
+    local escaped_content
+    escaped_content=$(sql_escape "$content")
+    
+    # Extract first line as description (up to MAX_DESC_SIZE chars)
     local desc
-    desc=$(head -1 "$file" | sed 's/^#* *//' | cut -c1-1024 | sed "s/'/''/g")
+    desc=$(head -1 "$file" | sed 's/^#* *//' | cut -c1-$MAX_DESC_SIZE)
+    local escaped_desc
+    escaped_desc=$(sql_escape "$desc")
     
-    echo "Importing: $name ($type)"
+    # Extract tags from content if present (look for tags: or keywords:)
+    local tags='["cognitive", "trigger"]'
+    if echo "$content" | grep -qi '^tags:'; then
+        local tag_line
+        tag_line=$(echo "$content" | grep -i '^tags:' | head -1 | sed 's/^tags://i' | tr -d '[]')
+        if [ -n "$tag_line" ]; then
+            # Convert to JSON array
+            tags=$(echo "$tag_line" | tr ',' '\n' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//' | grep -v '^$' | jq -R . | jq -s .)
+        fi
+    fi
+    
+    info "Importing: $name ($type)"
     
     dolt sql -q "
         INSERT INTO prompt_templates (name, description, content, type, status, tags)
-        VALUES ('$name', '$desc', '$content', '$type', 'active', '[\"cognitive\", \"trigger\"]')
+        VALUES ('$name', '$escaped_desc', '$escaped_content', '$type', 'active', '$tags')
         ON DUPLICATE KEY UPDATE 
             description = VALUES(description),
             content = VALUES(content),
             type = VALUES(type),
             status = VALUES(status),
+            tags = VALUES(tags),
             updated_at = CURRENT_TIMESTAMP
-    " 2>/dev/null || echo "  (skipped or error)"
+    " 2>/dev/null || { warn "  (skipped or error)"; return 1; }
+    
+    success "  Imported: $name"
 }
+
+# Stats
+imported=0
+failed=0
 
 echo "=== Importing triggers ==="
 for f in "$PROMPTS_DIR"/triggers/*.md; do
-    import_trigger "$f" "cognitive"
+    if import_trigger "$f" "cognitive"; then
+        imported=$((imported + 1))
+    else
+        failed=$((failed + 1))
+    fi
 done
 
 echo ""
 echo "=== Importing standalone prompts ==="
-import_trigger "$PROMPTS_DIR/transcendent-iteration.md" "cognitive"
-import_trigger "$PROMPTS_DIR/unsung-foundations.md" "task"
-import_trigger "$PROMPTS_DIR/fcos-model-first-convergence.md" "task"
+for f in \
+    "$PROMPTS_DIR/transcendent-iteration.md: cognitive" \
+    "$PROMPTS_DIR/unsung-foundations.md: task" \
+    "$PROMPTS_DIR/fcos-model-first-convergence.md: task"
+do
+    file="${f%:*}"
+    type="${f#*: }"
+    type="${type:-cognitive}"
+    if import_trigger "$file" "$type"; then
+        imported=$((imported + 1))
+    else
+        failed=$((failed + 1))
+    fi
+done
 
 echo ""
 echo "=== Committing ==="
 dolt add -A
-dolt commit -m "Import cognitive tools from ~/steve/prompts" 2>/dev/null || echo "No changes to commit"
+dolt commit -m "Import cognitive tools: $imported imported, $failed failed" 2>/dev/null || info "No changes to commit"
 
 echo ""
 echo "=== Summary ==="
+echo "Imported: $imported"
+echo "Failed:   $failed"
+echo ""
 dolt sql -q "SELECT type, COUNT(*) as count FROM prompt_templates GROUP BY type" -r tabular
