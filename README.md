@@ -154,6 +154,7 @@ bats tests/      # Full suite
 
 | File | When to Read |
 |------|--------------|
+| [CHANGELOG.md](CHANGELOG.md) | Version history and changes |
 | [WORKFLOWS.md](docs/WORKFLOWS.md) | Team collaboration, CI/CD, advanced patterns |
 | [COMPARISON.md](docs/COMPARISON.md) | Deciding vault vs flat files |
 | [CRYSTALLIZED.md](docs/CRYSTALLIZED.md) | Patterns, anti-patterns, lessons learned |
