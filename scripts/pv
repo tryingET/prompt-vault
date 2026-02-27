@@ -28,10 +28,20 @@ cmd_export() {
 
 cmd_templates() {
     ensure_vault
-    echo "=== Prompt Templates ==="
+    local type_filter="${1:-}"
+    local where=""
+    
+    if [ -n "$type_filter" ]; then
+        where="WHERE type = '$type_filter'"
+        echo "=== Prompt Templates (type=$type_filter) ==="
+    else
+        echo "=== Prompt Templates ==="
+    fi
+    
     dolt sql -q "
         SELECT name, type, status, version 
         FROM prompt_templates 
+        $where
         ORDER BY type, name
     " -r tabular
 }

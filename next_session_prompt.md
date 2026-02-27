@@ -1,64 +1,66 @@
-# Vault + Pi Integration Complete
+# Prompt Vault + Pi Integration
 
-## What's Built
+## Architecture
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                         ARCHITECTURE                             │
-├─────────────────────────────────────────────────────────────────┤
-│                                                                  │
+│                                                                 │
 │   ~/steve/prompts/          prompt-vault/           pi          │
 │   ┌─────────────┐          ┌─────────────┐      ┌─────────────┐ │
 │   │ triggers/   │ import   │ Dolt DB     │      │ extension   │ │
 │   │ 27 tools    │ ───────► │ 48 templates│ ──── │ vault-client│ │
 │   │ + INDEX     │          │ 28 cognitive│      │             │ │
-│   └─────────────┘          │ 20 task     │      │ /vault:name │ │
-│                            └─────────────┘      │ /vaults      │ │
+│   │ + validate  │          │ 20 task     │      │ /vault:name │ │
+│   └─────────────┘          └─────────────┘      │ /vaults      │ │
 │                                                 │ /route ctx   │ │
+│                                                 │ /vault-stats │ │
 │                                                 └─────────────┘ │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## How to Use
+## Usage
 
-### 1. LIST AVAILABLE TOOLS
-
-```
-/vaults              # List all 48 templates by type
-/vault cognitive     # List only cognitive tools
-/vault task          # List only task templates
-```
-
-### 2. INVOKE A TOOL DIRECTLY
+### Pi Commands
 
 ```
-/vault:inversion                    # Load inversion framework
-/vault:nexus                        # Load nexus framework
-/vault:meta-orchestration           # Load the router itself
-/vault:audit "Button.tsx"           # Load audit with context
+/vaults                     # List all 48 templates
+/vault cognitive            # Same (via command)
+/vault:inversion            # Load inversion framework
+/vault:meta-orchestration   # Load the router
+/vault:nexus "my problem"   # Load with context
+/route I'm stuck on X       # Get tool recommendation
+/vault-search "shadow"      # Search vault content
+/vault-stats                # Show execution statistics
 ```
 
-### 3. ROUTE VIA META-ORCHESTRATION
+### CLI
 
-```
-/route I'm stuck on a refactoring and don't know where to start
-/route Tests are failing and I don't understand why
-/route I need to make a risky change to the payment system
+```bash
+cd ~/programming/prompt-vault
+
+./scripts/pv templates              # List all
+./scripts/pv templates cognitive    # List cognitive tools only
+./scripts/pv templates task         # List task templates only
+./scripts/pv show template inversion # View one
+./scripts/pv search "shadow"        # Search
+
+# Re-import after editing triggers
+./scripts/import-cognitive-tools.sh
 ```
 
-This invokes `meta-orchestration` which:
-1. Determines your PHASE (sensemaking → execution)
-2. Suggests FORMALIZATION level (0-4)
-3. Recommends TOOLS
-4. Gives you the command to invoke
+### Validation
+
+```bash
+~/steve/prompts/triggers/validate.sh
+```
 
 ---
 
-## The Router Logic
+## The Router
 
-**meta-orchestration IS the router:**
+**meta-orchestration** is the phase navigator:
 
 | Phase | Goal | Tools |
 |-------|------|-------|
@@ -77,7 +79,7 @@ This invokes `meta-orchestration` which:
 
 ---
 
-## Cognitive Tools in Vault
+## Cognitive Tools (28)
 
 | Category | Tools |
 |----------|-------|
@@ -92,65 +94,65 @@ This invokes `meta-orchestration` which:
 
 ---
 
-## Files Created
+## Files
 
 ```
 ~/.pi/agent/extensions/vault-client/
-├── index.ts          # Extension (8028 bytes)
-└── package.json      # Metadata
+├── index.ts          # Extension (359 lines)
+└── package.json
+
+~/steve/prompts/
+├── prompt-snippets.md      # Master reference (1834 lines)
+├── triggers/               # 27 triggers + INDEX + validate.sh
+│   ├── INDEX.md
+│   ├── validate.sh
+│   ├── meta-orchestration.md
+│   ├── inversion.md
+│   └── ... (25 more)
+├── transcendent-iteration.md
+├── unsung-foundations.md
+└── fcos-model-first-convergence.md
 
 ~/programming/prompt-vault/
-├── scripts/import-cognitive-tools.sh   # Import script
-├── schema/schema.sql                   # Updated with type column
-└── prompt-vault-db/                    # Dolt database
-    └── 48 templates (28 cognitive, 20 task)
+├── schema/schema.sql       # With type column
+├── scripts/
+│   ├── pv                  # CLI (templates --type)
+│   ├── import-cognitive-tools.sh
+│   └── ...
+└── prompt-vault-db/        # Dolt database
 ```
 
 ---
 
-## Test It
+## Features
 
-```bash
-# Start pi (extension auto-loads)
-pi
-
-# List tools
-/vaults
-
-# Route a problem
-/route I'm overwhelmed with too many things to do
-
-# Invoke directly
-/vault:crisis
-```
-
----
-
-## Next Enhancements
-
-- [ ] Execution tracking (log to vault.executions)
-- [ ] A/B testing (return different versions by branch)
-- [ ] Search by tag: `/vault-tag cognitive`
-- [ ] Auto-suggest on keywords ("I'm stuck" → suggests inversion)
-- [ ] Full-text search with relevance scoring
+| Feature | Status |
+|---------|--------|
+| Direct vault query | ✅ `/vault:name` |
+| List by type | ✅ `/vaults`, `pv templates cognitive` |
+| Routing via meta-orchestration | ✅ `/route <context>` |
+| Search | ✅ `/vault-search` |
+| Execution tracking | ✅ Logs to vault.executions |
+| Stats | ✅ `/vault-stats` |
+| Validation | ✅ `validate.sh` |
+| A/B testing | 🔲 Future (dolt branches) |
+| Auto-suggest | 🔲 Future |
 
 ---
 
 ## Quick Reference
 
-```bash
-# Vault CLI
-cd ~/programming/prompt-vault
-./scripts/pv templates              # List all
-./scripts/pv show template inversion # View one
-./scripts/pv search "shadow"        # Search
+```
+# In pi
+/vaults                         # List all
+/vault:inversion                # Use tool
+/route <situation>              # Get recommendation
+/vault-stats                    # See usage
 
-# Re-import after adding triggers
-./scripts/import-cognitive-tools.sh
+# CLI
+./scripts/pv templates cognitive
+./scripts/pv search "shadow"
 
-# Pi commands
-/vaults                             # List all
-/vault:inversion                    # Use tool
-/route <situation>                  # Get routing suggestion
-/vault-search <query>               # Search vault
+# Validate
+~/steve/prompts/triggers/validate.sh
 ```
