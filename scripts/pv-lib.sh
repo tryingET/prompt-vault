@@ -42,13 +42,15 @@ check_deps() {
     fi
 }
 
-# Safely escape content for SQL using heredoc approach
-# Handles multi-line content, quotes, and special characters
+# Safely escape content for SQL
+# Handles: single quotes, backslashes, null bytes, newlines
 sql_escape() {
     local content="$1"
-    # Replace single quotes with doubled single quotes (SQL standard)
-    # Use printf to handle special chars properly
-    printf '%s' "$content" | sed "s/'/''/g"
+    # Order matters: backslash first, then quotes
+    # Remove null bytes, escape backslashes, escape single quotes
+    printf '%s' "$content" | \
+        tr -d '\0' | \
+        sed 's/\\/\\\\/g; s/'\''/'\'''\''/g'
 }
 
 # Alternative: Use base64 encoding for complex content
@@ -58,6 +60,12 @@ sql_escape_base64() {
     printf '%s' "$content" | base64 -w0
 }
 
+# Decode base64 in bash (for round-trip testing)
+sql_decode_base64() {
+    local encoded="$1"
+    printf '%s' "$encoded" | base64 -d
+}
+
 # Export functions and variables for sourcing scripts
-export -f info success warn error ensure_vault check_deps sql_escape sql_escape_base64
+export -f info success warn error ensure_vault check_deps sql_escape sql_escape_base64 sql_decode_base64
 export SCRIPTS_DIR VAULT_DIR RED GREEN YELLOW BLUE NC

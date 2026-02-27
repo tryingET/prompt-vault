@@ -6,6 +6,24 @@
 -- - Status lifecycle: draft → active → deprecated → archived
 -- - Executions/feedback enable the quality feedback loop
 -- - Collections provide logical grouping without hierarchy
+--
+-- Schema Version: 1
+-- Changelog:
+--   v1: Initial schema with schema_version table
+--   v0: Pre-versioning (no schema_version table)
+
+-- Schema version tracking for migrations
+-- Each row represents a migration applied
+CREATE TABLE IF NOT EXISTS schema_version (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    version INT NOT NULL,                     -- schema version number
+    description VARCHAR(255),                 -- what changed
+    applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_version (version)
+);
+
+-- Insert initial version if not exists
+INSERT IGNORE INTO schema_version (version, description) VALUES (1, 'Initial schema with version tracking');
 
 -- Core entity: reusable prompt templates
 -- Variables use pi syntax: $1, $2, $@, ${@:N}

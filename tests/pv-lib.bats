@@ -56,14 +56,50 @@ line2")
 
 @test "pv-lib: sql_escape handles backslashes" {
     result=$(sql_escape "path\\to\\file")
-    [[ "$result" == *"path"* ]]
-    [[ "$result" == *"file"* ]]
+    [[ "$result" == *"\\\\\\\\"* ]]  # Double backslashes
+}
+
+@test "pv-lib: sql_escape handles backslash-quote sequences" {
+    result=$(sql_escape "test\\'s value")
+    # Should escape both backslash and quote
+    [[ "$result" == *"\\\\''"* ]]
+}
+
+@test "pv-lib: sql_escape removes null bytes" {
+    result=$(sql_escape $'line1\x00line2')
+    [[ "$result" == *"line1line2"* ]]
+    [[ "$result" != *$'\x00'* ]]
+}
+
+@test "pv-lib: sql_escape handles commas" {
+    result=$(sql_escape "a, b, c")
+    [[ "$result" == *"a, b, c"* ]]
+}
+
+@test "pv-lib: sql_escape handles unicode" {
+    result=$(sql_escape "Hello 世界 🌍")
+    [[ "$result" == *"世界"* ]]
+    [[ "$result" == *"🌍"* ]]
+}
+
+@test "pv-lib: sql_escape handles mixed adversarial content" {
+    result=$(sql_escape "it's a\\test, with 'quotes', \\backslashes\\, and commas")
+    [[ "$result" == *"''"* ]]      # Escaped quotes
+    [[ "$result" == *'\\\\'* ]]    # Escaped backslashes
+    [[ "$result" == *","* ]]       # Commas preserved
 }
 
 @test "pv-lib: sql_escape_base64 produces valid base64" {
     result=$(sql_escape_base64 "test content")
     # Base64 only contains alphanumeric, +, /, and = for padding
     [[ "$result" =~ ^[A-Za-z0-9+/=]+$ ]]
+}
+
+@test "pv-lib: sql_escape_base64 roundtrip preserves content" {
+    original="it's a test\\with\\backslashes, commas, and \"quotes\""
+    encoded=$(sql_escape_base64 "$original")
+    decoded=$(sql_decode_base64 "$encoded")
+    [[ "$decoded" == "$original" ]]
 }
 
 @test "pv-lib: ensure_vault fails when vault missing" {
