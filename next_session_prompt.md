@@ -1,4 +1,134 @@
-# Prompt Vault + Pi Integration
+# Next Session: Complete Trigger Schema
+
+## Current State
+
+**Vault:** 48 templates (28 cognitive, 20 task)
+**Extension:** vault-client with execution tracking
+**CLI:** `pv templates [type]` filter working
+
+---
+
+## DEEP REVIEW FINDINGS
+
+### Bugs Found
+
+| Bug | Files | Severity |
+|-----|-------|----------|
+| Missing OUTPUT FORMAT | dependency-cartography, knowledge-crystallization, temporal-degradation, recursion-engine | HIGH |
+| OUTPUT naming inconsistent | 4 files use `OUTPUT:` or `OUTPUT STRUCTURE:` | MEDIUM |
+| Mode/tool classification unclear | controlled, morning, decision have OUTPUT but are "modes" | LOW |
+
+### Missing OUTPUT FORMAT
+
+```
+dependency-cartography.md  — 25 lines, no OUTPUT
+knowledge-crystallization.md — 22 lines, no OUTPUT
+temporal-degradation.md    — 17 lines, no OUTPUT
+recursion-engine.md        — 54 lines, no OUTPUT
+```
+
+### Naming Variants
+
+```
+OUTPUT FORMAT:      (16 files) ← STANDARD
+OUTPUT:             (3 files)
+OUTPUT STRUCTURE:   (1 file - deep-review.md)
+```
+
+---
+
+## Actions
+
+### 1. Add OUTPUT FORMAT to 4 files
+
+For each of: `dependency-cartography`, `knowledge-crystallization`, `temporal-degradation`, `recursion-engine`
+
+Add before closing ```:
+```
+OUTPUT FORMAT:
+```
+[appropriate output structure]
+```
+```
+
+### 2. Standardize naming
+
+Change `OUTPUT:` and `OUTPUT STRUCTURE:` → `OUTPUT FORMAT:`
+
+### 3. Re-import to vault
+
+```bash
+cd /home/tryinget/programming/prompt-vault
+./scripts/import-cognitive-tools.sh
+```
+
+### 4. Update validation
+
+Add to `validate.sh`:
+- Check all cognitive tools have OUTPUT FORMAT
+- Check naming is standardized
+
+### 5. Document schema
+
+Create `~/steve/prompts/triggers/TRIGGER_FORMAT.md`:
+```markdown
+## TRIGGER CONTRACT
+
+Every cognitive tool MUST have:
+1. Header: `NAME — Description` (no prefix)
+2. Content in code block
+3. `OUTPUT FORMAT:` section
+
+Mode triggers (napkin, crisis, controlled, morning, decision):
+- Define state/mode, not analysis
+- MAY omit OUTPUT FORMAT
+
+Naming: Always `OUTPUT FORMAT:` (not OUTPUT: or OUTPUT STRUCTURE:)
+```
+
+---
+
+## Quick Reference
+
+```bash
+# Validate triggers
+~/steve/prompts/triggers/validate.sh
+
+# List by type
+./scripts/pv templates cognitive
+./scripts/pv templates task
+
+# Re-import after edits
+./scripts/import-cognitive-tools.sh
+
+# Test in pi
+/vault:dependency-cartography
+/vault:temporal-degradation
+```
+
+---
+
+## Files Summary
+
+```
+~/.pi/agent/extensions/vault-client/
+├── index.ts          # 359 lines, execution tracking
+└── package.json
+
+~/steve/prompts/
+├── prompt-snippets.md      # Master reference
+├── triggers/               # 27 triggers + INDEX + validate.sh
+│   ├── 4 need OUTPUT FORMAT added
+│   └── 4 need OUTPUT naming fixed
+└── ...
+
+~/programming/prompt-vault/
+├── schema/schema.sql       # With type column
+├── scripts/pv              # CLI with --type filter
+└── prompt-vault-db/        # 48 templates
+```
+
+---
 
 ## Architecture
 
@@ -9,73 +139,13 @@
 │   ┌─────────────┐          ┌─────────────┐      ┌─────────────┐ │
 │   │ triggers/   │ import   │ Dolt DB     │      │ extension   │ │
 │   │ 27 tools    │ ───────► │ 48 templates│ ──── │ vault-client│ │
-│   │ + INDEX     │          │ 28 cognitive│      │             │ │
-│   │ + validate  │          │ 20 task     │      │ /vault:name │ │
-│   └─────────────┘          └─────────────┘      │ /vaults      │ │
-│                                                 │ /route ctx   │ │
+│   │ + validate  │          │ 28 cognitive│      │             │ │
+│   └─────────────┘          │ 20 task     │      │ /vault:name │ │
+│                            └─────────────┘      │ /route ctx   │ │
 │                                                 │ /vault-stats │ │
 │                                                 └─────────────┘ │
 └─────────────────────────────────────────────────────────────────┘
 ```
-
----
-
-## Usage
-
-### Pi Commands
-
-```
-/vaults                     # List all 48 templates
-/vault cognitive            # Same (via command)
-/vault:inversion            # Load inversion framework
-/vault:meta-orchestration   # Load the router
-/vault:nexus "my problem"   # Load with context
-/route I'm stuck on X       # Get tool recommendation
-/vault-search "shadow"      # Search vault content
-/vault-stats                # Show execution statistics
-```
-
-### CLI
-
-```bash
-cd ~/programming/prompt-vault
-
-./scripts/pv templates              # List all
-./scripts/pv templates cognitive    # List cognitive tools only
-./scripts/pv templates task         # List task templates only
-./scripts/pv show template inversion # View one
-./scripts/pv search "shadow"        # Search
-
-# Re-import after editing triggers
-./scripts/import-cognitive-tools.sh
-```
-
-### Validation
-
-```bash
-~/steve/prompts/triggers/validate.sh
-```
-
----
-
-## The Router
-
-**meta-orchestration** is the phase navigator:
-
-| Phase | Goal | Tools |
-|-------|------|-------|
-| SENSEMAKING | Understand problem space | inversion, telescopic |
-| HYPOTHESIS | Generate solutions | nexus, simplification |
-| PROBING | Test cheaply | blast-radius, escape-hatch |
-| VALIDATION | Stress-test | audit, adversary |
-| EXECUTION | Run bounded process | atomic-completion |
-
-**Formalization Ladder:**
-- 0: NAPKIN — disposable, fast
-- 1: SKETCH — temporary structure
-- 2: BOUNDED — executable with guards
-- 3: WORKFLOW — stable, repeatable
-- 4: OPERATIONAL — production-grade
 
 ---
 
@@ -88,71 +158,8 @@ cd ~/programming/prompt-vault
 | **Mode** | napkin, controlled, crisis, morning, decision |
 | **Quality** | deep-review, atomic-completion, blast-radius, escape-hatch |
 | **Testing** | mirror, adversary, inquisition, doppelganger, scaffold |
-| **Architecture** | dependency-cartography, temporal-degradation, knowledge-crystallization, recursion-engine |
+| **Architecture** | dependency-cartography*, temporal-degradation*, knowledge-crystallization*, recursion-engine* |
 | **Docs** | elevate |
 | **Problem** | constraint-inventory |
 
----
-
-## Files
-
-```
-~/.pi/agent/extensions/vault-client/
-├── index.ts          # Extension (359 lines)
-└── package.json
-
-~/steve/prompts/
-├── prompt-snippets.md      # Master reference (1834 lines)
-├── triggers/               # 27 triggers + INDEX + validate.sh
-│   ├── INDEX.md
-│   ├── validate.sh
-│   ├── meta-orchestration.md
-│   ├── inversion.md
-│   └── ... (25 more)
-├── transcendent-iteration.md
-├── unsung-foundations.md
-└── fcos-model-first-convergence.md
-
-~/programming/prompt-vault/
-├── schema/schema.sql       # With type column
-├── scripts/
-│   ├── pv                  # CLI (templates --type)
-│   ├── import-cognitive-tools.sh
-│   └── ...
-└── prompt-vault-db/        # Dolt database
-```
-
----
-
-## Features
-
-| Feature | Status |
-|---------|--------|
-| Direct vault query | ✅ `/vault:name` |
-| List by type | ✅ `/vaults`, `pv templates cognitive` |
-| Routing via meta-orchestration | ✅ `/route <context>` |
-| Search | ✅ `/vault-search` |
-| Execution tracking | ✅ Logs to vault.executions |
-| Stats | ✅ `/vault-stats` |
-| Validation | ✅ `validate.sh` |
-| A/B testing | 🔲 Future (dolt branches) |
-| Auto-suggest | 🔲 Future |
-
----
-
-## Quick Reference
-
-```
-# In pi
-/vaults                         # List all
-/vault:inversion                # Use tool
-/route <situation>              # Get recommendation
-/vault-stats                    # See usage
-
-# CLI
-./scripts/pv templates cognitive
-./scripts/pv search "shadow"
-
-# Validate
-~/steve/prompts/triggers/validate.sh
-```
+*Needs OUTPUT FORMAT added
