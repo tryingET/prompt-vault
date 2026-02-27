@@ -16,12 +16,11 @@ cd "$VAULT_DIR"
 
 echo "=== Importing from pi ==="
 
-# Safely escape content for SQL using heredoc to avoid shell interpretation
-# This handles backslashes, quotes, and multi-line content correctly
+# Safely escape content for SQL
+# Uses sed for single-quote escaping (SQL standard: '' for ')
 sql_escape_content() {
     local content="$1"
-    # Use awk for robust single-quote escaping (SQL standard: '' for ')
-    printf '%s' "$content" | awk '{gsub(/'"'"'/, "'"'"'"'"'"'"'"'"); print}' ORS=''
+    printf '%s' "$content" | sed "s/'/''/g"
 }
 
 # Execute SQL using temp file to avoid shell interpretation issues
