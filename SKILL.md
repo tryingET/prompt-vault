@@ -42,6 +42,9 @@ cd scripts
 ./pv exec template x "args"       # Run with tracking
 ./pv rate <exec-id> 4 "notes"     # Feedback
 ./pv stats                        # See what works
+
+./pv cleanup 30                   # Remove old execution logs
+./pv migrate status               # Check schema version
 ```
 
 ## Schema

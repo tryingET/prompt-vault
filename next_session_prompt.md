@@ -1,6 +1,6 @@
-# Prompt Vault + Pi Integration — COMPLETE
+# Prompt Vault + Pi Integration — DEEP REVIEW COMPLETE
 
-## Status: ✅ All Actions Complete
+## Status: ✅ All Critical Issues Fixed
 
 ---
 
@@ -25,20 +25,33 @@
 
 ---
 
-## Completed Actions
+## Deep Review Fixes Applied
 
-- [x] Schema evolution (type column)
-- [x] Import 28 cognitive tools to vault
-- [x] Import 20 task templates to vault
-- [x] Build vault-client extension for pi
-- [x] Add /vault:name command
-- [x] Add /route <context> routing
-- [x] Add execution tracking
-- [x] Add /vault-stats command
-- [x] Add --type filter to pv CLI
-- [x] Add OUTPUT FORMAT to 4 missing tools
-- [x] Standardize OUTPUT FORMAT naming (24 files)
-- [x] Create validate.sh for triggers
+| Issue | Severity | Fix |
+|-------|----------|-----|
+| CSV parser corrupts on commas | CRITICAL | Switched to JSON output |
+| No schema versioning | CRITICAL | Added schema_version table |
+| SQL escaping incomplete | HIGH | Handle backslashes + nulls |
+| No template validation | HIGH | Added validation at import |
+| No execution cleanup | MEDIUM | Added cleanup command |
+| Hardcoded paths | MEDIUM | Environment variables |
+
+---
+
+## Files Changed (Deep Review)
+
+```
+docs/CRYSTALLIZED.md              +145 (new - patterns & learnings)
+schema/schema.sql                 +18  (schema_version table)
+scripts/import-cognitive-tools.sh +107 (validation, proper escaping)
+scripts/pv                        +62  (cleanup command)
+scripts/pv-lib.sh                 +14  (better SQL escaping)
+scripts/pv-migrate                +68  (schema_version support)
+tests/pv-lib.bats                 +40  (adversarial test cases)
+migrations/.gitkeep               (new)
+
+~/.pi/.../vault-client/index.ts   rewritten (JSON parsing, escaping)
+```
 
 ---
 
@@ -67,6 +80,10 @@ cd ~/programming/prompt-vault
 ./scripts/pv show template inversion # View one
 ./scripts/pv search "shadow"        # Search
 
+# Maintenance
+./scripts/pv cleanup 30             # Remove old executions
+./scripts/pv migrate status         # Check schema version
+
 # Re-import after editing triggers
 ./scripts/import-cognitive-tools.sh
 ```
@@ -75,6 +92,7 @@ cd ~/programming/prompt-vault
 
 ```bash
 ~/steve/prompts/triggers/validate.sh
+./verify.sh
 ```
 
 ---
@@ -112,7 +130,7 @@ cd ~/programming/prompt-vault
 
 ```
 ~/.pi/agent/extensions/vault-client/
-├── index.ts          # 359 lines, execution tracking
+├── index.ts          # 393 lines, JSON parsing, proper escaping
 └── package.json
 
 ~/steve/prompts/
@@ -123,24 +141,48 @@ cd ~/programming/prompt-vault
 └── ...
 
 ~/programming/prompt-vault/
-├── schema/schema.sql       # With type column
-├── scripts/pv              # CLI with --type filter
+├── schema/schema.sql       # With schema_version table
+├── scripts/pv              # CLI with cleanup command
+├── migrations/             # For future migrations
+├── docs/CRYSTALLIZED.md    # Patterns & learnings
 └── prompt-vault-db/        # 48 templates (28 cognitive, 20 task)
 ```
 
 ---
 
-## Validation Results
+## Verification Results
 
 ```
-=== TRIGGER VALIDATION ===
-Extraction artifacts (### prefix): OK
-Header prefix (##): OK  
-Why it works sections: OK
-INDEX references exist: OK
-OUTPUT FORMAT present: 24 have, 2 don't (mode triggers: napkin, crisis)
+=== Prompt Vault Verification ===
+Prerequisites: ✓ dolt, ✓ vault initialized
+Core Commands: ✓ all pass
+Quality & Lint: ✓ all pass
+Subcommand Scripts: ✓ 23/23 executable
 
+Results: Passed: 33, Failed: 0
 ✓ ALL CHECKS PASSED
+
+Schema version: 1
+SQL escaping: handles quotes, backslashes, nulls, unicode
+JSON parsing: handles all edge cases
+```
+
+---
+
+## Rollback Commands
+
+```bash
+# If extension breaks pi:
+rm -rf ~/.pi/agent/extensions/vault-client
+
+# If vault corrupted:
+cd prompt-vault-db && dolt reset --hard HEAD~1
+
+# If bad import:
+./scripts/pv sql "DELETE FROM prompt_templates WHERE name = 'bad'"
+
+# Full reset:
+rm -rf prompt-vault-db && ./scripts/pv init && ./scripts/import-cognitive-tools.sh
 ```
 
 ---
@@ -157,7 +199,30 @@ OUTPUT FORMAT present: 24 have, 2 don't (mode triggers: napkin, crisis)
 # CLI
 ./scripts/pv templates cognitive
 ./scripts/pv search "shadow"
+./scripts/pv cleanup 30 --dry-run
+./scripts/pv migrate status
 
 # Validate
 ~/steve/prompts/triggers/validate.sh
+./verify.sh
 ```
+
+---
+
+## Documentation
+
+| File | Purpose |
+|------|---------|
+| [README.md](README.md) | Overview and quick start |
+| [SKILL.md](SKILL.md) | Pi skill definition |
+| [docs/WORKFLOWS.md](docs/WORKFLOWS.md) | Team collaboration, CI/CD |
+| [docs/COMPARISON.md](docs/COMPARISON.md) | Vault vs flat files |
+| [docs/CRYSTALLIZED.md](docs/CRYSTALLIZED.md) | Patterns, anti-patterns, lessons |
+
+---
+
+## Future Work (Non-Blocking)
+
+1. **Output capture** — Add optional `output_text` to executions table
+2. **Rate limiting** — Add throttling to `/vault:name` command  
+3. **HTTP API** — Abstract query layer when third client appears

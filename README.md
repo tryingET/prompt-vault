@@ -156,6 +156,29 @@ bats tests/      # Full suite
 |------|--------------|
 | [WORKFLOWS.md](docs/WORKFLOWS.md) | Team collaboration, CI/CD, advanced patterns |
 | [COMPARISON.md](docs/COMPARISON.md) | Deciding vault vs flat files |
+| [CRYSTALLIZED.md](docs/CRYSTALLIZED.md) | Patterns, anti-patterns, lessons learned |
+
+## Pi Integration
+
+The vault-client extension connects pi directly to the vault:
+
+```
+/vaults                     # List all templates
+/vault:inversion            # Load inversion framework
+/vault:nexus "my problem"   # Load with context
+/route I'm stuck on X       # Get tool recommendation
+/vault-stats                # Show usage statistics
+```
+
+## Maintenance
+
+```bash
+./pv cleanup 30             # Remove executions older than 30 days
+./pv cleanup 30 --dry-run   # Preview cleanup
+./pv migrate status         # Check schema version
+./pv backup create          # Create backup
+./pv backup list            # List backups
+```
 
 ## Philosophy
 
