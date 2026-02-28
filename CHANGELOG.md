@@ -1,5 +1,7 @@
 # Changelog
 
+> [← Back to README](README.md) · [Workflows](docs/WORKFLOWS.md) · [Patterns](docs/CRYSTALLIZED.md)
+
 All notable changes to prompt-vault are documented here.
 
 ## [1.1.0] - 2026-02-27

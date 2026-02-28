@@ -1,5 +1,11 @@
 # Prompt Vault
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Dolt](https://img.shields.io/badge/Database-Dolt-blue)](https://www.dolthub.com/)
+[![Shell](https://img.shields.io/badge/Shell-Bash-green)](https://www.gnu.org/software/bash/)
+
+**Version-controlled prompt templates with SQL, Git semantics, and analytics.**
+
 Prompts are programs. They deserve the same rigor as code: version control, testing, metrics, and collaborative review.
 
 Prompt Vault treats prompts as structured data in a SQL database with Git-style version control. Every prompt has a history. Every change is tracked. Every execution measured.
@@ -154,6 +160,7 @@ bats tests/      # Full suite
 
 | File | When to Read |
 |------|--------------|
+| [QUICKSTART.md](QUICKSTART.md) | Get started in 5 minutes |
 | [CHANGELOG.md](CHANGELOG.md) | Version history and changes |
 | [WORKFLOWS.md](docs/WORKFLOWS.md) | Team collaboration, CI/CD, advanced patterns |
 | [COMPARISON.md](docs/COMPARISON.md) | Deciding vault vs flat files |
@@ -188,3 +195,13 @@ Most prompt engineering is faith-based. You write a prompt, use it, hope it work
 Vault closes the loop. Every prompt has a past. Every execution leaves evidence. Every judgment gets recorded. Over time, patterns emerge. Weak prompts reveal themselves. Strong ones compound.
 
 The database is small. The impact is not.
+
+## License
+
+MIT License — see [LICENSE](LICENSE) for details.
+
+## Contributing
+
+1. Read [CRYSTALLIZED.md](docs/CRYSTALLIZED.md) for patterns and conventions
+2. Run `./verify.sh` before submitting changes
+3. Follow conventional commit format

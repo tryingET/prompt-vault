@@ -9,6 +9,8 @@ read_when:
 
 # Crystallized Learnings
 
+> [← Back to README](../README.md) · [Workflows](WORKFLOWS.md) · [Comparison](COMPARISON.md)
+
 Knowledge extracted from development and review sessions.
 
 ## Patterns Discovered

@@ -8,6 +8,9 @@ prompt-vault-db/.doltcfg/
 # Backups
 backups/
 
+# Session artifacts (regenerated each session)
+.next_session.md
+
 # Editor
 *.swp
 *.swo

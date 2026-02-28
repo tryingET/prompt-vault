@@ -9,6 +9,8 @@ read_when:
 
 # Prompt Vault Workflows
 
+> [← Back to README](../README.md) · [Comparison](COMPARISON.md) · [Patterns](CRYSTALLIZED.md)
+
 For practitioners who've outgrown flat files.
 
 ## The A/B Testing Protocol

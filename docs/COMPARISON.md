@@ -7,6 +7,8 @@ read_when:
 
 # Prompt Vault vs Flat Files
 
+> [← Back to README](../README.md) · [Changelog](../CHANGELOG.md)
+
 Pi uses flat markdown files. Vault uses a SQL database with Git semantics.
 
 The difference: **pi trusts. Vault verifies.**
