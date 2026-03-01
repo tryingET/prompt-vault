@@ -7,5 +7,26 @@ read_when:
 # System4D — Fog
 
 ## Risks
-- Risk(s):
 
+- Dolt not widely adopted — may have ecosystem gaps
+- Single-user model limits team collaboration
+- No output capture breaks full feedback loop
+
+## Assumptions
+
+- Users have Dolt installed
+- Users are comfortable with SQL
+- Templates are text-only (no binary assets)
+
+## Exceptions
+
+- Execution logs can grow unbounded (mitigated by `pv cleanup`)
+- Large templates (>1MB) rejected at import
+
+## Debt
+
+| Item | Status |
+|------|--------|
+| HTTP API abstraction | Deferred until third client |
+| Output capture | Planned |
+| Rate limiting | Planned |

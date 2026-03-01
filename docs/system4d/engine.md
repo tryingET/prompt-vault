@@ -7,5 +7,23 @@ read_when:
 # System4D — Engine
 
 ## Invariants
-- Invariant(s):
 
+- Every template has unique `name`
+- Every template has `status` (draft → active → deprecated → archived)
+- Every execution references a valid template
+- Schema version is tracked and migrations are explicit
+
+## Lifecycle
+
+```
+Template: draft → active → deprecated → archived
+Execution: created → (optional: rated)
+```
+
+## States
+
+| Entity | States |
+|--------|--------|
+| prompt_templates | draft, active, deprecated, archived |
+| executions | created |
+| feedback | created |

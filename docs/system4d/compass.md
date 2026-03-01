@@ -7,8 +7,12 @@ read_when:
 # System4D — Compass
 
 ## Driver
-- Driver:
+
+- Prompt engineering lacks feedback loops — we write, use, hope
 
 ## Outcomes
-- Outcome(s):
 
+- Every prompt has version history
+- Every execution is tracked
+- Every judgment is recorded
+- Weak prompts reveal themselves; strong ones compound

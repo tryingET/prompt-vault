@@ -6,7 +6,19 @@ read_when:
 
 # Org Summary
 
-- Org purpose:
-- Non-negotiables:
-- Approval/consent notes:
+## Software Company
 
+- **Purpose:** Build AI-powered tools and infrastructure
+- **Location:** `~/ai-society/softwareco/`
+- **Templates:** `softwareco-templates` (L1)
+
+## Non-negotiables
+
+- No secrets in git
+- MRs only, no direct push to main
+- Run verification before merge
+
+## Approval/consent notes
+
+- Template changes require L1 review
+- Schema migrations require explicit rollback plan
