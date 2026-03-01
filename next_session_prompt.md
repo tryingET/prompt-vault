@@ -44,11 +44,23 @@ cd ~/ai-society/softwareco/owned/prompt-vault
 
 ## Next Steps
 
-1. **Set up remote** — DoltHub or GitLab
-2. **Test extension** — Verify `/vault:name` works
-3. **Archive old** — Remove `~/programming/prompt-vault`
-4. **Output capture** — Add to executions table
-5. **Quality dashboard** — Build visualization
+### Immediate
+
+1. **Set up remote** — Add DoltHub or GitLab remote for backup/collaboration
+2. **Test extension** — Verify `/vault:name` and `/route` work in pi with new path
+3. **Archive old location** — Remove or archive `~/programming/prompt-vault`
+
+### Short-term
+
+4. **Output capture** — Add optional `output_text` column to executions table
+5. **Rate limiting** — Add throttling to `/vault:name` command
+6. **Quality dashboard** — Build `pv quality dashboard` with charts
+
+### Future
+
+7. **HTTP API** — Abstract query layer when third client appears
+8. **Multi-tenancy** — Support multiple vaults per user/team
+9. **Web UI** — Browser-based template management
 
 ## Documentation
 
@@ -64,11 +76,11 @@ cd ~/ai-society/softwareco/owned/prompt-vault
 ## Recent History
 
 ```
+b560267 docs: fill in template placeholders with prompt-vault context
 900fe0e docs: update AGENTS.md for prompt-vault specifics
 675253c Merge prompt-vault with full git history
 3e4a07e Initial commit from softwareco-templates L1
 7749fba docs: prepare for publication with badges, navigation
-09b723f Fix critical issues from deep-review
 ```
 
 ## Known Issues
