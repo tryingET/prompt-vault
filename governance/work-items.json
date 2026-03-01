@@ -1,0 +1,22 @@
+{
+  "schema_version": 1,
+  "updated_at": "",
+  "owner": "prompt-vault",
+  "naming_contract": {
+    "system_name": "PROMPT_VAULT",
+    "issue_prefix": "PROMPTVAULT-",
+    "tool_namespace": "prompt-vault"
+  },
+  "milestones": [
+    {
+      "id": "M1",
+      "title": "Initial Setup",
+      "issues": []
+    }
+  ],
+  "program_dod": [
+    "All tests pass",
+    "Documentation updated",
+    "Code reviewed"
+  ]
+}
