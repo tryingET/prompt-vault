@@ -1,0 +1,266 @@
+#!/usr/bin/env bash
+# pv-tui - Terminal UI for browsing and managing the vault
+# Requires: fzf, bat (optional)
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+VAULT_DIR="${VAULT_DIR:-$SCRIPT_DIR/../prompt-vault-db}"
+
+cd "$VAULT_DIR"
+
+# Check dependencies
+if ! command -v fzf &> /dev/null; then
+    echo "Error: fzf is required. Install with: apt install fzf or brew install fzf" >&2
+    exit 1
+fi
+
+# Colors
+export FZF_DEFAULT_OPTS="
+    --height=90%
+    --layout=reverse
+    --border=rounded
+    --color=bg+:#1e1e2e,bg:#181825,spinner:#f5e0dc,hl:#f38ba8
+    --color=fg:#cdd6f4,header:#f38ba8,info:#cba6f7,pointer:#f5e0dc
+    --color=marker:#f5e0dc,fg+:#cdd6f4,prompt:#cba6f7,hl+:#f38ba8
+"
+
+get_templates() {
+    dolt sql -r csv -q "
+        SELECT name, description, status 
+        FROM prompt_templates 
+        ORDER BY name
+    " | tail -n +2 | column -t -s','
+}
+
+get_skills() {
+    dolt sql -r csv -q "
+        SELECT name, LEFT(description, 60), status 
+        FROM skills 
+        ORDER BY name
+    " | tail -n +2 | column -t -s','
+}
+
+get_collections() {
+    dolt sql -r csv -q "
+        SELECT name, description 
+        FROM collections 
+        ORDER BY name
+    " | tail -n +2 | column -t -s','
+}
+
+show_template() {
+    local name="$1"
+    local content=$(dolt sql -r csv -q "
+        SELECT content FROM prompt_templates 
+        WHERE name = '$name' AND status = 'active' 
+        ORDER BY version DESC LIMIT 1
+    " | tail -1 | sed "s/''/'/g")
+    
+    if command -v bat &> /dev/null; then
+        echo "$content" | bat --language=markdown --style=plain --paging=always
+    else
+        echo "$content" | less -R
+    fi
+}
+
+show_skill() {
+    local name="$1"
+    local readme=$(dolt sql -r csv -q "
+        SELECT readme FROM skills 
+        WHERE name = '$name' AND status = 'active' 
+        ORDER BY version DESC LIMIT 1
+    " | tail -1 | sed "s/''/'/g")
+    
+    if command -v bat &> /dev/null; then
+        echo "$readme" | bat --language=markdown --style=plain --paging=always
+    else
+        echo "$readme" | less -R
+    fi
+}
+
+show_collection() {
+    local name="$1"
+    "$SCRIPT_DIR/pv-collection" show "$name"
+}
+
+# Main menu
+main_menu() {
+    local choice=$(echo -e "Templates\nSkills\nCollections\nSearch\nAnalytics\nBranches\nExit" | 
+        fzf --prompt="Prompt Vault > " --preview="")
+    
+    case "$choice" in
+        Templates) templates_menu ;;
+        Skills) skills_menu ;;
+        Collections) collections_menu ;;
+        Search) search_menu ;;
+        Analytics) analytics_menu ;;
+        Branches) branches_menu ;;
+        Exit) exit 0 ;;
+    esac
+}
+
+templates_menu() {
+    local name=$(dolt sql -r csv -q "
+        SELECT name FROM prompt_templates ORDER BY name
+    " | tail -n +2 | fzf --prompt="Templates > " --preview="
+        dolt sql -r csv -q \"SELECT description, status, version FROM prompt_templates WHERE name = {}\" 2>/dev/null | tail -n +2
+    ")
+    
+    [ -z "$name" ] && main_menu && return
+    
+    local action=$(echo -e "View\nEdit\nHistory\nActivate\nDeprecate\nBack" | 
+        fzf --prompt="$name > " --preview="")
+    
+    case "$action" in
+        View) show_template "$name" ;;
+        Edit) 
+            export VAULT_DIR
+            "$SCRIPT_DIR/pv" edit-template "$name"
+            ;;
+        History)
+            dolt sql -q "
+                SELECT version, status, created_at, updated_at 
+                FROM prompt_templates 
+                WHERE name = '$name' 
+                ORDER BY version
+            " -r tabular | less
+            ;;
+        Activate) 
+            dolt sql -q "UPDATE prompt_templates SET status = 'active' WHERE name = '$name'"
+            echo "Activated $name"
+            ;;
+        Deprecate)
+            dolt sql -q "UPDATE prompt_templates SET status = 'deprecated' WHERE name = '$name'"
+            echo "Deprecated $name"
+            ;;
+        Back) ;;
+    esac
+    
+    templates_menu
+}
+
+skills_menu() {
+    local name=$(dolt sql -r csv -q "
+        SELECT name FROM skills ORDER BY name
+    " | tail -n +2 | fzf --prompt="Skills > " --preview="
+        dolt sql -r csv -q \"SELECT LEFT(description, 80), status FROM skills WHERE name = {}\" 2>/dev/null | tail -n +2
+    ")
+    
+    [ -z "$name" ] && main_menu && return
+    
+    local action=$(echo -e "View\nHistory\nActivate\nDeprecate\nBack" | 
+        fzf --prompt="$name > " --preview="")
+    
+    case "$action" in
+        View) show_skill "$name" ;;
+        History)
+            dolt sql -q "
+                SELECT version, status, created_at 
+                FROM skills 
+                WHERE name = '$name' 
+                ORDER BY version
+            " -r tabular | less
+            ;;
+        Activate) 
+            dolt sql -q "UPDATE skills SET status = 'active' WHERE name = '$name'"
+            echo "Activated $name"
+            ;;
+        Deprecate)
+            dolt sql -q "UPDATE skills SET status = 'deprecated' WHERE name = '$name'"
+            echo "Deprecated $name"
+            ;;
+        Back) ;;
+    esac
+    
+    skills_menu
+}
+
+collections_menu() {
+    local name=$(dolt sql -r csv -q "
+        SELECT name FROM collections ORDER BY name
+    " | tail -n +2 | fzf --prompt="Collections > " --preview="
+        dolt sql -r csv -q \"SELECT description FROM collections WHERE name = {}\" 2>/dev/null | tail -n +2
+    ")
+    
+    [ -z "$name" ] && main_menu && return
+    
+    show_collection "$name"
+    collections_menu
+}
+
+search_menu() {
+    local query=$(echo "" | fzf --prompt="Search > " --print-query --preview="" --no-sort)
+    
+    [ -z "$query" ] && main_menu && return
+    
+    export VAULT_DIR
+    "$SCRIPT_DIR/pv-search" "$query" | less
+    search_menu
+}
+
+analytics_menu() {
+    local cmd=$(echo -e "Overview\nTop Templates\nRatings\nRecent\nTrends\nBack" | 
+        fzf --prompt="Analytics > " --preview="")
+    
+    case "$cmd" in
+        Overview) 
+            export VAULT_DIR
+            "$SCRIPT_DIR/pv-analytics" overview | less
+            ;;
+        "Top Templates")
+            export VAULT_DIR
+            "$SCRIPT_DIR/pv-analytics" top-templates | less
+            ;;
+        Ratings)
+            export VAULT_DIR
+            "$SCRIPT_DIR/pv-analytics" ratings | less
+            ;;
+        Recent)
+            export VAULT_DIR
+            "$SCRIPT_DIR/pv-analytics" recent 20 | less
+            ;;
+        Trends)
+            export VAULT_DIR
+            "$SCRIPT_DIR/pv-analytics" trends | less
+            ;;
+        Back) main_menu && return ;;
+    esac
+    
+    analytics_menu
+}
+
+branches_menu() {
+    local current=$(dolt branch --show-current)
+    local branches=$(dolt branch -a | sed 's/\*//;s/^  //')
+    
+    local branch=$(echo "$branches" | fzf --prompt="Branches ($current) > " --preview="")
+    
+    [ -z "$branch" ] && main_menu && return
+    
+    local action=$(echo -e "Checkout\nDiff with main\nMerge to current\nDelete\nBack" | 
+        fzf --prompt="$branch > " --preview="")
+    
+    case "$action" in
+        Checkout)
+            dolt checkout "$branch"
+            echo "Switched to $branch"
+            ;;
+        "Diff with main")
+            dolt diff main "$branch" | less
+            ;;
+        "Merge to current")
+            dolt merge "$branch"
+            echo "Merged $branch"
+            ;;
+        Delete)
+            dolt branch -d "$branch"
+            echo "Deleted $branch"
+            ;;
+        Back) ;;
+    esac
+    
+    branches_menu
+}
+
+# Run
+main_menu

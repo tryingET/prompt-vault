@@ -1,0 +1,116 @@
+#!/usr/bin/env bash
+# pv-quick - Quick actions menu
+# Usage: pv-quick
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+if ! command -v fzf &> /dev/null; then
+    echo "Error: fzf required. Install: apt install fzf" >&2
+    exit 1
+fi
+
+# Quick actions
+actions=(
+    "📊 Dashboard:quality dashboard"
+    "🔍 Search:search"
+    "➕ New Template:new-template"
+    "➕ New Skill:new-skill"
+    "📝 Edit Template:edit-template"
+    "📤 Export to Pi:export"
+    "📥 Import from Pi:import"
+    "🌿 New Branch:branch"
+    "📋 View Log:log"
+    "✅ Lint All:lint"
+    "💾 Backup:create-backup"
+    "📈 Analytics:analytics"
+    "❓ Help:help"
+)
+
+# Extract action names and descriptions
+names=()
+descriptions=()
+cmds=()
+
+for action in "${actions[@]}"; do
+    name="${action%%:*}"
+    rest="${action#*:}"
+    cmd="${rest%%:*}"
+    desc="${rest#*:}"
+    names+=("$name")
+    cmds+=("$cmd")
+    descriptions+=("$desc")
+done
+
+# Show menu
+selection=$(printf '%s\n' "${names[@]}" | fzf \
+    --height=40% \
+    --layout=reverse \
+    --border=rounded \
+    --prompt="Quick Action > " \
+    --preview-window=hidden \
+    --header="Select an action")
+
+[ -z "$selection" ] && exit 0
+
+# Find index
+idx=-1
+for i in "${!names[@]}"; do
+    if [ "${names[$i]}" = "$selection" ]; then
+        idx=$i
+        break
+    fi
+done
+
+[ $idx -eq -1 ] && exit 1
+
+cmd="${cmds[$idx]}"
+
+# Execute action
+case "$cmd" in
+    dashboard)
+        "$SCRIPT_DIR/pv-quality" dashboard
+        ;;
+    search)
+        read -p "Search query: " query
+        "$SCRIPT_DIR/pv-search" "$query"
+        ;;
+    new-template)
+        read -p "Template name: " name
+        "$SCRIPT_DIR/pv" new-template "$name"
+        ;;
+    new-skill)
+        read -p "Skill name: " name
+        "$SCRIPT_DIR/pv" new-skill "$name"
+        ;;
+    edit-template)
+        VAULT_DIR="${VAULT_DIR:-$SCRIPT_DIR/../prompt-vault-db}"
+        name=$(cd "$VAULT_DIR" && dolt sql -r csv -q "SELECT name FROM prompt_templates WHERE status = 'active' ORDER BY name" | tail -n +2 | fzf --prompt="Select template > ")
+        [ -n "$name" ] && "$SCRIPT_DIR/pv" edit-template "$name"
+        ;;
+    export)
+        "$SCRIPT_DIR/pv" export
+        ;;
+    import)
+        "$SCRIPT_DIR/pv" import
+        ;;
+    branch)
+        read -p "Branch name: " name
+        "$SCRIPT_DIR/pv" branch "$name"
+        ;;
+    log)
+        "$SCRIPT_DIR/pv" log
+        ;;
+    lint)
+        "$SCRIPT_DIR/pv" lint
+        ;;
+    create-backup)
+        "$SCRIPT_DIR/pv-backup" create
+        ;;
+    analytics)
+        "$SCRIPT_DIR/pv-analytics" overview
+        ;;
+    help)
+        "$SCRIPT_DIR/pv" --help | less
+        ;;
+esac

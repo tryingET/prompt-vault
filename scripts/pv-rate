@@ -1,0 +1,70 @@
+#!/usr/bin/env bash
+# pv-rate - Record feedback for an execution
+# Usage: pv-rate <execution-id> <rating> [notes] [--issues issue1,issue2]
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+VAULT_DIR="${VAULT_DIR:-$SCRIPT_DIR/../prompt-vault-db}"
+
+EXEC_ID="${1:-}"
+RATING="${2:-}"
+shift 2 || true
+
+NOTES=""
+ISSUES="[]"
+WOULD_USE_AGAIN="TRUE"
+
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        --issues|-i)
+            ISSUES=$(echo "$2" | jq -R 'split(",")')
+            shift 2
+            ;;
+        --would-use-again|--no-use-again)
+            WOULD_USE_AGAIN=$([[ "$1" == "--would-use-again" ]] && echo "TRUE" || echo "FALSE")
+            shift
+            ;;
+        *)
+            NOTES="$NOTES $1"
+            shift
+            ;;
+    esac
+done
+
+if [ -z "$EXEC_ID" ] || [ -z "$RATING" ]; then
+    echo "Usage: pv-rate <execution-id> <rating> [notes] [--issues i1,i2] [--would-use-again|--no-use-again]" >&2
+    exit 1
+fi
+
+# Validate rating
+if ! [[ "$RATING" =~ ^[1-5]$ ]]; then
+    echo "Error: Rating must be 1-5" >&2
+    exit 1
+fi
+
+NOTES=$(echo "$NOTES" | sed 's/^ *//;s/ *$//' | sed "s/'/''/g")
+
+cd "$VAULT_DIR"
+
+# Check execution exists
+EXISTS=$(dolt sql -r csv -q "SELECT COUNT(*) FROM executions WHERE id = $EXEC_ID" | tail -1)
+if [ "$EXISTS" = "0" ]; then
+    echo "Error: Execution $EXEC_ID not found" >&2
+    exit 1
+fi
+
+# Insert feedback
+dolt sql -q "
+    INSERT INTO feedback (execution_id, rating, notes, issues, would_use_again)
+    VALUES ($EXEC_ID, $RATING, '$NOTES', '$ISSUES', $WOULD_USE_AGAIN)
+"
+
+echo "✓ Recorded feedback for execution $EXEC_ID"
+echo "  Rating: $RATING/5"
+[ -n "$NOTES" ] && echo "  Notes: $NOTES"
+echo ""
+echo "View stats: pv stats $(dolt sql -r csv -q "
+    SELECT pt.name FROM prompt_templates pt
+    JOIN executions e ON e.entity_id = pt.id
+    WHERE e.id = $EXEC_ID
+" | tail -1)"

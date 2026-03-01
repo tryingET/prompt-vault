@@ -1,0 +1,188 @@
+#!/usr/bin/env bash
+# pv-tag - Tag and release management
+# Usage: pv-tag <command> [args]
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+VAULT_DIR="${VAULT_DIR:-$SCRIPT_DIR/../prompt-vault-db}"
+
+cd "$VAULT_DIR"
+
+cmd="${1:-list}"
+shift || true
+
+case "$cmd" in
+    list)
+        echo "=== Tags ==="
+        dolt tag -v 2>/dev/null || dolt tag
+        ;;
+    
+    create)
+        tag="${1:-}"
+        [ -z "$tag" ] && { echo "Usage: pv-tag create <tag> [message]" >&2; exit 1; }
+        message="${2:-Release $tag}"
+        
+        dolt tag "$tag" -m "$message"
+        echo "✓ Created tag: $tag"
+        ;;
+    
+    delete)
+        tag="${1:-}"
+        [ -z "$tag" ] && { echo "Usage: pv-tag delete <tag>" >&2; exit 1; }
+        
+        dolt tag -d "$tag"
+        echo "✓ Deleted tag: $tag"
+        ;;
+    
+    show)
+        tag="${1:-}"
+        [ -z "$tag" ] && { echo "Usage: pv-tag show <tag>" >&2; exit 1; }
+        
+        echo "=== Tag: $tag ==="
+        dolt log -n 1 "$tag" 2>/dev/null || echo "Tag not found"
+        ;;
+    
+    diff)
+        tag1="${1:-}"
+        tag2="${2:-}"
+        [ -z "$tag1" ] || [ -z "$tag2" ] && { echo "Usage: pv-tag diff <tag1> <tag2>" >&2; exit 1; }
+        
+        dolt diff "$tag1" "$tag2"
+        ;;
+    
+    release)
+        # Create a release with notes
+        version="${1:-}"
+        [ -z "$version" ] && { echo "Usage: pv-tag release <version>" >&2; exit 1; }
+        
+        tag="v$version"
+        
+        # Get changes since last tag
+        last_tag=$(dolt tag -l | head -1)
+        
+        echo "=== Creating Release $tag ==="
+        echo ""
+        
+        # Generate release notes
+        {
+            echo "# Release $tag"
+            echo ""
+            echo "Date: $(date +%Y-%m-%d)"
+            echo ""
+            
+            if [ -n "$last_tag" ]; then
+                echo "## Changes since $last_tag"
+                echo ""
+                dolt log "$last_tag..HEAD" --pretty=format:"- %s" 2>/dev/null || echo "- Initial release"
+            else
+                echo "## Initial Release"
+                echo ""
+                echo "- Initial prompt vault setup"
+            fi
+            
+            echo ""
+            echo "## Statistics"
+            echo ""
+            echo "- Templates: $(dolt sql -r csv -q "SELECT COUNT(*) FROM prompt_templates WHERE status = 'active'" | tail -1)"
+            echo "- Skills: $(dolt sql -r csv -q "SELECT COUNT(*) FROM skills WHERE status = 'active'" | tail -1)"
+            echo "- Collections: $(dolt sql -r csv -q "SELECT COUNT(*) FROM collections" | tail -1)"
+            
+        } > "/tmp/release-notes-$tag.md"
+        
+        echo "Release notes generated at /tmp/release-notes-$tag.md"
+        echo ""
+        cat "/tmp/release-notes-$tag.md"
+        echo ""
+        
+        read -p "Create tag $tag? (y/n): " confirm
+        if [ "$confirm" = "y" ]; then
+            dolt tag "$tag" -F "/tmp/release-notes-$tag.md"
+            echo "✓ Created release: $tag"
+        else
+            echo "Aborted"
+        fi
+        ;;
+    
+    export)
+        # Export vault at specific tag
+        tag="${1:-}"
+        output="${2:-./export-$tag}"
+        [ -z "$tag" ] && { echo "Usage: pv-tag export <tag> [output-dir]" >&2; exit 1; }
+        
+        echo "Exporting vault at tag: $tag"
+        
+        # Stash current changes
+        current_branch=$(dolt branch --show-current)
+        
+        # Checkout tag
+        dolt checkout "$tag" 2>/dev/null || { echo "Tag not found: $tag"; exit 1; }
+        
+        # Export
+        mkdir -p "$output"
+        export VAULT_DIR
+        "$SCRIPT_DIR/export-to-pi.sh" "$output"
+        
+        # Return to branch
+        dolt checkout "$current_branch"
+        
+        echo "✓ Exported to $output"
+        ;;
+    
+    changelog)
+        output="${1:-CHANGELOG.md}"
+        
+        echo "Generating changelog..."
+        
+        {
+            echo "# Changelog"
+            echo ""
+            
+            tags=$(dolt tag -l)
+            
+            if [ -z "$tags" ]; then
+                echo "No tags found. Create tags to generate changelog."
+                exit 0
+            fi
+            
+            prev_tag=""
+            for tag in $tags; do
+                echo "## $tag"
+                echo ""
+                
+                if [ -n "$prev_tag" ]; then
+                    dolt log "$tag..$prev_tag" --pretty=format:"- %s" 2>/dev/null || true
+                else
+                    dolt log "$tag" --pretty=format:"- %s" -n 10 2>/dev/null || true
+                fi
+                
+                echo ""
+                prev_tag="$tag"
+            done
+            
+        } > "$output"
+        
+        echo "✓ Generated $output"
+        ;;
+    
+    help|*)
+        cat << 'EOF'
+Usage: pv-tag <command> [args]
+
+Commands:
+  list                    List all tags
+  create <tag> [msg]      Create a tag
+  delete <tag>            Delete a tag
+  show <tag>              Show tag details
+  diff <tag1> <tag2>      Compare two tags
+  release <version>       Create release with notes
+  export <tag> [dir]      Export vault at tag
+  changelog [output]      Generate changelog from tags
+
+Examples:
+  pv-tag create v1.0.0 "First release"
+  pv-tag release 1.1.0
+  pv-tag diff v1.0.0 v1.1.0
+  pv-tag export v1.0.0 ./release-v1
+EOF
+        ;;
+esac

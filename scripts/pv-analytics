@@ -1,0 +1,261 @@
+#!/usr/bin/env bash
+# pv-analytics - View detailed analytics
+# Usage: pv-analytics [command] [args]
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+VAULT_DIR="${VAULT_DIR:-$SCRIPT_DIR/../prompt-vault-db}"
+
+cd "$VAULT_DIR"
+
+cmd="${1:-overview}"
+shift || true
+
+run_query() {
+    dolt sql -q "$1" -r tabular
+}
+
+case "$cmd" in
+    overview)
+        echo "=== Analytics Overview ==="
+        run_query "
+            SELECT 
+                'Templates' as category,
+                COUNT(*) as total,
+                SUM(CASE WHEN status = 'active' THEN 1 ELSE 0 END) as active,
+                SUM(CASE WHEN status = 'draft' THEN 1 ELSE 0 END) as draft,
+                SUM(CASE WHEN status = 'deprecated' THEN 1 ELSE 0 END) as deprecated
+            FROM prompt_templates
+            UNION ALL
+            SELECT 
+                'Skills',
+                COUNT(*),
+                SUM(CASE WHEN status = 'active' THEN 1 ELSE 0 END),
+                SUM(CASE WHEN status = 'draft' THEN 1 ELSE 0 END),
+                SUM(CASE WHEN status = 'deprecated' THEN 1 ELSE 0 END)
+            FROM skills
+        "
+        echo ""
+        run_query "
+            SELECT 
+                COUNT(*) as total_executions,
+                COUNT(DISTINCT entity_id) as unique_entities,
+                AVG(latency_ms) as avg_latency_ms,
+                SUM(CASE WHEN success = FALSE THEN 1 ELSE 0 END) as failures
+            FROM executions
+        "
+        ;;
+
+    top-templates)
+        echo "=== Top Templates by Usage ==="
+        run_query "
+            SELECT 
+                t.name,
+                COUNT(e.id) as executions,
+                ROUND(AVG(e.latency_ms)) as avg_ms,
+                ROUND(AVG(f.rating), 2) as avg_rating
+            FROM prompt_templates t
+            LEFT JOIN executions e ON e.entity_type = 'template' AND e.entity_id = t.id
+            LEFT JOIN feedback f ON f.execution_id = e.id
+            WHERE t.status = 'active'
+            GROUP BY t.name
+            ORDER BY executions DESC
+            LIMIT 20
+        "
+        ;;
+
+    ratings)
+        echo "=== Rating Distribution ==="
+        run_query "
+            SELECT 
+                rating,
+                COUNT(*) as count,
+                ROUND(COUNT(*) * 100.0 / SUM(COUNT(*)) OVER(), 1) as pct
+            FROM feedback
+            GROUP BY rating
+            ORDER BY rating
+        "
+        ;;
+
+    issues)
+        echo "=== Common Issues ==="
+        run_query "
+            SELECT 
+                JSON_UNQUOTE(JSON_EXTRACT(issues, CONCAT('\$[', idx.i, ']'))) as issue,
+                COUNT(*) as occurrences
+            FROM feedback
+            CROSS JOIN (
+                SELECT 0 as i UNION SELECT 1 UNION SELECT 2 UNION SELECT 3 UNION SELECT 4
+            ) as idx
+            WHERE JSON_EXTRACT(issues, CONCAT('\$[', idx.i, ']')) IS NOT NULL
+            GROUP BY issue
+            ORDER BY occurrences DESC
+        " 2>/dev/null || echo "No issues recorded yet"
+        ;;
+
+    trends)
+        echo "=== Weekly Trends ==="
+        run_query "
+            SELECT 
+                DATE_FORMAT(created_at, '%Y-%m-%d') as date,
+                COUNT(*) as executions,
+                ROUND(AVG(latency_ms)) as avg_ms,
+                ROUND(AVG((SELECT AVG(rating) FROM feedback f WHERE f.execution_id = executions.id)), 2) as avg_rating
+            FROM executions
+            WHERE created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)
+            GROUP BY DATE_FORMAT(created_at, '%Y-%m-%d')
+            ORDER BY date DESC
+            LIMIT 30
+        "
+        ;;
+
+    template)
+        name="${1:-}"
+        if [ -z "$name" ]; then
+            echo "Usage: pv-analytics template <name>" >&2
+            exit 1
+        fi
+        echo "=== Analytics for: $name ==="
+        run_query "
+            SELECT 
+                t.version,
+                t.status,
+                t.created_at,
+                t.updated_at
+            FROM prompt_templates t
+            WHERE t.name = '$name'
+            ORDER BY t.version
+        "
+        echo ""
+        run_query "
+            SELECT 
+                COUNT(e.id) as total_executions,
+                ROUND(AVG(e.latency_ms)) as avg_latency_ms,
+                MIN(e.latency_ms) as min_ms,
+                MAX(e.latency_ms) as max_ms,
+                ROUND(AVG(f.rating), 2) as avg_rating,
+                SUM(CASE WHEN f.would_use_again = TRUE THEN 1 ELSE 0 END) as would_use_again
+            FROM prompt_templates t
+            LEFT JOIN executions e ON e.entity_type = 'template' AND e.entity_id = t.id
+            LEFT JOIN feedback f ON f.execution_id = e.id
+            WHERE t.name = '$name' AND t.status = 'active'
+        "
+        ;;
+
+    skill)
+        name="${1:-}"
+        if [ -z "$name" ]; then
+            echo "Usage: pv-analytics skill <name>" >&2
+            exit 1
+        fi
+        run_query "
+            SELECT 
+                s.version,
+                s.status,
+                COUNT(e.id) as executions,
+                ROUND(AVG(f.rating), 2) as avg_rating
+            FROM skills s
+            LEFT JOIN executions e ON e.entity_type = 'skill' AND e.entity_id = s.id
+            LEFT JOIN feedback f ON f.execution_id = e.id
+            WHERE s.name = '$name'
+            GROUP BY s.version, s.status
+            ORDER BY s.version
+        "
+        ;;
+
+    recent)
+        limit="${1:-10}"
+        echo "=== Recent Executions ==="
+        run_query "
+            SELECT 
+                e.id,
+                CASE e.entity_type WHEN 'template' THEN t.name ELSE s.name END as name,
+                e.entity_type,
+                e.model,
+                e.latency_ms,
+                e.success,
+                f.rating,
+                e.created_at
+            FROM executions e
+            LEFT JOIN prompt_templates t ON e.entity_type = 'template' AND e.entity_id = t.id
+            LEFT JOIN skills s ON e.entity_type = 'skill' AND e.entity_id = s.id
+            LEFT JOIN feedback f ON f.execution_id = e.id
+            ORDER BY e.created_at DESC
+            LIMIT $limit
+        "
+        ;;
+
+    compare)
+        t1="${1:-}"
+        t2="${2:-}"
+        if [ -z "$t1" ] || [ -z "$t2" ]; then
+            echo "Usage: pv-analytics compare <template1> <template2>" >&2
+            exit 1
+        fi
+        echo "=== Comparing: $t1 vs $t2 ==="
+        run_query "
+            SELECT 
+                t.name,
+                COUNT(e.id) as executions,
+                ROUND(AVG(e.latency_ms)) as avg_ms,
+                ROUND(AVG(f.rating), 2) as avg_rating,
+                ROUND(SUM(CASE WHEN f.would_use_again = TRUE THEN 1 ELSE 0 END) * 100.0 / NULLIF(COUNT(f.id), 0), 1) as would_use_again_pct
+            FROM prompt_templates t
+            LEFT JOIN executions e ON e.entity_type = 'template' AND e.entity_id = t.id
+            LEFT JOIN feedback f ON f.execution_id = e.id
+            WHERE t.name IN ('$t1', '$t2') AND t.status = 'active'
+            GROUP BY t.name
+        "
+        ;;
+
+    export)
+        format="${1:-csv}"
+        echo "=== Exporting analytics ==="
+        case "$format" in
+            csv)
+                dolt sql -q "
+                    SELECT 
+                        e.id,
+                        e.entity_type,
+                        CASE e.entity_type WHEN 'template' THEN t.name ELSE s.name END as entity_name,
+                        e.model,
+                        e.latency_ms,
+                        e.success,
+                        f.rating,
+                        f.notes,
+                        e.created_at
+                    FROM executions e
+                    LEFT JOIN prompt_templates t ON e.entity_type = 'template' AND e.entity_id = t.id
+                    LEFT JOIN skills s ON e.entity_type = 'skill' AND e.entity_id = s.id
+                    LEFT JOIN feedback f ON f.execution_id = e.id
+                    ORDER BY e.created_at
+                " -r csv
+                ;;
+            json)
+                dolt sql -q "
+                    SELECT 
+                        e.id,
+                        e.entity_type,
+                        CASE e.entity_type WHEN 'template' THEN t.name ELSE s.name END as entity_name,
+                        e.model,
+                        e.latency_ms,
+                        e.success,
+                        f.rating,
+                        f.notes,
+                        e.created_at
+                    FROM executions e
+                    LEFT JOIN prompt_templates t ON e.entity_type = 'template' AND e.entity_id = t.id
+                    LEFT JOIN skills s ON e.entity_type = 'skill' AND e.entity_id = s.id
+                    LEFT JOIN feedback f ON f.execution_id = e.id
+                    ORDER BY e.created_at
+                " -r json
+                ;;
+        esac
+        ;;
+
+    *)
+        echo "Unknown command: $cmd" >&2
+        echo "Commands: overview, top-templates, ratings, issues, trends, template, skill, recent, compare, export" >&2
+        exit 1
+        ;;
+esac

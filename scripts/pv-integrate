@@ -1,0 +1,373 @@
+#!/usr/bin/env bash
+# pv-integrate - Integration helpers for external tools
+# Usage: pv-integrate <command> [args]
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+VAULT_DIR="${VAULT_DIR:-$SCRIPT_DIR/../prompt-vault-db}"
+
+cmd="${1:-help}"
+shift || true
+
+case "$cmd" in
+    # LangChain export
+    langchain)
+        output="${1:-./langchain-prompts.json}"
+        echo "Exporting for LangChain..."
+        
+        cd "$VAULT_DIR"
+        
+        dolt sql -q "
+            SELECT JSON_ARRAYAGG(
+                JSON_OBJECT(
+                    'name', name,
+                    'template', content,
+                    'metadata', JSON_OBJECT(
+                        'description', description,
+                        'tags', tags
+                    )
+                )
+            )
+            FROM prompt_templates 
+            WHERE status = 'active'
+        " -r json | tail -1 > "$output"
+        
+        echo "✓ Exported to $output"
+        ;;
+        
+    # OpenAI function calling format
+    openai-functions)
+        output="${1:-./openai-functions.json}"
+        echo "Exporting as OpenAI function definitions..."
+        
+        cd "$VAULT_DIR"
+        
+        # Build functions array
+        dolt sql -q "
+            SELECT JSON_ARRAYAGG(
+                JSON_OBJECT(
+                    'name', name,
+                    'description', description,
+                    'parameters', JSON_OBJECT(
+                        'type', 'object',
+                        'properties', JSON_OBJECT(
+                            'args', JSON_OBJECT(
+                                'type', 'string',
+                                'description', 'Arguments for the prompt'
+                            )
+                        ),
+                        'required', JSON_ARRAY('args')
+                    )
+                )
+            )
+            FROM prompt_templates 
+            WHERE status = 'active'
+        " -r json | tail -1 > "$output"
+        
+        echo "✓ Exported to $output"
+        ;;
+        
+    # Semantic Kernel format
+    semantic-kernel)
+        output_dir="${1:-./semantic-kernel}"
+        echo "Exporting for Semantic Kernel..."
+        
+        mkdir -p "$output_dir"
+        cd "$VAULT_DIR"
+        
+        # Export each as a separate file
+        dolt sql -r csv -q "SELECT name FROM prompt_templates WHERE status = 'active'" | tail -n +2 | while read name; do
+            [ -z "$name" ] && continue
+            
+            content=$(dolt sql -r csv -q "
+                SELECT content FROM prompt_templates 
+                WHERE name = '$name' 
+                ORDER BY version DESC LIMIT 1
+            " | tail -1 | sed "s/''/'/g")
+            
+            desc=$(dolt sql -r csv -q "
+                SELECT description FROM prompt_templates 
+                WHERE name = '$name' 
+                ORDER BY version DESC LIMIT 1
+            " | tail -1 | sed "s/''/'/g")
+            
+            cat > "$output_dir/${name}.txt" << EOF
+---
+name: $name
+description: $desc
+---
+$content
+EOF
+        done
+        
+        echo "✓ Exported to $output_dir/"
+        ;;
+        
+    # Generate embedding-ready content
+    embeddings)
+        output="${1:-./embeddings.jsonl}"
+        echo "Generating embeddings-ready content..."
+        
+        cd "$VAULT_DIR"
+        
+        > "$output"
+        
+        # Templates
+        dolt sql -r csv -q "
+            SELECT name, description, content 
+            FROM prompt_templates 
+            WHERE status = 'active'
+        " | tail -n +2 | while IFS=',' read -r name desc content; do
+            [ -z "$name" ] && continue
+            
+            # Create embedding-friendly text
+            text="Template: $name. $desc. $content"
+            
+            # JSONL format for embedding APIs
+            echo "{\"id\": \"template-$name\", \"text\": $(echo "$text" | jq -Rs .), \"metadata\": {\"type\": \"template\", \"name\": \"$name\"}}" >> "$output"
+        done
+        
+        # Skills
+        dolt sql -r csv -q "
+            SELECT name, description, readme 
+            FROM skills 
+            WHERE status = 'active'
+        " | tail -n +2 | while IFS=',' read -r name desc readme; do
+            [ -z "$name" ] && continue
+            
+            text="Skill: $name. $desc. $readme"
+            echo "{\"id\": \"skill-$name\", \"text\": $(echo "$text" | jq -Rs .), \"metadata\": {\"type\": \"skill\", \"name\": \"$name\"}}" >> "$output"
+        done
+        
+        echo "✓ Generated $(wc -l < "$output") embedding records in $output"
+        ;;
+        
+    # Generate Obsidian vault
+    obsidian)
+        output_dir="${1:-./obsidian-vault}"
+        echo "Creating Obsidian vault..."
+        
+        mkdir -p "$output_dir/Templates" "$output_dir/Skills" "$output_dir/Collections"
+        cd "$VAULT_DIR"
+        
+        # Templates as notes
+        dolt sql -r csv -q "SELECT name, description, content FROM prompt_templates WHERE status = 'active'" | tail -n +2 | while IFS=',' read -r name desc content; do
+            [ -z "$name" ] && continue
+            content=$(echo "$content" | sed "s/''/'/g")
+            desc=$(echo "$desc" | sed "s/''/'/g")
+            
+            cat > "$output_dir/Templates/${name}.md" << EOF
+---
+type: prompt-template
+tags:
+  - prompt
+  - template
+description: $desc
+---
+
+# $name
+
+$desc
+
+## Prompt
+
+\`\`\`markdown
+$content
+\`\`\`
+EOF
+        done
+        
+        # Skills
+        dolt sql -r csv -q "SELECT name, description, readme FROM skills WHERE status = 'active'" | tail -n +2 | while IFS=',' read -r name desc readme; do
+            [ -z "$name" ] && continue
+            readme=$(echo "$readme" | sed "s/''/'/g")
+            
+            cat > "$output_dir/Skills/${name}.md" << EOF
+---
+type: skill
+tags:
+  - prompt
+  - skill
+---
+
+$readme
+EOF
+        done
+        
+        # Collections
+        dolt sql -r csv -q "SELECT name, description FROM collections" | tail -n +2 | while IFS=',' read -r name desc; do
+            [ -z "$name" ] && continue
+            
+            cat > "$output_dir/Collections/${name}.md" << EOF
+---
+type: collection
+---
+
+# $name
+
+$desc
+
+## Templates
+
+\`\`\`dataview
+LIST
+FROM "Templates"
+WHERE contains(collection, "$name")
+\`\`\`
+EOF
+        done
+        
+        echo "✓ Created Obsidian vault at $output_dir/"
+        ;;
+        
+    # REST API (simple Python server)
+    api-server)
+        port="${1:-8080}"
+        echo "Starting REST API server on port $port..."
+        
+        cat > /tmp/pv-api.py << 'PYEOF'
+#!/usr/bin/env python3
+import json
+import subprocess
+import os
+from http.server import HTTPServer, BaseHTTPRequestHandler
+from urllib.parse import urlparse, parse_qs
+
+VAULT_DIR = os.environ.get('VAULT_DIR', './prompt-vault-db')
+
+def run_sql(query, format='json'):
+    result = subprocess.run(
+        ['dolt', 'sql', '-q', query, '-r', format],
+        capture_output=True, text=True, cwd=VAULT_DIR
+    )
+    return result.stdout
+
+class VaultHandler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        path = urlparse(self.path).path
+        query = parse_qs(urlparse(self.path).query)
+        
+        if path == '/api/templates':
+            sql = "SELECT name, description, status FROM prompt_templates"
+            if 'search' in query:
+                sql += f" WHERE name LIKE '%{query['search'][0]}%' OR description LIKE '%{query['search'][0]}%'"
+            sql += " ORDER BY name"
+            
+            data = run_sql(sql, 'json')
+            self.send_response(200)
+            self.send_header('Content-Type', 'application/json')
+            self.end_headers()
+            self.wfile.write(data.encode())
+            
+        elif path.startswith('/api/templates/'):
+            name = path.split('/')[-1]
+            sql = f"SELECT * FROM prompt_templates WHERE name = '{name}' AND status = 'active' LIMIT 1"
+            data = run_sql(sql, 'json')
+            self.send_response(200)
+            self.send_header('Content-Type', 'application/json')
+            self.end_headers()
+            self.wfile.write(data.encode())
+            
+        elif path == '/api/skills':
+            data = run_sql("SELECT name, description, status FROM skills ORDER BY name", 'json')
+            self.send_response(200)
+            self.send_header('Content-Type', 'application/json')
+            self.end_headers()
+            self.wfile.write(data.encode())
+            
+        elif path.startswith('/api/skills/'):
+            name = path.split('/')[-1]
+            sql = f"SELECT * FROM skills WHERE name = '{name}' AND status = 'active' LIMIT 1"
+            data = run_sql(sql, 'json')
+            self.send_response(200)
+            self.send_header('Content-Type', 'application/json')
+            self.end_headers()
+            self.wfile.write(data.encode())
+            
+        elif path == '/api/stats':
+            data = run_sql("""
+                SELECT 
+                    (SELECT COUNT(*) FROM prompt_templates WHERE status = 'active') as templates,
+                    (SELECT COUNT(*) FROM skills WHERE status = 'active') as skills,
+                    (SELECT COUNT(*) FROM executions) as executions
+            """, 'json')
+            self.send_response(200)
+            self.send_header('Content-Type', 'application/json')
+            self.end_headers()
+            self.wfile.write(data.encode())
+            
+        elif path == '/health':
+            self.send_response(200)
+            self.send_header('Content-Type', 'application/json')
+            self.end_headers()
+            self.wfile.write(b'{"status": "ok"}')
+            
+        else:
+            self.send_response(404)
+            self.end_headers()
+    
+    def log_message(self, format, *args):
+        print(f"[API] {args[0]}")
+
+if __name__ == '__main__':
+    port = int(os.environ.get('PORT', 8080))
+    server = HTTPServer(('', port), VaultHandler)
+    print(f"Prompt Vault API running on port {port}")
+    print(f"Endpoints: /api/templates, /api/skills, /api/stats, /health")
+    server.serve_forever()
+PYEOF
+        
+        export VAULT_DIR="$VAULT_DIR"
+        python3 /tmp/pv-api.py
+        ;;
+        
+    # Webhook for external triggers
+    webhook)
+        event="${1:-push}"
+        echo "Processing webhook event: $event"
+        
+        case "$event" in
+            push)
+                echo "Pulling latest changes..."
+                cd "$VAULT_DIR"
+                dolt pull origin main 2>/dev/null || echo "No remote configured"
+                
+                echo "Exporting to pi format..."
+                export VAULT_DIR
+                "$SCRIPT_DIR/export-to-pi.sh"
+                ;;
+            import)
+                echo "Importing from pi format..."
+                export VAULT_DIR
+                "$SCRIPT_DIR/import-from-pi.sh"
+                ;;
+            backup)
+                export VAULT_DIR
+                "$SCRIPT_DIR/pv-backup" create
+                ;;
+        esac
+        ;;
+        
+    help|*)
+        cat << 'EOF'
+Usage: pv-integrate <command> [args]
+
+Export Formats:
+  langchain [output]      Export for LangChain (JSON)
+  openai-functions [out]  Export as OpenAI function definitions
+  semantic-kernel [dir]   Export for Semantic Kernel
+  embeddings [output]     Generate embedding-ready JSONL
+  obsidian [dir]          Create Obsidian vault
+
+Integration:
+  api-server [port]       Start REST API server (port 8080)
+  webhook <event>         Process webhook (push, import, backup)
+
+Examples:
+  pv-integrate langchain ./prompts.json
+  pv-integrate obsidian ~/Notes/Prompts
+  pv-integrate api-server 3000
+  pv-integrate embeddings | openai embeddings create -
+EOF
+        ;;
+esac

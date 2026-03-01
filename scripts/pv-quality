@@ -1,0 +1,315 @@
+#!/usr/bin/env bash
+# pv-quality - Quality scoring and health dashboard
+# Usage: pv-quality [command] [args]
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+VAULT_DIR="${VAULT_DIR:-$SCRIPT_DIR/../prompt-vault-db}"
+
+cd "$VAULT_DIR"
+
+cmd="${1:-dashboard}"
+shift || true
+
+calculate_template_score() {
+    local name="$1"
+    local score=0
+    local max_score=100
+    
+    # Get metrics
+    local data=$(dolt sql -r json -q "
+        SELECT 
+            CHAR_LENGTH(content) as content_len,
+            CHAR_LENGTH(description) as desc_len,
+            (SELECT COUNT(*) FROM executions e WHERE e.entity_type = 'template' AND e.entity_id = t.id) as executions,
+            (SELECT AVG(rating) FROM executions e JOIN feedback f ON f.execution_id = e.id WHERE e.entity_type = 'template' AND e.entity_id = t.id) as avg_rating
+        FROM prompt_templates t
+        WHERE name = '$name' AND status = 'active'
+        LIMIT 1
+    " 2>/dev/null | jq -r '.rows[0] // empty')
+    
+    [ -z "$data" ] && echo "0" && return
+    
+    local content_len=$(echo "$data" | jq -r '.content_len // 0')
+    local desc_len=$(echo "$data" | jq -r '.desc_len // 0')
+    local executions=$(echo "$data" | jq -r '.executions // 0')
+    local avg_rating=$(echo "$data" | jq -r '.avg_rating // 0')
+    
+    # Description quality (0-20 points)
+    if [ "$desc_len" -ge 50 ] && [ "$desc_len" -le 150 ]; then
+        score=$((score + 20))
+    elif [ "$desc_len" -ge 20 ]; then
+        score=$((score + 10))
+    fi
+    
+    # Content length (0-15 points)
+    if [ "$content_len" -ge 100 ]; then
+        score=$((score + 15))
+    elif [ "$content_len" -ge 50 ]; then
+        score=$((score + 10))
+    elif [ "$content_len" -ge 20 ]; then
+        score=$((score + 5))
+    fi
+    
+    # Usage (0-25 points)
+    if [ "$executions" -ge 10 ]; then
+        score=$((score + 25))
+    elif [ "$executions" -ge 5 ]; then
+        score=$((score + 15))
+    elif [ "$executions" -ge 1 ]; then
+        score=$((score + 5))
+    fi
+    
+    # Ratings (0-40 points)
+    if [ "$(echo "$avg_rating > 4" | bc -l 2>/dev/null || echo 0)" -eq 1 ]; then
+        score=$((score + 40))
+    elif [ "$(echo "$avg_rating > 3" | bc -l 2>/dev/null || echo 0)" -eq 1 ]; then
+        score=$((score + 30))
+    elif [ "$(echo "$avg_rating > 2" | bc -l 2>/dev/null || echo 0)" -eq 1 ]; then
+        score=$((score + 20))
+    elif [ "$(echo "$avg_rating > 0" | bc -l 2>/dev/null || echo 0)" -eq 1 ]; then
+        score=$((score + 10))
+    fi
+    
+    echo "$score"
+}
+
+calculate_skill_score() {
+    local name="$1"
+    local score=0
+    
+    local data=$(dolt sql -r json -q "
+        SELECT 
+            CHAR_LENGTH(readme) as readme_len,
+            CHAR_LENGTH(description) as desc_len,
+            license,
+            (SELECT COUNT(*) FROM executions e WHERE e.entity_type = 'skill' AND e.entity_id = s.id) as executions,
+            (SELECT AVG(rating) FROM executions e JOIN feedback f ON f.execution_id = e.id WHERE e.entity_type = 'skill' AND e.entity_id = s.id) as avg_rating
+        FROM skills s
+        WHERE name = '$name' AND status = 'active'
+        LIMIT 1
+    " 2>/dev/null | jq -r '.rows[0] // empty')
+    
+    [ -z "$data" ] && echo "0" && return
+    
+    local readme_len=$(echo "$data" | jq -r '.readme_len // 0')
+    local desc_len=$(echo "$data" | jq -r '.desc_len // 0')
+    local license=$(echo "$data" | jq -r '.license // empty')
+    local executions=$(echo "$data" | jq -r '.executions // 0')
+    local avg_rating=$(echo "$data" | jq -r '.avg_rating // 0')
+    
+    # Description (0-20)
+    [ "$desc_len" -ge 50 ] && score=$((score + 20))
+    [ "$desc_len" -ge 20 ] && [ "$desc_len" -lt 50 ] && score=$((score + 10))
+    
+    # README (0-20)
+    [ "$readme_len" -ge 500 ] && score=$((score + 20))
+    [ "$readme_len" -ge 200 ] && [ "$readme_len" -lt 500 ] && score=$((score + 10))
+    
+    # License (0-10)
+    [ -n "$license" ] && score=$((score + 10))
+    
+    # Usage (0-25)
+    [ "$executions" -ge 10 ] && score=$((score + 25))
+    [ "$executions" -ge 5 ] && [ "$executions" -lt 10 ] && score=$((score + 15))
+    [ "$executions" -ge 1 ] && [ "$executions" -lt 5 ] && score=$((score + 5))
+    
+    # Ratings (0-25)
+    [ "$(echo "$avg_rating > 4" | bc -l 2>/dev/null || echo 0)" -eq 1 ] && score=$((score + 25))
+    [ "$(echo "$avg_rating > 3" | bc -l 2>/dev/null || echo 0)" -eq 1 ] && score=$((score + 20))
+    [ "$(echo "$avg_rating > 2" | bc -l 2>/dev/null || echo 0)" -eq 1 ] && score=$((score + 10))
+    
+    echo "$score"
+}
+
+get_grade() {
+    local score="$1"
+    
+    if [ "$score" -ge 90 ]; then echo "A"
+    elif [ "$score" -ge 80 ]; then echo "B"
+    elif [ "$score" -ge 70 ]; then echo "C"
+    elif [ "$score" -ge 60 ]; then echo "D"
+    else echo "F"
+    fi
+}
+
+case "$cmd" in
+    dashboard)
+        echo "╔════════════════════════════════════════════════════════════════╗"
+        echo "║                    PROMPT VAULT QUALITY                        ║"
+        echo "╚════════════════════════════════════════════════════════════════╝"
+        echo ""
+        
+        # Overall stats
+        total_templates=$(dolt sql -r csv -q "SELECT COUNT(*) FROM prompt_templates WHERE status = 'active'" | tail -1)
+        total_skills=$(dolt sql -r csv -q "SELECT COUNT(*) FROM skills WHERE status = 'active'" | tail -1)
+        total_executions=$(dolt sql -r csv -q "SELECT COUNT(*) FROM executions" | tail -1)
+        total_feedback=$(dolt sql -r csv -q "SELECT COUNT(*) FROM feedback" | tail -1)
+        
+        echo "Overview"
+        echo "─────────────────────────────────────"
+        printf "  Templates:    %4s   Skills:       %3s\n" "$total_templates" "$total_skills"
+        printf "  Executions:   %4s   Feedback:     %3s\n" "$total_executions" "$total_feedback"
+        echo ""
+        
+        # Template scores
+        echo "Template Quality Scores"
+        echo "─────────────────────────────────────"
+        printf "%-25s %6s %6s\n" "NAME" "SCORE" "GRADE"
+        echo "─────────────────────────────────────"
+        
+        dolt sql -r csv -q "SELECT name FROM prompt_templates WHERE status = 'active' ORDER BY name" | tail -n +2 | while read name; do
+            [ -z "$name" ] && continue
+            score=$(calculate_template_score "$name")
+            grade=$(get_grade "$score")
+            printf "%-25s %6s %6s\n" "$name" "$score" "$grade"
+        done
+        
+        echo ""
+        
+        # Skill scores
+        echo "Skill Quality Scores"
+        echo "─────────────────────────────────────"
+        printf "%-25s %6s %6s\n" "NAME" "SCORE" "GRADE"
+        echo "─────────────────────────────────────"
+        
+        dolt sql -r csv -q "SELECT name FROM skills WHERE status = 'active' ORDER BY name" | tail -n +2 | while read name; do
+            [ -z "$name" ] && continue
+            score=$(calculate_skill_score "$name")
+            grade=$(get_grade "$score")
+            printf "%-25s %6s %6s\n" "$name" "$score" "$grade"
+        done
+        
+        echo ""
+        echo "Score Components: Description (0-20), Content (0-15), Usage (0-25), Ratings (0-40)"
+        ;;
+    
+    template)
+        name="${1:-}"
+        [ -z "$name" ] && { echo "Usage: pv-quality template <name>" >&2; exit 1; }
+        
+        score=$(calculate_template_score "$name")
+        grade=$(get_grade "$score")
+        
+        echo "=== $name Quality Score ==="
+        echo ""
+        echo "Score: $score/100"
+        echo "Grade: $grade"
+        echo ""
+        
+        dolt sql -q "
+            SELECT 
+                CHAR_LENGTH(content) as content_chars,
+                CHAR_LENGTH(description) as desc_chars,
+                (SELECT COUNT(*) FROM executions e WHERE e.entity_type = 'template' AND e.entity_id = t.id) as uses,
+                (SELECT ROUND(AVG(rating), 2) FROM executions e JOIN feedback f ON f.execution_id = e.id WHERE e.entity_type = 'template' AND e.entity_id = t.id) as avg_rating
+            FROM prompt_templates t
+            WHERE name = '$name' AND status = 'active'
+        " -r tabular
+        ;;
+    
+    skill)
+        name="${1:-}"
+        [ -z "$name" ] && { echo "Usage: pv-quality skill <name>" >&2; exit 1; }
+        
+        score=$(calculate_skill_score "$name")
+        grade=$(get_grade "$score")
+        
+        echo "=== $name Quality Score ==="
+        echo ""
+        echo "Score: $score/100"
+        echo "Grade: $grade"
+        ;;
+    
+    report)
+        # Generate markdown report
+        output="${1:-quality-report.md}"
+        
+        echo "Generating quality report..."
+        
+        {
+            echo "# Prompt Vault Quality Report"
+            echo ""
+            echo "Generated: $(date)"
+            echo ""
+            
+            echo "## Summary"
+            echo ""
+            echo "- Templates: $(dolt sql -r csv -q "SELECT COUNT(*) FROM prompt_templates WHERE status = 'active'" | tail -1)"
+            echo "- Skills: $(dolt sql -r csv -q "SELECT COUNT(*) FROM skills WHERE status = 'active'" | tail -1)"
+            echo "- Executions: $(dolt sql -r csv -q "SELECT COUNT(*) FROM executions" | tail -1)"
+            echo ""
+            
+            echo "## Template Scores"
+            echo ""
+            echo "| Name | Score | Grade |"
+            echo "|------|-------|-------|"
+            
+            dolt sql -r csv -q "SELECT name FROM prompt_templates WHERE status = 'active' ORDER BY name" | tail -n +2 | while read name; do
+                [ -z "$name" ] && continue
+                score=$(calculate_template_score "$name")
+                grade=$(get_grade "$score")
+                echo "| $name | $score | $grade |"
+            done
+            
+            echo ""
+            echo "## Skill Scores"
+            echo ""
+            echo "| Name | Score | Grade |"
+            echo "|------|-------|-------|"
+            
+            dolt sql -r csv -q "SELECT name FROM skills WHERE status = 'active' ORDER BY name" | tail -n +2 | while read name; do
+                [ -z "$name" ] && continue
+                score=$(calculate_skill_score "$name")
+                grade=$(get_grade "$score")
+                echo "| $name | $score | $grade |"
+            done
+            
+        } > "$output"
+        
+        echo "✓ Report saved to $output"
+        ;;
+    
+    low)
+        # Show items with low quality scores
+        threshold="${1:-60}"
+        echo "=== Items Below $threshold Points ==="
+        echo ""
+        
+        dolt sql -r csv -q "SELECT name FROM prompt_templates WHERE status = 'active'" | tail -n +2 | while read name; do
+            [ -z "$name" ] && continue
+            score=$(calculate_template_score "$name")
+            if [ "$score" -lt "$threshold" ]; then
+                echo "  Template: $name ($score pts)"
+            fi
+        done
+        
+        dolt sql -r csv -q "SELECT name FROM skills WHERE status = 'active'" | tail -n +2 | while read name; do
+            [ -z "$name" ] && continue
+            score=$(calculate_skill_score "$name")
+            if [ "$score" -lt "$threshold" ]; then
+                echo "  Skill: $name ($score pts)"
+            fi
+        done
+        ;;
+    
+    help|*)
+        cat << 'EOF'
+Usage: pv-quality <command> [args]
+
+Commands:
+  dashboard              Show quality dashboard
+  template <name>        Show template quality breakdown
+  skill <name>           Show skill quality breakdown
+  report [output]        Generate markdown quality report
+  low [threshold]        Show items below threshold (default: 60)
+
+Scoring:
+  Templates: Description (0-20), Content (0-15), Usage (0-25), Ratings (0-40)
+  Skills: Description (0-20), README (0-20), License (0-10), Usage (0-25), Ratings (0-25)
+
+Grades:
+  A: 90+, B: 80-89, C: 70-79, D: 60-69, F: <60
+EOF
+        ;;
+esac

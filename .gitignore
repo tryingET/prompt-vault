@@ -1,0 +1,21 @@
+# User's vault database (created by pv init)
+prompt-vault-db/.dolt/
+prompt-vault-db/.doltcfg/
+
+# Keep the schema and config
+!prompt-vault-db/vault.yaml
+
+# Backups
+backups/
+
+# Session artifacts (regenerated each session)
+.next_session.md
+
+# Editor
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db

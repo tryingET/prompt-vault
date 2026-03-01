@@ -1,0 +1,108 @@
+#!/usr/bin/env bash
+# pv-search - Search templates and skills
+# Usage: pv-search <query> [--type template|skill|all] [--tag tag]
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+VAULT_DIR="${VAULT_DIR:-$SCRIPT_DIR/../prompt-vault-db}"
+
+cd "$VAULT_DIR"
+
+query="${1:-}"
+shift || true
+
+type="all"
+tag=""
+
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        --type|-t)
+            type="$2"
+            shift 2
+            ;;
+        --tag)
+            tag="$2"
+            shift 2
+            ;;
+        *)
+            shift
+            ;;
+    esac
+done
+
+if [ -z "$query" ] && [ -z "$tag" ]; then
+    echo "Usage: pv-search <query> [--type template|skill|all] [--tag tag]" >&2
+    exit 1
+fi
+
+# Escape for SQL
+query_escaped=$(echo "$query" | sed "s/'/''/g")
+
+echo "=== Search Results: '$query' ==="
+
+search_templates() {
+    dolt sql -q "
+        SELECT 
+            'template' as type,
+            name,
+            description,
+            status,
+            MATCH(content, description) AGAINST ('$query_escaped') as relevance
+        FROM prompt_templates
+        WHERE 
+            (content LIKE '%$query_escaped%' OR description LIKE '%$query_escaped%' OR name LIKE '%$query_escaped%')
+            AND status != 'archived'
+        ORDER BY relevance DESC, name
+    " -r tabular 2>/dev/null || dolt sql -q "
+        SELECT 
+            'template' as type,
+            name,
+            description,
+            status
+        FROM prompt_templates
+        WHERE 
+            (content LIKE '%$query_escaped%' OR description LIKE '%$query_escaped%' OR name LIKE '%$query_escaped%')
+            AND status != 'archived'
+        ORDER BY name
+    " -r tabular
+}
+
+search_skills() {
+    dolt sql -q "
+        SELECT 
+            'skill' as type,
+            name,
+            LEFT(description, 60) as description,
+            status
+        FROM skills
+        WHERE 
+            (readme LIKE '%$query_escaped%' OR description LIKE '%$query_escaped%' OR name LIKE '%$query_escaped%')
+            AND status != 'archived'
+        ORDER BY name
+    " -r tabular
+}
+
+case "$type" in
+    template)
+        search_templates
+        ;;
+    skill)
+        search_skills
+        ;;
+    all|*)
+        if [ "$type" = "all" ]; then
+            echo "Templates:"
+            search_templates
+            echo ""
+            echo "Skills:"
+            search_skills
+        else
+            search_templates
+            echo ""
+            search_skills
+        fi
+        ;;
+esac
+
+echo ""
+echo "Show details: pv show <type> <name>"

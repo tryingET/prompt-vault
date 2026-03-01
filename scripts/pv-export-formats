@@ -1,0 +1,233 @@
+#!/usr/bin/env bash
+# pv-export-formats - Export to various formats
+# Usage: pv-export-formats <format> [output]
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+VAULT_DIR="${VAULT_DIR:-$SCRIPT_DIR/../prompt-vault-db}"
+
+cd "$VAULT_DIR"
+
+format="${1:-help}"
+output="${2:-}"
+
+case "$format" in
+    markdown)
+        output="${output:-./prompt-vault-export}"
+        mkdir -p "$output/templates" "$output/skills"
+        
+        echo "Exporting to Markdown..."
+        
+        # Export templates
+        dolt sql -r csv -q "SELECT name FROM prompt_templates WHERE status = 'active'" | tail -n +2 | while read name; do
+            [ -z "$name" ] && continue
+            
+            content=$(dolt sql -r csv -q "SELECT content FROM prompt_templates WHERE name = '$name' ORDER BY version DESC LIMIT 1" | tail -1 | sed "s/''/'/g")
+            desc=$(dolt sql -r csv -q "SELECT description FROM prompt_templates WHERE name = '$name' LIMIT 1" | tail -1 | sed "s/''/'/g")
+            
+            cat > "$output/templates/${name}.md" << EOF
+# $name
+
+> $desc
+
+## Prompt
+
+$content
+EOF
+        done
+        
+        # Export skills
+        dolt sql -r csv -q "SELECT name FROM skills WHERE status = 'active'" | tail -n +2 | while read name; do
+            [ -z "$name" ] && continue
+            
+            readme=$(dolt sql -r csv -q "SELECT readme FROM skills WHERE name = '$name' ORDER BY version DESC LIMIT 1" | tail -1 | sed "s/''/'/g")
+            echo "$readme" > "$output/skills/${name}.md"
+        done
+        
+        # Create index
+        cat > "$output/README.md" << EOF
+# Prompt Vault Export
+
+Generated: $(date)
+
+## Templates
+
+$(dolt sql -r csv -q "SELECT name, description FROM prompt_templates WHERE status = 'active'" | tail -n +2 | while IFS=',' read name desc; do
+    echo "- [$name](templates/${name}.md) - $desc"
+done)
+
+## Skills
+
+$(dolt sql -r csv -q "SELECT name, description FROM skills WHERE status = 'active'" | tail -n +2 | while IFS=',' read name desc; do
+    echo "- [$name](skills/${name}.md) - $desc"
+done)
+EOF
+        
+        echo "✓ Exported to $output/"
+        ;;
+    
+    jsonl)
+        output="${output:-./prompts.jsonl}"
+        
+        echo "Exporting to JSONL..."
+        
+        > "$output"
+        
+        dolt sql -r csv -q "SELECT name, description, content FROM prompt_templates WHERE status = 'active'" | tail -n +2 | while IFS=',' read name desc content; do
+            [ -z "$name" ] && continue
+            jq -n \
+                --arg name "$name" \
+                --arg desc "$desc" \
+                --arg content "$content" \
+                '{type: "template", name: $name, description: $desc, content: $content}' >> "$output"
+        done
+        
+        dolt sql -r csv -q "SELECT name, description, readme FROM skills WHERE status = 'active'" | tail -n +2 | while IFS=',' read name desc readme; do
+            [ -z "$name" ] && continue
+            jq -n \
+                --arg name "$name" \
+                --arg desc "$desc" \
+                --arg readme "$readme" \
+                '{type: "skill", name: $name, description: $desc, readme: $readme}' >> "$output"
+        done
+        
+        echo "✓ Exported to $output ($(wc -l < "$output") records)"
+        ;;
+    
+    yaml)
+        output="${output:-./prompts.yaml}"
+        
+        echo "Exporting to YAML..."
+        
+        {
+            echo "templates:"
+            dolt sql -r csv -q "SELECT name, description, content FROM prompt_templates WHERE status = 'active' ORDER BY name" | tail -n +2 | while IFS=',' read name desc content; do
+                [ -z "$name" ] && continue
+                echo "  - name: $name"
+                echo "    description: \"$desc\""
+                echo "    content: |"
+                echo "$content" | sed 's/^/      /'
+            done
+            
+            echo ""
+            echo "skills:"
+            dolt sql -r csv -q "SELECT name, description FROM skills WHERE status = 'active' ORDER BY name" | tail -n +2 | while IFS=',' read name desc; do
+                [ -z "$name" ] && continue
+                echo "  - name: $name"
+                echo "    description: \"$desc\""
+            done
+        } > "$output"
+        
+        echo "✓ Exported to $output"
+        ;;
+    
+    typescript)
+        output="${output:-./prompts.ts}"
+        
+        echo "Exporting to TypeScript..."
+        
+        # Build header
+        {
+            echo "// Auto-generated from Prompt Vault"
+            echo "// Generated: $(date)"
+            echo ""
+            echo "export interface PromptTemplate {"
+            echo "  name: string;"
+            echo "  description: string;"
+            echo "  content: string;"
+            echo "  variables: string[];"
+            echo "}"
+            echo ""
+            echo "export interface Skill {"
+            echo "  name: string;"
+            echo "  description: string;"
+            echo "  readme: string;"
+            echo "}"
+            echo ""
+            echo "export const templates: PromptTemplate[] = "
+            
+            # Use jq to transform JSON and create proper array
+            dolt sql -r json -q "SELECT name, description, content FROM prompt_templates WHERE status = 'active' ORDER BY name" 2>/dev/null | \
+                jq '[.rows[] | {name, description, content, variables: []}]'
+            
+            echo ";"
+            echo ""
+            echo "export const skills: Skill[] = "
+            
+            dolt sql -r json -q "SELECT name, description, readme FROM skills WHERE status = 'active' ORDER BY name" 2>/dev/null | \
+                jq '[.rows[] | {name, description, readme}]'
+            
+            echo ";"
+        } > "$output"
+        
+        echo "✓ Exported to $output"
+        ;;
+    
+    python)
+        output="${output:-./prompts.py}"
+        
+        echo "Exporting to Python..."
+        
+        {
+            echo '"""Auto-generated from Prompt Vault"""'
+            echo "# Generated: $(date)"
+            echo "import json"
+            echo ""
+            echo "# Raw data exported as JSON - parse with json.loads()"
+            echo "TEMPLATES_JSON = '''
+"
+            
+            dolt sql -r json -q "SELECT name, description, content FROM prompt_templates WHERE status = 'active' ORDER BY name" 2>/dev/null | \
+                jq '.rows'
+            
+            echo "'''"
+            echo ""
+            echo "SKILLS_JSON = '''
+"
+            
+            dolt sql -r json -q "SELECT name, description, readme FROM skills WHERE status = 'active' ORDER BY name" 2>/dev/null | \
+                jq '.rows'
+            
+            echo "'''"
+            echo ""
+            echo "# Usage: templates = json.loads(TEMPLATES_JSON)"
+        } > "$output"
+        
+        echo "✓ Exported to $output"
+        ;;
+    
+    csv)
+        output="${output:-./prompts.csv}"
+        
+        echo "Exporting to CSV..."
+        
+        echo "type,name,description,content" > "$output"
+        
+        dolt sql -r csv -q "SELECT 'template', name, description, content FROM prompt_templates WHERE status = 'active'" | tail -n +2 >> "$output"
+        dolt sql -r csv -q "SELECT 'skill', name, description, readme FROM skills WHERE status = 'active'" | tail -n +2 >> "$output"
+        
+        echo "✓ Exported to $output"
+        ;;
+    
+    help|*)
+        cat << 'EOF'
+Usage: pv-export-formats <format> [output]
+
+Export vault to various formats.
+
+Formats:
+  markdown [dir]    Export as Markdown files with index
+  jsonl [file]      Export as JSON Lines (one object per line)
+  yaml [file]       Export as YAML
+  typescript [file] Export as TypeScript with types
+  python [file]     Export as Python dataclasses
+  csv [file]        Export as CSV
+
+Examples:
+  pv-export-formats markdown ./docs
+  pv-export-formats jsonl ./data/prompts.jsonl
+  pv-export-formats typescript ./src/prompts.ts
+  pv-export-formats python ./prompts.py
+EOF
+        ;;
+esac

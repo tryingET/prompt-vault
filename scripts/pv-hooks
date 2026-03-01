@@ -1,0 +1,139 @@
+#!/usr/bin/env bash
+# pv-hooks - Git hooks for prompt vault
+# Usage: pv-hooks install|uninstall|run <hook>
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+VAULT_DIR="${VAULT_DIR:-$SCRIPT_DIR/../prompt-vault-db}"
+
+cmd="${1:-help}"
+shift || true
+
+case "$cmd" in
+    install)
+        # Install git hooks in parent repo
+        parent_git="$(git rev-parse --show-toplevel 2>/dev/null || echo "")"
+        
+        if [ -z "$parent_git" ]; then
+            echo "Error: Not in a git repository" >&2
+            exit 1
+        fi
+        
+        hooks_dir="$parent_git/.git/hooks"
+        
+        # Pre-commit hook
+        cat > "$hooks_dir/pre-commit.prompt-vault" << 'HOOK'
+#!/bin/bash
+# Prompt Vault pre-commit hook
+set -e
+
+VAULT_DIR="${VAULT_DIR:-./prompt-vault/prompt-vault-db}"
+
+if [ -d "$VAULT_DIR/.dolt" ]; then
+    cd "$VAULT_DIR"
+    
+    # Check for uncommitted dolt changes
+    if ! dolt diff --quiet 2>/dev/null; then
+        echo "Error: Uncommitted changes in prompt vault"
+        echo "Please commit vault changes first:"
+        echo "  cd prompt-vault/scripts && ./pv commit 'your message'"
+        exit 1
+    fi
+fi
+HOOK
+        chmod +x "$hooks_dir/pre-commit.prompt-vault"
+        
+        # Pre-push hook
+        cat > "$hooks_dir/pre-push.prompt-vault" << 'HOOK'
+#!/bin/bash
+# Prompt Vault pre-push hook
+set -e
+
+VAULT_DIR="${VAULT_DIR:-./prompt-vault/prompt-vault-db}"
+
+if [ -d "$VAULT_DIR/.dolt" ]; then
+    cd "$VAULT_DIR/../scripts"
+    
+    # Run lint check
+    echo "Running prompt vault lint check..."
+    if ! ./pv-lint --quiet 2>/dev/null; then
+        echo "Warning: Lint check found issues. Review with: pv lint"
+    fi
+fi
+HOOK
+        chmod +x "$hooks_dir/pre-push.prompt-vault"
+        
+        # Update main hooks to chain
+        for hook in pre-commit pre-push; do
+            if [ -f "$hooks_dir/$hook" ]; then
+                if ! grep -q "prompt-vault" "$hooks_dir/$hook"; then
+                    echo "" >> "$hooks_dir/$hook"
+                    echo "# Prompt vault hook" >> "$hooks_dir/$hook"
+                    echo "[ -f \$0.prompt-vault ] && . \$0.prompt-vault" >> "$hooks_dir/$hook"
+                fi
+            else
+                cat > "$hooks_dir/$hook" << EOF
+#!/bin/bash
+# Git hook
+[ -f \$0.prompt-vault ] && . \$0.prompt-vault
+EOF
+                chmod +x "$hooks_dir/$hook"
+            fi
+        done
+        
+        echo "✓ Installed git hooks in $hooks_dir"
+        ;;
+    
+    uninstall)
+        parent_git="$(git rev-parse --show-toplevel 2>/dev/null || echo "")"
+        [ -z "$parent_git" ] && { echo "Error: Not in a git repository" >&2; exit 1; }
+        
+        hooks_dir="$parent_git/.git/hooks"
+        rm -f "$hooks_dir/pre-commit.prompt-vault" "$hooks_dir/pre-push.prompt-vault"
+        echo "✓ Removed prompt vault git hooks"
+        ;;
+    
+    run)
+        hook="${1:-}"
+        case "$hook" in
+            pre-commit)
+                cd "$VAULT_DIR"
+                if ! dolt diff --quiet 2>/dev/null; then
+                    echo "FAIL: Uncommitted vault changes"
+                    exit 1
+                fi
+                echo "OK: Vault is clean"
+                ;;
+            pre-push)
+                export VAULT_DIR
+                "$SCRIPT_DIR/pv-lint" --quiet 2>/dev/null || true
+                ;;
+            *)
+                echo "Unknown hook: $hook" >&2
+                exit 1
+                ;;
+        esac
+        ;;
+    
+    list)
+        echo "Available hooks:"
+        echo "  pre-commit  - Check for uncommitted vault changes"
+        echo "  pre-push    - Run lint check before push"
+        ;;
+    
+    help|*)
+        cat << 'EOF'
+Usage: pv-hooks <command>
+
+Commands:
+  install     Install git hooks in parent repository
+  uninstall   Remove prompt vault git hooks
+  run <hook>  Manually run a hook
+  list        List available hooks
+
+Hooks:
+  pre-commit  - Ensures vault changes are committed before git commit
+  pre-push    - Runs lint check before git push
+EOF
+        ;;
+esac

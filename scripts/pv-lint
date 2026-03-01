@@ -1,0 +1,262 @@
+#!/usr/bin/env bash
+# pv-lint - Lint and validate templates and skills
+# Usage: pv-lint [--fix] [template-name]
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Source shared library
+source "$SCRIPT_DIR/pv-lib.sh"
+
+# Check for required dependencies
+check_deps jq dolt
+
+cd "$VAULT_DIR"
+
+FIX="${1:-}"
+TARGET="${2:-}"
+
+errors=0
+warnings=0
+
+pass() { echo -e "\033[32m✓\033[0m $1"; }
+fail() { echo -e "\033[31m✗\033[0m $1"; ((errors++)) || true; }
+warn() { echo -e "\033[33m!\033[0m $1"; ((warnings++)) || true; }
+
+lint_template() {
+    local name="$1"
+    
+    echo ""
+    echo "=== Template: $name ==="
+    
+    # Get template data using JSON format for proper handling
+    local data=$(dolt sql -r json -q "
+        SELECT 
+            id, 
+            COALESCE(description, '') as description, 
+            CHAR_LENGTH(content) as content_len,
+            CHAR_LENGTH(description) as desc_len
+        FROM prompt_templates 
+        WHERE name = '$name' AND status = 'active' 
+        ORDER BY version DESC LIMIT 1
+    " 2>/dev/null | jq -r '.rows[0] // empty')
+    
+    if [ -z "$data" ]; then
+        fail "Template not found or not active"
+        return
+    fi
+    
+    local description=$(echo "$data" | jq -r '.description // empty')
+    local content_len=$(echo "$data" | jq -r '.content_len // 0')
+    local desc_len=$(echo "$data" | jq -r '.desc_len // 0')
+    
+    # Check description
+    if [ -z "$description" ] || [ "$desc_len" -eq 0 ]; then
+        fail "Missing description"
+    elif [ "$desc_len" -lt 20 ]; then
+        warn "Description too short ($desc_len chars, recommend 20+)"
+    elif [ "$desc_len" -gt 200 ]; then
+        warn "Description too long ($desc_len chars, max 200)"
+    else
+        pass "Description OK ($desc_len chars)"
+    fi
+    
+    # Check content
+    if [ "$content_len" -eq 0 ]; then
+        fail "Missing content"
+    else
+        pass "Content present ($content_len chars)"
+    fi
+    
+    # Get actual content for variable check
+    local content=$(dolt sql -r csv -q "
+        SELECT content FROM prompt_templates 
+        WHERE name = '$name' AND status = 'active' 
+        ORDER BY version DESC LIMIT 1
+    " 2>/dev/null | tail -1)
+    
+    # Check for variable definitions
+    local vars=$(echo "$content" | grep -oE '\$[0-9]+|\$@|\$ARGUMENTS|\${@[0-9:]*}' | sort -u || true)
+    if [ -n "$vars" ]; then
+        pass "Variables found: $(echo $vars | tr '\n' ' ')"
+    fi
+    
+    # Check for common issues
+    if echo "$content" | grep -qi "TODO\|FIXME\|XXX"; then
+        warn "Contains TODO/FIXME markers"
+    fi
+    
+    # Check for unbalanced braces
+    local open_braces=$(echo "$content" | grep -o '{' | wc -l)
+    local close_braces=$(echo "$content" | grep -o '}' | wc -l)
+    if [ "$open_braces" != "$close_braces" ]; then
+        fail "Unbalanced braces: $open_braces open, $close_braces close"
+    fi
+    
+    # Check for frontmatter if looks like skill
+    if echo "$content" | head -1 | grep -q "^---"; then
+        if ! echo "$content" | grep -q "^name:"; then
+            warn "Has frontmatter delimiter but missing 'name' field"
+        fi
+        if ! echo "$content" | grep -q "^description:"; then
+            warn "Has frontmatter delimiter but missing 'description' field"
+        fi
+    fi
+    
+    # Check for recommended sections in longer templates
+    if [ "$content_len" -gt 500 ]; then
+        if ! echo "$content" | grep -qi "usage\|example\|setup"; then
+            warn "Long template missing Usage/Example/Setup section"
+        fi
+    fi
+}
+
+lint_skill() {
+    local name="$1"
+    
+    echo ""
+    echo "=== Skill: $name ==="
+    
+    # Validate name per Agent Skills spec
+    if [[ ! "$name" =~ ^[a-z0-9]([a-z0-9-]*[a-z0-9])?$ ]]; then
+        fail "Name violates Agent Skills spec (lowercase, numbers, hyphens only)"
+    fi
+    
+    if [ ${#name} -gt 64 ]; then
+        fail "Name exceeds 64 characters"
+    fi
+    
+    # Get skill data
+    local data=$(dolt sql -r json -q "
+        SELECT 
+            id,
+            COALESCE(description, '') as description,
+            CHAR_LENGTH(readme) as readme_len,
+            CHAR_LENGTH(description) as desc_len,
+            COALESCE(license, '') as license
+        FROM skills 
+        WHERE name = '$name' AND status = 'active' 
+        ORDER BY version DESC LIMIT 1
+    " 2>/dev/null | jq -r '.rows[0] // empty')
+    
+    if [ -z "$data" ]; then
+        fail "Skill not found or not active"
+        return
+    fi
+    
+    local description=$(echo "$data" | jq -r '.description // empty')
+    local desc_len=$(echo "$data" | jq -r '.desc_len // 0')
+    local readme_len=$(echo "$data" | jq -r '.readme_len // 0')
+    local license=$(echo "$data" | jq -r '.license // empty')
+    
+    # Check description
+    if [ -z "$description" ] || [ "$desc_len" -eq 0 ]; then
+        fail "Missing description (required by Agent Skills spec)"
+    elif [ "$desc_len" -gt 1024 ]; then
+        fail "Description exceeds 1024 characters ($desc_len)"
+    elif [ "$desc_len" -lt 50 ]; then
+        warn "Description too brief ($desc_len chars, recommend 50+)"
+    else
+        pass "Description OK ($desc_len chars)"
+    fi
+    
+    # Check readme content
+    if [ "$readme_len" -eq 0 ]; then
+        fail "Missing readme content"
+    else
+        pass "Readme present ($readme_len chars)"
+    fi
+    
+    # Get readme for frontmatter check
+    local readme=$(dolt sql -r csv -q "
+        SELECT readme FROM skills 
+        WHERE name = '$name' AND status = 'active' 
+        ORDER BY version DESC LIMIT 1
+    " 2>/dev/null | tail -1)
+    
+    # Check frontmatter in readme
+    if ! echo "$readme" | head -1 | grep -q "^---"; then
+        fail "Missing frontmatter delimiter '---'"
+    else
+        if ! echo "$readme" | grep -q "^name:"; then
+            fail "Missing 'name' in frontmatter"
+        fi
+        if ! echo "$readme" | grep -q "^description:"; then
+            fail "Missing 'description' in frontmatter"
+        fi
+        pass "Frontmatter structure OK"
+    fi
+    
+    # Check for recommended sections
+    if [ "$readme_len" -gt 300 ]; then
+        local has_setup=$(echo "$readme" | grep -qi "setup\|install\|getting started" && echo 1 || echo 0)
+        local has_usage=$(echo "$readme" | grep -qi "usage\|how to use\|example" && echo 1 || echo 0)
+        
+        if [ "$has_setup" = "0" ]; then
+            warn "Missing Setup/Installation section"
+        fi
+        if [ "$has_usage" = "0" ]; then
+            warn "Missing Usage/Example section"
+        fi
+    fi
+    
+    # Check license
+    if [ -n "$license" ] && [ "$license" != "NULL" ]; then
+        pass "License: $license"
+    else
+        warn "No license specified"
+    fi
+}
+
+lint_all() {
+    echo "=== Linting all templates ==="
+    
+    local templates=$(dolt sql -r csv -q "SELECT name FROM prompt_templates WHERE status = 'active'" | tail -n +2)
+    for name in $templates; do
+        [ -z "$name" ] && continue
+        lint_template "$name"
+    done
+    
+    echo ""
+    echo "=== Linting all skills ==="
+    
+    local skills=$(dolt sql -r csv -q "SELECT name FROM skills WHERE status = 'active'" | tail -n +2)
+    for name in $skills; do
+        [ -z "$name" ] && continue
+        lint_skill "$name"
+    done
+}
+
+# Main
+if [ "$FIX" = "--fix" ]; then
+    echo "Auto-fix not yet implemented"
+    TARGET="${2:-}"
+fi
+
+if [ -n "$TARGET" ] && [ "$TARGET" != "--fix" ]; then
+    # Check if template or skill
+    type=$(dolt sql -r csv -q "
+        SELECT 
+            CASE 
+                WHEN EXISTS (SELECT 1 FROM prompt_templates WHERE name = '$TARGET') THEN 'template'
+                WHEN EXISTS (SELECT 1 FROM skills WHERE name = '$TARGET') THEN 'skill'
+                ELSE 'unknown'
+            END
+    " | tail -1)
+    
+    case "$type" in
+        template) lint_template "$TARGET" ;;
+        skill) lint_skill "$TARGET" ;;
+        *) echo "Unknown: $TARGET"; exit 1 ;;
+    esac
+else
+    lint_all
+fi
+
+echo ""
+echo "=== Summary ==="
+echo "Errors: $errors"
+echo "Warnings: $warnings"
+
+[ $errors -gt 0 ] && exit 1
+exit 0
