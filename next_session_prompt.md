@@ -1,6 +1,7 @@
 # Prompt Vault — Session Context
 
 > **Location:** `~/ai-society/softwareco/owned/prompt-vault`
+> **Moving to:** `~/ai-society/core/prompt-vault`
 
 ## Quick Status
 
@@ -10,19 +11,98 @@
 | Templates | 48 (28 cognitive, 20 task) |
 | Verification | 33/33 checks pass |
 | Schema | v1 (versioned) |
-| Extension | Connected at new path |
+| Extension | Connected |
 
-## Architecture
+## Strategic Direction
+
+**Decision: Move to `core/`**
+
+> "I would go with core, and then we can always extract the individual prompt tables for each company at a later stage. Each agent should be attributed its own prompts. And the results should be stored there, from each JSONL file, right?! With details about each toolcall and so on."
+
+**No, not too crazy — this is the right architecture.**
+
+### Future Architecture
 
 ```
-~/steve/prompts/triggers/   →  import  →  prompt-vault-db/  →  pi extension
-     (source)                    (Dolt)        (vault-client)
+ai-society/
+├── core/
+│   └── prompt-vault/                    # L0 - Master vault
+│       ├── prompt-vault-db/             # Dolt DB (all cognitive tools)
+│       ├── triggers/                    # Canonical source (synced from ~/steve)
+│       ├── scripts/                     # CLI tools
+│       └── extension/                   # pi integration
+│
+├── softwareco/
+│   ├── infra/workstation/prompts/       # ← symlink or import from core
+│   └── owned/                           # Project repos (use core vault)
+│
+└── holdingco/
+    └── (same pattern)
 ```
+
+### Why Core?
+
+1. **Cognitive triggers are universal** — inversion, audit, nexus aren't company-specific
+2. **Single source of truth** — one vault, all tools, no duplication
+3. **Follows L0→L1→L2 pattern** — consistent with template hierarchy
+4. **Per-company extraction later** — can filter by tags/type when needed
+
+### Agent Attribution Vision
+
+Each execution should track:
+- `agent_id` — Which agent/session used the template
+- `tool_calls[]` — Each tool invocation with args/result
+- `output_text` — Full response
+- `rating` — Human feedback
+
+### JSONL Structure (Per Execution)
+
+```json
+{
+  "timestamp": "2026-03-01T12:00:00Z",
+  "agent_id": "softwareco-nexus",
+  "template": "inversion",
+  "template_version": 3,
+  "model": "claude-3-sonnet",
+  "latency_ms": 3420,
+  "input_context": "Review the authentication module",
+  "tool_calls": [
+    {"tool": "read", "args": {"path": "auth.py"}, "result": "..."},
+    {"tool": "bash", "args": {"cmd": "pytest"}, "result": "..."}
+  ],
+  "output_text": "## Shadow Analysis...",
+  "rating": 4,
+  "rating_notes": "Good but missed error paths"
+}
+```
+
+## Next Steps
+
+### Immediate
+
+1. **Move to core** — `mv ~/ai-society/softwareco/owned/prompt-vault ~/ai-society/core/prompt-vault`
+2. **Sync triggers** — Consolidate `~/steve/prompts/triggers/` → `core/prompt-vault/triggers/`
+3. **Clean up duplicates** — Remove/symlink `softwareco/infra/workstation/prompts/triggers/`
+4. **Update extension** — Point to new core location
+
+### Short-term
+
+5. **Add `agent_id` column** — Track which agent used each template
+6. **Add `tool_calls` column** — JSON array of tool invocations
+7. **Output capture** — Add `output_text` column
+8. **JSONL export** — `pv export-executions --format jsonl --agent softwareco-nexus`
+
+### Future
+
+9. **Per-company extraction** — `pv extract --company softwareco --output company-vault/`
+10. **JSONL ingestion** — Import agent logs back to vault for analytics
+11. **Agent analytics** — Per-agent quality dashboards
+12. **Multi-tenant schema** — Partition by company/agent if needed
 
 ## Key Commands
 
 ```bash
-cd ~/ai-society/softwareco/owned/prompt-vault
+cd ~/ai-society/core/prompt-vault
 
 ./scripts/pv templates              # List all
 ./scripts/pv show template <name>   # View
@@ -42,59 +122,29 @@ cd ~/ai-society/softwareco/owned/prompt-vault
 /vault-stats                # Usage stats
 ```
 
-## Next Steps
+## Open Questions
 
-### Immediate
-
-1. **Set up remote** — Add DoltHub or GitLab remote for backup/collaboration
-2. **Test extension** — Verify `/vault:name` and `/route` work in pi with new path
-3. **Archive old location** — Remove or archive `~/programming/prompt-vault`
-
-### Short-term
-
-4. **Output capture** — Add optional `output_text` column to executions table
-5. **Rate limiting** — Add throttling to `/vault:name` command
-6. **Quality dashboard** — Build `pv quality dashboard` with charts
-
-### Future
-
-7. **HTTP API** — Abstract query layer when third client appears
-8. **Multi-tenancy** — Support multiple vaults per user/team
-9. **Web UI** — Browser-based template management
+| Question | Options |
+|----------|---------|
+| JSONL storage | One file per session? Per day? Per agent? |
+| Tool call capture | Full output or truncated? |
+| Privacy | What gets stored vs redacted? |
+| Agent ID format | `company-agent-name` or UUID? |
 
 ## Documentation
 
 | File | Purpose |
 |------|---------|
 | [README.md](README.md) | Project overview |
-| [QUICKSTART.md](QUICKSTART.md) | 5-minute setup |
 | [CHANGELOG.md](CHANGELOG.md) | Version history |
 | [docs/CRYSTALLIZED.md](docs/CRYSTALLIZED.md) | Patterns & learnings |
-| [docs/WORKFLOWS.md](docs/WORKFLOWS.md) | Team collaboration |
 | [docs/project/](docs/project/) | Vision, goals, status |
 
 ## Recent History
 
 ```
+2b00bd4 docs: merge next_steps.md into next_session_prompt.md
 b560267 docs: fill in template placeholders with prompt-vault context
 900fe0e docs: update AGENTS.md for prompt-vault specifics
 675253c Merge prompt-vault with full git history
-3e4a07e Initial commit from softwareco-templates L1
-7749fba docs: prepare for publication with badges, navigation
-```
-
-## Known Issues
-
-| Issue | Status | Fix |
-|-------|--------|-----|
-| No output capture | Planned | Add `output_text` column |
-| No rate limiting | Planned | Add to extension |
-| CSV parsing | Fixed | Switched to JSON |
-
-## Extension Path
-
-```typescript
-// ~/.pi/agent/extensions/vault-client/index.ts
-const VAULT_DIR = process.env.VAULT_DIR ||
-  "/home/tryinget/ai-society/softwareco/owned/prompt-vault/prompt-vault-db";
 ```
