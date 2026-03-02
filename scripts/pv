@@ -614,6 +614,43 @@ cmd_cleanup() {
     echo "Remaining executions: $new_total"
 }
 
+cmd_vocabulary() {
+    ensure_vault
+    echo "=== Tag Vocabulary ==="
+    echo ""
+    
+    # Export all tags and process with shell tools
+    local tmpfile=$(mktemp)
+    dolt sql -q "SELECT tags FROM prompt_templates WHERE status = 'active' AND tags IS NOT NULL" -r csv 2>/dev/null | tail -n +2 > "$tmpfile"
+    
+    # Extract and count tags by namespace
+    echo "## action:"
+    grep -oE '"action:[^"]+' "$tmpfile" | sed 's/"action://' | sort | uniq -c | sort -rn | awk '{print "  - " $2 " (" $1 ")"}'
+    echo ""
+    
+    echo "## phase:"
+    grep -oE '"phase:[^"]+' "$tmpfile" | sed 's/"phase://' | sort | uniq -c | sort -rn | awk '{print "  - " $2 " (" $1 ")"}'
+    echo ""
+    
+    echo "## formalization:"
+    grep -oE '"formalization:[^"]+' "$tmpfile" | sed 's/"formalization://' | sort | uniq -c | sort -rn | awk '{print "  - " $2 " (" $1 ")"}'
+    echo ""
+    
+    echo "## domain:"
+    grep -oE '"domain:[^"]+' "$tmpfile" | sed 's/"domain://' | sort | uniq -c | sort -rn | awk '{print "  - " $2 " (" $1 ")"}'
+    echo ""
+    
+    echo "## scope:"
+    grep -oE '"scope:[^"]+' "$tmpfile" | sed 's/"scope://' | sort | uniq -c | sort -rn | awk '{print "  - " $2 " (" $1 ")"}'
+    echo ""
+    
+    rm -f "$tmpfile"
+    
+    echo "## Summary"
+    echo "  Tagged templates: $(dolt sql -q "SELECT COUNT(*) FROM prompt_templates WHERE status = 'active' AND tags IS NOT NULL" -r csv 2>/dev/null | tail -1)"
+    echo "  Total templates: $(dolt sql -q "SELECT COUNT(*) FROM prompt_templates WHERE status = 'active'" -r csv 2>/dev/null | tail -1)"
+}
+
 usage() {
     cat << 'EOF'
 Prompt Vault CLI - Version-controlled prompt templates and skills
@@ -657,6 +694,7 @@ Search & Analytics:
   stats [name]             Usage statistics
   analytics [cmd]          Detailed analytics
   quality [cmd]            Quality scores and dashboard
+  vocabulary               Show tag vocabulary
   exec <template> [args]   Execute template with tracking
   rate <id> <rating>       Rate an execution
 
@@ -760,6 +798,7 @@ case "${1:-}" in
     quick) shift; cmd_quick "$@" ;;
     vars) shift; cmd_vars "$@" ;;
     tag) shift; cmd_tag "$@" ;;
+    vocabulary) cmd_vocabulary ;;
     cleanup) shift; cmd_cleanup "$@" ;;
     -h|--help|help) usage ;;
     -v|--version) echo "pv version $VERSION" ;;

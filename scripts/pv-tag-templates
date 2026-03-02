@@ -1,0 +1,106 @@
+#!/bin/bash
+# Tag all existing templates based on the tag vocabulary plan
+# See: next_session_prompt.md
+
+set -e
+
+VAULT_DIR="${VAULT_DIR:-$HOME/ai-society/core/prompt-vault/prompt-vault-db}"
+
+# Tag assignments based on cognitive tool analysis
+declare -A TAGS
+
+# Cognitive tools - action/phase/formalization
+TAGS["inversion"]='["action:invert","phase:sensemaking","phase:hypothesis","formalization:napkin","scope:code"]'
+TAGS["nexus"]='["action:reduce","phase:hypothesis","phase:execution","formalization:structured","scope:system"]'
+TAGS["audit"]='["action:validate","phase:validation","formalization:bounded","scope:code"]'
+TAGS["first-principles"]='["action:reduce","phase:sensemaking","formalization:napkin","scope:self"]'
+TAGS["simplification"]='["action:reduce","phase:execution","formalization:structured","scope:code"]'
+TAGS["telescopic"]='["action:expand","phase:sensemaking","phase:validation","formalization:napkin","scope:system","scope:portfolio"]'
+TAGS["adversary"]='["action:validate","phase:validation","formalization:bounded","domain:security","scope:code"]'
+TAGS["mirror"]='["action:generate","phase:probing","formalization:bounded","scope:self"]'
+TAGS["scaffold"]='["action:generate","phase:hypothesis","formalization:bounded","scope:code"]'
+TAGS["doppelganger"]='["action:generate","phase:validation","formalization:bounded","scope:code"]'
+TAGS["inquisition"]='["action:validate","phase:validation","formalization:bounded","scope:self"]'
+TAGS["deep-review"]='["action:validate","phase:validation","formalization:workflow","scope:code"]'
+TAGS["blast-radius"]='["action:project","phase:validation","formalization:bounded","scope:system"]'
+TAGS["escape-hatch"]='["action:project","phase:execution","formalization:bounded","scope:system"]'
+TAGS["temporal-degradation"]='["action:project","phase:sensemaking","formalization:structured","scope:system"]'
+TAGS["constraint-inventory"]='["action:reduce","phase:sensemaking","formalization:napkin","scope:system"]'
+TAGS["knowledge-crystallization"]='["action:crystallize","phase:execution","formalization:structured","scope:self"]'
+TAGS["implicit-explicit"]='["action:crystallize","phase:validation","formalization:structured","scope:code"]'
+
+# Control/mode templates
+TAGS["meta-orchestration"]='["action:control","phase:sensemaking","phase:hypothesis","phase:probing","phase:validation","phase:execution","formalization:structured","scope:self"]'
+TAGS["crisis"]='["action:control","phase:sensemaking","formalization:napkin","scope:self"]'
+TAGS["morning"]='["action:control","phase:sensemaking","formalization:napkin","scope:self"]'
+TAGS["decision"]='["action:control","phase:hypothesis","formalization:napkin","scope:self"]'
+TAGS["napkin"]='["action:mode","phase:sensemaking","formalization:napkin","scope:self"]'
+TAGS["controlled"]='["action:mode","phase:execution","formalization:bounded","scope:self"]'
+
+# Additional cognitive tools
+TAGS["atomic-completion"]='["action:validate","phase:execution","formalization:bounded","scope:code"]'
+TAGS["dependency-cartography"]='["action:expand","phase:sensemaking","formalization:structured","scope:system"]'
+TAGS["elevate"]='["action:expand","phase:hypothesis","formalization:napkin","scope:self"]'
+TAGS["escape-hatch"]='["action:project","phase:execution","formalization:bounded","scope:system"]'
+TAGS["formalization-threshold"]='["action:validate","phase:hypothesis","formalization:napkin","scope:self"]'
+TAGS["recursion-engine"]='["action:expand","phase:validation","formalization:structured","scope:code"]'
+TAGS["transcendent-iteration"]='["action:crystallize","phase:execution","formalization:workflow","scope:self"]'
+
+# Task templates - domain-specific
+TAGS["commit"]='["domain:backend","phase:execution","formalization:bounded"]'
+TAGS["pr"]='["domain:backend","phase:validation","formalization:workflow"]'
+TAGS["preflight"]='["domain:infrastructure","phase:sensemaking","formalization:structured"]'
+TAGS["preflight-brief"]='["domain:infrastructure","phase:sensemaking","formalization:structured"]'
+TAGS["preflight-census"]='["domain:infrastructure","phase:sensemaking","formalization:structured"]'
+TAGS["preflight-daily"]='["domain:infrastructure","phase:sensemaking","formalization:structured"]'
+TAGS["preflight-repo"]='["domain:infrastructure","phase:sensemaking","formalization:structured"]'
+TAGS["preflight-risk"]='["domain:infrastructure","phase:validation","formalization:bounded"]'
+TAGS["frontend-design"]='["domain:frontend","phase:execution","formalization:workflow"]'
+TAGS["e3d-htn"]='["domain:planning","phase:hypothesis","formalization:structured"]'
+TAGS["cl"]='["domain:backend","phase:execution","formalization:bounded"]'
+TAGS["codemap"]='["domain:backend","phase:sensemaking","formalization:structured"]'
+TAGS["is"]='["domain:backend","phase:execution","formalization:bounded"]'
+TAGS["next-10-expert-suggestions"]='["action:expand","phase:hypothesis","formalization:napkin"]'
+TAGS["propose-pi-upstream-change"]='["domain:infrastructure","phase:validation","formalization:workflow"]'
+TAGS["propose-pi-upstream-change-exp"]='["domain:infrastructure","phase:validation","formalization:workflow"]'
+TAGS["refine-from-docs"]='["action:crystallize","phase:sensemaking","formalization:structured"]'
+TAGS["refine-from-docs-exp"]='["action:crystallize","phase:sensemaking","formalization:structured"]'
+TAGS["unsung-foundations"]='["action:expand","phase:sensemaking","formalization:napkin"]'
+TAGS["fcos-model-first-convergence"]='["domain:governance","phase:validation","formalization:workflow"]'
+
+tag_template() {
+    local name="$1"
+    local tags="$2"
+    
+    echo "Tagging: $name"
+    cd "$VAULT_DIR"
+    dolt sql -q "UPDATE prompt_templates SET tags = '$tags' WHERE name = '$name'" 2>/dev/null || {
+        echo "  Warning: Could not tag $name"
+    }
+}
+
+commit_changes() {
+    cd "$VAULT_DIR"
+    dolt add -A
+    dolt commit -m "Tag all templates with vocabulary" 2>/dev/null || echo "No changes to commit"
+}
+
+# Main
+echo "Tagging templates..."
+echo ""
+
+for name in "${!TAGS[@]}"; do
+    tag_template "$name" "${TAGS[$name]}"
+done
+
+echo ""
+echo "Committing changes..."
+commit_changes
+
+echo ""
+echo "Verifying tags..."
+cd "$VAULT_DIR"
+dolt sql -q "SELECT name, tags FROM prompt_templates WHERE tags IS NOT NULL LIMIT 10"
+
+echo ""
+echo "Done. Run './scripts/pv templates' to see all templates."

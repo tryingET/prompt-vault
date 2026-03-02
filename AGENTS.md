@@ -16,13 +16,14 @@ Version-controlled prompt templates using Dolt SQL database with Git semantics, 
 ./scripts/pv templates              # List all templates
 ./scripts/pv show template <name>   # View template
 ./scripts/pv search <query>         # Search content
+./scripts/pv vocabulary             # Show tag vocabulary
 ./scripts/pv cleanup 30             # Remove old execution logs
 ./scripts/pv migrate status         # Check schema version
 ```
 
 ### Schema
 ```
-prompt_templates: id, name, content, description, tags, version, status
+prompt_templates: id, name, content, description, tags (JSON), type, version, status
 executions:       id, entity_type, entity_id, latency_ms, success
 feedback:         id, execution_id, rating, notes, issues
 schema_version:   id, version, description, applied_at
@@ -30,16 +31,39 @@ schema_version:   id, version, description, applied_at
 
 ### Pi Integration
 The vault-client extension at `~/.pi/agent/extensions/vault-client/` connects pi directly:
+
+**Human Commands:**
 - `/vaults` — List all templates
 - `/vault:name` — Load template
+- `/vault-search query` — Search content
 - `/route <context>` — Get tool recommendation
+- `/vault-stats` — Usage statistics
+
+**LLM Tools:**
+- `vault_query({ tags, keywords, limit, include_content })` — Query by tags/keywords
+- `vault_retrieve({ names, include_content })` — Get templates by name
+- `vault_vocabulary()` — List tag vocabulary
+- `vault_insert({ name, content, description, tags, source, confirm_new_tags })` — Insert with validation
+- `vault_rate({ template_name, rating, success, notes })` — Rate for feedback
+
+### Tag Vocabulary
+Templates are tagged with namespaced values:
+
+| Namespace | Purpose | Values |
+|-----------|---------|--------|
+| `action:` | What the tool does | invert, reduce, expand, generate, validate, project, crystallize, control, mode |
+| `phase:` | When to apply | sensemaking, hypothesis, probing, validation, execution |
+| `formalization:` | Rigor level | napkin (0-1), bounded (2), structured (3), workflow (4) |
+| `domain:` | Subject area | backend, frontend, infrastructure, security, governance, planning |
+| `scope:` | Application level | self, code, system, portfolio |
 
 ### Key Files
 | File | Purpose |
 |------|---------|
 | `scripts/pv` | Main CLI |
+| `scripts/pv-tag-templates` | Bulk tag templates |
 | `schema/schema.sql` | Database schema |
-| `verify.sh` | 33 verification checks |
+| `verify.sh` | 34 verification checks |
 | `docs/CRYSTALLIZED.md` | Patterns and learnings |
 
 ## Deterministic tooling policy (ROCS-first)

@@ -80,14 +80,42 @@ import_trigger() {
     local escaped_desc
     escaped_desc=$(sql_escape "$desc")
     
-    # Extract tags from content if present (look for tags: or keywords:)
-    local tags='["cognitive", "trigger"]'
-    if echo "$content" | grep -qi '^tags:'; then
-        local tag_line
-        tag_line=$(echo "$content" | grep -i '^tags:' | head -1 | sed 's/^tags://i' | tr -d '[]')
-        if [ -n "$tag_line" ]; then
-            # Convert to JSON array
-            tags=$(echo "$tag_line" | tr ',' '\n' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//' | grep -v '^$' | jq -R . | jq -s .)
+    # Extract tags from frontmatter or content
+    local tags='null'
+    
+    # Check for YAML frontmatter (--- at start)
+    if echo "$content" | head -1 | grep -q '^---$'; then
+        # Extract frontmatter section
+        local frontmatter
+        frontmatter=$(echo "$content" | sed -n '2,/^---$/p' | head -n -1)
+        
+        # Look for tags: in frontmatter
+        if echo "$frontmatter" | grep -qi '^tags:'; then
+            local tag_line
+            tag_line=$(echo "$frontmatter" | grep -i '^tags:' | head -1 | sed 's/^tags://i' | tr -d '[]')
+            if [ -n "$tag_line" ]; then
+                # Convert to JSON array
+                tags=$(echo "$tag_line" | tr ',' '\n' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//' | grep -v '^$' | jq -R . | jq -s .)
+            fi
+        fi
+    else
+        # Check for tags: in content (non-frontmatter)
+        if echo "$content" | grep -qi '^tags:'; then
+            local tag_line
+            tag_line=$(echo "$content" | grep -i '^tags:' | head -1 | sed 's/^tags://i' | tr -d '[]')
+            if [ -n "$tag_line" ]; then
+                # Convert to JSON array
+                tags=$(echo "$tag_line" | tr ',' '\n' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//' | grep -v '^$' | jq -R . | jq -s .)
+            fi
+        fi
+    fi
+    
+    # If no tags found, set default based on type
+    if [ "$tags" = "null" ]; then
+        if [ "$type" = "cognitive" ]; then
+            tags='["cognitive"]'
+        else
+            tags='["task"]'
         fi
     fi
     
