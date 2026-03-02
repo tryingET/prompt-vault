@@ -1,150 +1,262 @@
 # Prompt Vault — Session Context
 
-> **Location:** `~/ai-society/softwareco/owned/prompt-vault`
-> **Moving to:** `~/ai-society/core/prompt-vault`
+> **Location:** `~/ai-society/core/prompt-vault`
+> **Status:** v1.1.0 | 48 templates (30 cognitive, 18 task) | 33/33 checks pass
 
-## Quick Status
+---
 
-| Aspect | Status |
-|--------|--------|
-| Version | v1.1.0 (deep review complete) |
-| Templates | 48 (28 cognitive, 20 task) |
-| Verification | 33/33 checks pass |
-| Schema | v1 (versioned) |
-| Extension | Connected |
+## Current State
 
-## Strategic Direction
+### Schema (existing)
+```sql
+prompt_templates:
+  id, name, description, content, variables, tags (JSON),
+  version, parent_id, status, created_at, updated_at, type
 
-**Decision: Move to `core/`**
+executions:
+  id, entity_type, entity_id, entity_version, input_context,
+  model, success, created_at
 
-> "I would go with core, and then we can always extract the individual prompt tables for each company at a later stage. Each agent should be attributed its own prompts. And the results should be stored there, from each JSONL file, right?! With details about each toolcall and so on."
-
-**No, not too crazy — this is the right architecture.**
-
-### Future Architecture
-
-```
-ai-society/
-├── core/
-│   └── prompt-vault/                    # L0 - Master vault
-│       ├── prompt-vault-db/             # Dolt DB (all cognitive tools)
-│       ├── triggers/                    # Canonical source (synced from ~/steve)
-│       ├── scripts/                     # CLI tools
-│       └── extension/                   # pi integration
-│
-├── softwareco/
-│   ├── infra/workstation/prompts/       # ← symlink or import from core
-│   └── owned/                           # Project repos (use core vault)
-│
-└── holdingco/
-    └── (same pattern)
+feedback:
+  id, execution_id, rating, notes, issues
 ```
 
-### Why Core?
+### Extension (`~/.pi/agent/extensions/vault-client/`)
+- `/vault:name` — load template
+- `/vaults` — list all
+- `/vault-search query` — search
+- `/route context` — meta-orchestration recommendation
+- `/vault-stats` — usage stats
 
-1. **Cognitive triggers are universal** — inversion, audit, nexus aren't company-specific
-2. **Single source of truth** — one vault, all tools, no duplication
-3. **Follows L0→L1→L2 pattern** — consistent with template hierarchy
-4. **Per-company extraction later** — can filter by tags/type when needed
+### CLI (`~/ai-society/core/prompt-vault/scripts/`)
+- `pv templates` — list
+- `pv show template <name>` — view
+- `pv search <query>` — search content
+- `pv-template-vars` — extract/validate variables
+- + 20+ other commands
 
-### Agent Attribution Vision
+---
 
-Each execution should track:
-- `agent_id` — Which agent/session used the template
-- `tool_calls[]` — Each tool invocation with args/result
-- `output_text` — Full response
-- `rating` — Human feedback
+## Decisions from Last Session
 
-### JSONL Structure (Per Execution)
+### 1. NO full rebuild
+- Keep Dolt DB (versioning works)
+- Keep existing extension (it works)
+- Keep CLI scripts (they work)
 
-```json
-{
-  "timestamp": "2026-03-01T12:00:00Z",
-  "agent_id": "softwareco-nexus",
-  "template": "inversion",
-  "template_version": 3,
-  "model": "claude-3-sonnet",
-  "latency_ms": 3420,
-  "input_context": "Review the authentication module",
-  "tool_calls": [
-    {"tool": "read", "args": {"path": "auth.py"}, "result": "..."},
-    {"tool": "bash", "args": {"cmd": "pytest"}, "result": "..."}
-  ],
-  "output_text": "## Shadow Analysis...",
-  "rating": 4,
-  "rating_notes": "Good but missed error paths"
-}
+### 2. Add tags vocabulary (not enums)
+```
+tags: ['action:invert', 'phase:sensemaking', 'formalization:napkin', 'domain:security', 'scope:code']
+```
+Namespaced strings, flexible, no schema migrations.
+
+### 3. Add LLM tools (not just slash commands)
+Tools let LLM query autonomously. Commands require humans.
+
+---
+
+## Implementation Plan
+
+### Phase 1: Add Tools to Extension
+
+**New tools in `vault-client/index.ts`:**
+
+```typescript
+// 1. Query by tags/keywords
+vault_query({ tags: [], keywords: [], limit: 3, include_content: false })
+
+// 2. Retrieve by name
+vault_retrieve({ names: [], include_content: true })
+
+// 3. List vocabulary (what tags/namespaces exist)
+vault_vocabulary()
+
+// 4. Insert with vocabulary check
+vault_insert({ name, content, description, tags, source, confirm_new_tags: false })
+
+// 5. Rate for A/B tracking
+vault_rate({ template_name, variant, rating, success, notes })
 ```
 
-## Next Steps
+**Changes to existing extension:**
+- Keep existing `/vault:*` commands for humans
+- Add new `vault_*` tools for LLM
+- Add `tags` to query logic
 
-### Immediate
+### Phase 2: Tag Existing Templates
 
-1. **Move to core** — `mv ~/ai-society/softwareco/owned/prompt-vault ~/ai-society/core/prompt-vault`
-2. **Sync triggers** — Consolidate `~/steve/prompts/triggers/` → `core/prompt-vault/triggers/`
-3. **Clean up duplicates** — Remove/symlink `softwareco/infra/workstation/prompts/triggers/`
-4. **Update extension** — Point to new core location
+**Tag vocabulary:**
 
-### Short-term
+| Namespace | Values |
+|-----------|--------|
+| `action:` | invert, reduce, expand, generate, validate, project, crystallize |
+| `phase:` | sensemaking, hypothesis, probing, validation, execution |
+| `formalization:` | napkin, structured, bounded, workflow, operational |
+| `domain:` | security, database, frontend, backend, testing, infrastructure, documentation, governance |
+| `scope:` | self, code, system, organization, portfolio |
+| `source:` | softwareco, holdingco, core |
 
-5. **Add `agent_id` column** — Track which agent used each template
-6. **Add `tool_calls` column** — JSON array of tool invocations
-7. **Output capture** — Add `output_text` column
-8. **JSONL export** — `pv export-executions --format jsonl --agent softwareco-nexus`
+**Migration script:**
+```bash
+# Add tags to existing templates based on type and analysis
+./scripts/pv-tag-templates
+```
 
-### Future
+### Phase 3: Vocabulary Enforcement
 
-9. **Per-company extraction** — `pv extract --company softwareco --output company-vault/`
-10. **JSONL ingestion** — Import agent logs back to vault for analytics
-11. **Agent analytics** — Per-agent quality dashboards
-12. **Multi-tenant schema** — Partition by company/agent if needed
+**In `vault_insert` tool:**
+1. Query existing tags from DB
+2. Compare new tags against vocabulary
+3. If new tags detected, return confirmation request with suggestions
+4. LLM must explicitly confirm new tags
+
+**Example:**
+```
+LLM: vault_insert({ tags: ["action:shadow"] })
+Tool: { status: "confirm", new_tags: ["action:shadow"],
+        existing: { action: ["invert", "validate", ...] },
+        suggestion: "Did you mean action:invert?" }
+LLM: vault_insert({ tags: ["action:invert"], confirm_new_tags: true })
+Tool: { status: "ok" }
+```
+
+---
+
+## Files to Change
+
+### MUST change:
+| File | Change |
+|------|--------|
+| `~/.pi/agent/extensions/vault-client/index.ts` | Add 5 new tools |
+| `~/ai-society/core/prompt-vault/scripts/pv-tag` | Script to bulk-tag templates |
+
+### SHOULD change:
+| File | Change |
+|------|--------|
+| `vault-client/evaluator.ts` | Update for new tool interface |
+| `scripts/import-cognitive-tools.sh` | Extract tags from frontmatter |
+| `input/*.md` | Add frontmatter with tags |
+
+### MAY change (later):
+| File | Change |
+|------|--------|
+| Schema | Add `source`, `owner`, `predecessor` columns |
+| `scripts/pv-*` | Update for tag-based queries |
+| `prompt-template-accelerator` | Integrate with new tools |
+
+### SHOULD NOT change:
+| File | Reason |
+|------|--------|
+| Dolt DB | Works, has versioning |
+| Existing `/vault:*` commands | Humans use them |
+| CLI scripts | They work |
+
+---
+
+## Tag Assignments (Draft)
+
+### Cognitive Tools → Actions
+
+| Template | action | phase | formalization |
+|----------|--------|-------|---------------|
+| inversion | invert | sensemaking, hypothesis | napkin |
+| nexus | reduce | hypothesis, execution | structured |
+| audit | validate | validation | bounded |
+| first-principles | reduce | sensemaking | napkin |
+| simplification | reduce | execution | structured |
+| telescopic | expand | sensemaking, validation | napkin |
+| adversary | validate | validation | bounded |
+| mirror | generate | probing | bounded |
+| scaffold | generate | hypothesis | bounded |
+| doppelganger | generate | validation | bounded |
+| inquisition | validate | validation | bounded |
+| deep-review | validate | validation | workflow |
+| blast-radius | project | validation | bounded |
+| escape-hatch | project | execution | bounded |
+| temporal-degradation | project | sensemaking | structured |
+| constraint-inventory | reduce | sensemaking | napkin |
+| knowledge-crystallization | crystallize | execution | structured |
+| implicit-explicit | crystallize | validation | structured |
+| meta-orchestration | (control) | (all) | structured |
+| crisis | (control) | sensemaking | napkin |
+| morning | (control) | sensemaking | napkin |
+| decision | (control) | hypothesis | napkin |
+| napkin | (mode) | sensemaking | napkin |
+| controlled | (mode) | execution | bounded |
+
+### Task Templates
+
+| Template | domain |
+|----------|--------|
+| commit | backend |
+| pr | backend |
+| preflight* | infrastructure |
+| frontend-design | frontend |
+| e3d-htn | planning |
+
+---
+
+## Next Actions
+
+1. **Add `tags` column queries to extension** — update `getTemplate`, `listTemplates`, `searchTemplates`
+2. **Implement `vault_query` tool** — query by tags with overlap matching
+3. **Implement `vault_retrieve` tool** — get by names
+4. **Implement `vault_vocabulary` tool** — list existing tags grouped by namespace
+5. **Implement `vault_insert` tool** — with vocabulary check
+6. **Implement `vault_rate` tool** — for feedback loop
+7. **Tag existing templates** — migration script
+8. **Test LLM autonomous querying** — verify tool works
+9. **Update import script** — read tags from frontmatter
+10. **Document tag vocabulary** — in AGENTS.md or docs/
+
+---
+
+## Open Questions
+
+| Question | Decision needed |
+|----------|-----------------|
+| Where does `source:` live? | In tags or separate column? |
+| How to handle variants (A/B)? | `inversion@exp` as separate name or `variant:exp` tag? |
+| Control/mode templates | Special `type:control` tag or separate handling? |
+| Vocabulary storage | In DB (query on insert) or hardcoded in tool? |
+
+---
 
 ## Key Commands
 
 ```bash
 cd ~/ai-society/core/prompt-vault
 
-./scripts/pv templates              # List all
-./scripts/pv show template <name>   # View
-./scripts/pv search <query>         # Search
-./scripts/pv cleanup 30             # Maintenance
-./scripts/pv migrate status         # Check schema
+# CLI
+./scripts/pv templates
+./scripts/pv show template inversion
+./scripts/pv search "shadow"
+./scripts/pv-template-vars list inversion
 
-./verify.sh                         # Full verification
+# Verification
+./verify.sh
+
+# DB
+cd prompt-vault-db
+dolt sql -q "SELECT name, tags FROM prompt_templates LIMIT 5"
 ```
 
-## Pi Integration
+## Pi Commands (human)
 
 ```
-/vaults                     # List templates
-/vault:inversion            # Load cognitive tool
-/route I'm stuck on X       # Get tool recommendation
-/vault-stats                # Usage stats
+/vaults                     # List all
+/vault:inversion            # Load template
+/vault-search bug           # Search
+/route I'm stuck            # Get recommendation
+/vault-stats                # Usage
 ```
 
-## Open Questions
-
-| Question | Options |
-|----------|---------|
-| JSONL storage | One file per session? Per day? Per agent? |
-| Tool call capture | Full output or truncated? |
-| Privacy | What gets stored vs redacted? |
-| Agent ID format | `company-agent-name` or UUID? |
-
-## Documentation
-
-| File | Purpose |
-|------|---------|
-| [README.md](README.md) | Project overview |
-| [CHANGELOG.md](CHANGELOG.md) | Version history |
-| [docs/CRYSTALLIZED.md](docs/CRYSTALLIZED.md) | Patterns & learnings |
-| [docs/project/](docs/project/) | Vision, goals, status |
-
-## Recent History
+## Pi Tools (LLM)
 
 ```
-2b00bd4 docs: merge next_steps.md into next_session_prompt.md
-b560267 docs: fill in template placeholders with prompt-vault context
-900fe0e docs: update AGENTS.md for prompt-vault specifics
-675253c Merge prompt-vault with full git history
+vault_query({ tags: ["action:invert"], limit: 3 })
+vault_retrieve({ names: ["inversion", "nexus"] })
+vault_vocabulary()
+vault_insert({ name: "...", content: "...", tags: [...] })
+vault_rate({ template_name: "inversion", rating: 4, success: true })
 ```
