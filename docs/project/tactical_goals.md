@@ -27,3 +27,8 @@ read_when:
 - [ ] Build quality dashboard
 - [ ] Template validation at import ($VAR syntax)
 - [ ] HTTP API for third-party clients
+- [ ] Enhance `vault-stats` to show full metrics:
+  - Per-template: avg rating, success rate, avg latency, token usage
+  - Tag-based: most used tags, best rated tags
+  - Trend: rating over time, usage patterns
+  - Health: low-rated templates, high errors, unused templates
