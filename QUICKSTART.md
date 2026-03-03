@@ -95,12 +95,14 @@ The vault-client extension connects pi directly:
 **Human Commands:**
 ```
 /vaults                     # List all templates
-/vault:inversion            # Load inversion framework
+/vault:inversion            # Load inversion (Tab for autocomplete)
 /vault:nexus "my problem"   # Load with context
 /vault-search bug           # Search content
 /route I'm stuck on X       # Get tool recommendation
 /vault-stats                # Show usage statistics
 ```
+
+**Autocomplete:** Type `/vault:` and press Tab for template suggestions.
 
 **LLM Tools (autonomous):**
 ```
