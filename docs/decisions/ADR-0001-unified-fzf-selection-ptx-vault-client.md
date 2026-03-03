@@ -11,7 +11,7 @@ owners:
 
 ## Status
 
-**Accepted** (Slices 0-3 implemented; Slice 4 cleanup/hardening pending)
+**Accepted** (Slices 0-4 implemented; validation evidence captured)
 
 ## Context
 
@@ -205,6 +205,11 @@ Tasks:
 Exit criteria:
 - both extensions coexist predictably in one session
 
+Result (2026-03-03):
+- removed deprecated editor-exclusive paths (`setEditorComponent`) from PTX + vault-client
+- added troubleshooting docs and failure-mode signaling in non-UI mode
+- smoke matrix captured in [Slice 4 validation](../dev/slice4-validation-matrix.md)
+
 ---
 
 ## Acceptance criteria (global)
@@ -245,9 +250,9 @@ Expected behavior in each failure mode must be explicit and non-silent.
 
 If migration causes instability:
 
-1. Toggle feature flag to re-enable legacy autocomplete path.
-2. Revert selector integration commits per extension.
-3. Keep shared contract scaffolding (non-invasive) if harmless.
+1. Revert selector migration commits per extension (PTX and/or vault-client).
+2. Restore previously removed editor/autocomplete modules from VCS history if needed.
+3. Keep shared contract scaffolding if harmless to avoid repeated migration churn.
 
 Rollback command guidance should be documented per repo before merge.
 
@@ -276,6 +281,6 @@ Rollback command guidance should be documented per repo before merge.
 - [x] Slice 1 contract merged in both repos
 - [x] Slice 2 PTX migrated + tests green
 - [x] Slice 3 vault-client migrated + tests green
-- [ ] Slice 4 cleanup done
+- [x] Slice 4 cleanup done
 - [x] Docs/changelog updated
-- [ ] Mixed-session smoke test passed
+- [x] Mixed-session smoke test passed

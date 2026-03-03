@@ -9,11 +9,12 @@ All notable changes to prompt-vault are documented here.
 ### Added
 
 - `docs/dev/fzf-spike-slice0.md` with cross-context fzf viability evidence for ADR-0001.
+- `docs/dev/slice4-validation-matrix.md` with mixed-session smoke and failure-mode evidence.
 
 ### Changed
 
-- `docs/decisions/ADR-0001-unified-fzf-selection-ptx-vault-client.md` status updated to accepted with Slice 0-3 completion notes.
-- `next_session_prompt.md` now tracks only remaining Slice 4 hardening + smoke matrix tasks.
+- `docs/decisions/ADR-0001-unified-fzf-selection-ptx-vault-client.md` updated to reflect Slice 0-4 completion and validated checklist.
+- `next_session_prompt.md` now tracks post-ADR follow-up opportunities only.
 
 ## [1.2.0] - 2026-03-03
 

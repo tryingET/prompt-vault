@@ -20,8 +20,8 @@ read_when:
 
 ## Recent Changes
 
-- **Unified selector transition (in progress)** — ADR-0001 slices 0-3 implemented across PTX + vault-client (fzf-ranked fuzzy selector, deterministic fallback, legacy editor paths feature-flagged)
-- **Slice 0 evidence captured** — `docs/dev/fzf-spike-slice0.md`
+- **Unified selector transition (slice 4 complete)** — ADR-0001 slices 0-4 implemented across PTX + vault-client (fzf-ranked fuzzy selector, deterministic fallback, editor-conflict pathways removed)
+- **Validation evidence captured** — `docs/dev/fzf-spike-slice0.md`, `docs/dev/slice4-validation-matrix.md`
 - **v1.2.0** — LLM tools, tag vocabulary, pv-tag-templates
 - **v1.1.0** — Deep review fixes (CSV→JSON, schema versioning, escaping)
 
