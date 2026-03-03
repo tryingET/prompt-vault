@@ -3,6 +3,11 @@
 ## Intent
 Version-controlled prompt templates using Dolt SQL database with Git semantics, analytics, and A/B testing.
 
+## Current State
+- **Templates:** 50 (30 cognitive, 20 task) — all tagged
+- **Verification:** 34/34 checks pass
+- **Version:** v1.2.0
+
 ## Guardrails
 - No secrets in git.
 - Never push to `main`; MRs only.
@@ -91,7 +96,26 @@ Forbidden:
 ## Read order
 1) `README.md` — Project overview
 2) `QUICKSTART.md` — Get started in 5 minutes
-3) `docs/CRYSTALLIZED.md` — Design decisions
-4) `docs/WORKFLOWS.md` — Team collaboration patterns
-5) `docs/_core/` — Vendored governance
-6) `diary/` — Recent work sessions
+3) `docs/CRYSTALLIZED.md` — Design decisions and patterns
+4) `docs/project/tactical_goals.md` — Current work items
+5) `docs/WORKFLOWS.md` — Team collaboration patterns
+6) `docs/dev/status.md` — Health metrics
+
+## Quick reference for agents
+
+**To find templates by purpose:**
+```
+vault_query({ tags: ["action:invert"] })     # Find inversion tools
+vault_query({ tags: ["phase:validation"] })  # Find validation tools
+vault_query({ keywords: ["security"] })      # Search by keyword
+```
+
+**To get a template:**
+```
+vault_retrieve({ names: ["inversion"], include_content: true })
+```
+
+**To see available tags:**
+```
+vault_vocabulary()
+```
