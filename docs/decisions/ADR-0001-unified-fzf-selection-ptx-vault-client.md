@@ -1,6 +1,6 @@
 ---
 summary: "Adopt a unified FZF-based selection architecture for PTX and vault-client to remove custom editor conflicts and standardize fuzzy framework/template selection UX."
-status: proposed
+status: accepted
 date: 2026-03-03
 owners:
   - prompt-vault
@@ -11,7 +11,7 @@ owners:
 
 ## Status
 
-**Proposed** (ready for implementation slices)
+**Accepted** (Slices 0-3 implemented; Slice 4 cleanup/hardening pending)
 
 ## Context
 
@@ -152,6 +152,11 @@ Exit criteria:
 - clear yes/no on interactive fzf viability
 - documented fallback path if no
 
+Result (2026-03-03):
+- interactive fzf from extension execution path is not reliable (`ioctl`/TTY failure)
+- non-interactive `fzf --filter` works and is now used for ranking
+- documented in [Slice 0 spike notes](../dev/fzf-spike-slice0.md)
+
 ## Slice 1 — Shared selector contract
 
 Goal: align both extensions on candidate/result contract.
@@ -267,10 +272,10 @@ Rollback command guidance should be documented per repo before merge.
 
 ## Execution checklist (copy/paste)
 
-- [ ] Slice 0 spike complete and documented
-- [ ] Slice 1 contract merged in both repos
-- [ ] Slice 2 PTX migrated + tests green
-- [ ] Slice 3 vault-client migrated + tests green
+- [x] Slice 0 spike complete and documented
+- [x] Slice 1 contract merged in both repos
+- [x] Slice 2 PTX migrated + tests green
+- [x] Slice 3 vault-client migrated + tests green
 - [ ] Slice 4 cleanup done
-- [ ] Docs/changelog updated
+- [x] Docs/changelog updated
 - [ ] Mixed-session smoke test passed
