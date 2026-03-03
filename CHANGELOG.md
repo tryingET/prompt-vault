@@ -4,6 +4,54 @@
 
 All notable changes to prompt-vault are documented here.
 
+## [1.2.0] - 2026-03-03
+
+### LLM Tools & Tag Vocabulary
+
+Added autonomous LLM access to the vault and comprehensive tagging system.
+
+### Added
+
+- **5 LLM Tools for autonomous vault access:**
+  - `vault_query({ tags, keywords, limit, include_content })` — Query templates by tags and/or keywords
+  - `vault_retrieve({ names, include_content })` — Retrieve templates by exact names
+  - `vault_vocabulary()` — List all tags grouped by namespace
+  - `vault_insert({ name, content, description, tags, source, confirm_new_tags })` — Insert with vocabulary validation
+  - `vault_rate({ template_name, rating, success, notes })` — Rate template for feedback loop
+
+- **Tag vocabulary for all 50 templates:**
+  - `action:` — What the tool does (invert, reduce, expand, generate, validate, project, crystallize, control, mode)
+  - `phase:` — When to apply (sensemaking, hypothesis, probing, validation, execution)
+  - `formalization:` — Rigor level (napkin, bounded, structured, workflow)
+  - `domain:` — Subject area (backend, frontend, infrastructure, security, governance, planning)
+  - `scope:` — Application level (self, code, system, portfolio)
+
+- **`pv vocabulary` command** — Show tag vocabulary with counts
+
+- **`pv-tag-templates` script** — Bulk tag templates with vocabulary
+
+### Changed
+
+- **import-cognitive-tools.sh** — Now reads tags from YAML frontmatter
+
+- **vault-client extension** — Added 5 new tools alongside existing human commands
+
+- **AGENTS.md** — Updated with tools reference and tag vocabulary
+
+### Files Changed
+
+```
+~/.pi/.../vault-client/index.ts   +350 (5 new LLM tools)
+scripts/pv-tag-templates          new (bulk tagging)
+scripts/pv                        +35 (vocabulary command)
+scripts/import-cognitive-tools.sh +25 (frontmatter tags)
+AGENTS.md                         updated
+README.md                         updated
+QUICKSTART.md                     updated
+```
+
+---
+
 ## [1.1.0] - 2026-02-27
 
 ### Deep Review Session

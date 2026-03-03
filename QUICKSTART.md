@@ -52,7 +52,15 @@ cd prompt-vault
 ./scripts/pv search "review"
 ```
 
-### 4. Create a Template
+### 4. View Tag Vocabulary
+
+```bash
+./scripts/pv vocabulary
+```
+
+Shows all tags grouped by namespace (action, phase, formalization, domain, scope).
+
+### 5. Create a Template
 
 ```bash
 ./scripts/pv new-template my-review
@@ -84,12 +92,22 @@ cd prompt-vault
 
 The vault-client extension connects pi directly:
 
+**Human Commands:**
 ```
 /vaults                     # List all templates
 /vault:inversion            # Load inversion framework
 /vault:nexus "my problem"   # Load with context
+/vault-search bug           # Search content
 /route I'm stuck on X       # Get tool recommendation
 /vault-stats                # Show usage statistics
+```
+
+**LLM Tools (autonomous):**
+```
+vault_query({ tags: ["action:invert"], limit: 3 })
+vault_retrieve({ names: ["inversion", "nexus"] })
+vault_vocabulary()
+vault_rate({ template_name: "inversion", rating: 4, success: true })
 ```
 
 ## Maintenance

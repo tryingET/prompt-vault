@@ -15,6 +15,18 @@ Knowledge extracted from development and review sessions.
 
 ## Patterns Discovered
 
+### LLM Tools Alongside Human Commands
+- **Pattern:** Same extension provides both `/slash-commands` (human) and `tool_functions` (LLM)
+- **Where it works:** AI assistants that need autonomous access to structured data
+- **Apply when:** Building tools for both human operators and AI agents
+- **Implementation:** Commands transform user input; tools return structured data for LLM reasoning
+
+### Tag Vocabulary with Namespaces
+- **Pattern:** Tags as `namespace:value` strings (e.g., `action:invert`, `phase:sensemaking`)
+- **Why not enums:** Flexible, no schema migrations, queryable with LIKE/JSON_CONTAINS
+- **Apply when:** Taxonomy that will evolve over time
+- **Implementation:** Query existing tags from DB, validate on insert with confirmation flag
+
 ### Dolt as Application Database
 - **Pattern:** Using Dolt (Git-for-data) as the primary storage for versioned content
 - **Where it works:** Single-user local use, content that benefits from history/branching
@@ -129,6 +141,9 @@ Knowledge extracted from development and review sessions.
 - [x] Fix SQL escaping (handle backslashes)
 - [x] Add adversarial test cases
 - [x] Add cleanup command for old executions
+- [x] Add LLM tools for autonomous vault access
+- [x] Tag all templates with vocabulary
+- [x] Add vocabulary command to CLI
 
 ### Pending
 - [ ] Add output capture to executions (with privacy flag)

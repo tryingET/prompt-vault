@@ -170,13 +170,33 @@ bats tests/      # Full suite
 
 The vault-client extension connects pi directly to the vault:
 
+**Human Commands:**
 ```
 /vaults                     # List all templates
 /vault:inversion            # Load inversion framework
 /vault:nexus "my problem"   # Load with context
+/vault-search bug           # Search content
 /route I'm stuck on X       # Get tool recommendation
 /vault-stats                # Show usage statistics
 ```
+
+**LLM Tools (autonomous access):**
+```
+vault_query({ tags: ["action:invert"], limit: 3 })
+vault_retrieve({ names: ["inversion", "nexus"], include_content: true })
+vault_vocabulary()
+vault_insert({ name: "my-tool", content: "...", tags: ["action:validate"] })
+vault_rate({ template_name: "inversion", rating: 4, success: true })
+```
+
+**Tag Vocabulary:**
+| Namespace | Purpose | Values |
+|-----------|---------|--------|
+| `action:` | What it does | invert, reduce, expand, generate, validate, project, crystallize |
+| `phase:` | When to apply | sensemaking, hypothesis, probing, validation, execution |
+| `formalization:` | Rigor level | napkin, bounded, structured, workflow |
+| `domain:` | Subject area | backend, frontend, infrastructure, security, governance |
+| `scope:` | Application level | self, code, system, portfolio |
 
 ## Maintenance
 
