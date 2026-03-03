@@ -170,13 +170,13 @@ rm -rf prompt-vault-db && ./scripts/pv init && ./scripts/import-cognitive-tools.
 ### Initial Release
 
 - Dolt-backed prompt template storage
-- 48 templates (28 cognitive, 20 task)
+- 50 templates (30 cognitive, 20 task)
 - Pi integration via vault-client extension
 - CLI with 30+ commands
 - Execution tracking and feedback
 - Branch/merge for A/B testing
 - Export to multiple formats
-- Verification suite (33 checks)
+- Verification suite (34 checks)
 
 ### Pi Commands
 

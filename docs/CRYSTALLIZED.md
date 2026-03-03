@@ -145,11 +145,9 @@ Knowledge extracted from development and review sessions.
 - [x] Tag all templates with vocabulary
 - [x] Add vocabulary command to CLI
 
-### Pending
-- [ ] Add output capture to executions (with privacy flag)
-- [ ] Add template validation at import ($VAR syntax)
-- [ ] Add rate limiting awareness to extension
-- [ ] Document HTTP API abstraction path for future
+### Pending (tracked in docs/project/tactical_goals.md)
+
+See tactical goals for current work items.
 
 ## For Contributors
 

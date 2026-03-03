@@ -129,8 +129,9 @@ vault_rate({ template_name: "inversion", rating: 4, success: true })
 ~/steve/prompts/          prompt-vault/           pi
 ┌─────────────┐          ┌─────────────┐      ┌─────────────┐
 │ triggers/   │ import   │ Dolt DB     │      │ extension   │
-│ 27 tools    │ ───────► │ 48 templates│ ──── │ vault-client│
-└─────────────┘          └─────────────┘      └─────────────┘
+│ 30 tools    │ ───────► │ 50 templates│ ──── │ vault-client│
+└─────────────┘          │ +5 LLM tools│      │ 5 tools     │
+                         └─────────────┘      └─────────────┘
 ```
 
 ## Next Steps

@@ -152,7 +152,7 @@ skills ──► skill_assets
 ## Verification
 
 ```bash
-./verify.sh      # 33 checks
+./verify.sh      # 34 checks
 bats tests/      # Full suite
 ```
 

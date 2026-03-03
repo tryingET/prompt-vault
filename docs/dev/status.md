@@ -6,21 +6,22 @@ read_when:
 
 # Status
 
-**Last Updated:** 2026-03-01
+**Last Updated:** 2026-03-03
 
 ## Health
 
 | Metric | Status |
 |--------|--------|
-| Verification | ✅ 33/33 checks pass |
-| Templates | 48 (28 cognitive, 20 task) |
+| Verification | ✅ 34/34 checks pass |
+| Templates | 50 (30 cognitive, 20 task) |
+| Tagged | 50/50 (100%) |
 | Schema Version | 1 |
-| Extension | ✅ Connected to new path |
+| Extension | ✅ 5 LLM tools + human commands |
 
 ## Recent Changes
 
+- **v1.2.0** — LLM tools, tag vocabulary, pv-tag-templates
 - **v1.1.0** — Deep review fixes (CSV→JSON, schema versioning, escaping)
-- **Transition** — Moved to `~/ai-society/softwareco/owned/prompt-vault`
 
 ## Blockers
 

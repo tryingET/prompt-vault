@@ -30,3 +30,4 @@ read_when:
 | HTTP API abstraction | Deferred until third client |
 | Output capture | Planned |
 | Rate limiting | Planned |
+| Template validation | Planned |
