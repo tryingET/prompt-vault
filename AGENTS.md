@@ -39,7 +39,7 @@ The vault-client extension at `~/.pi/agent/extensions/vault-client/` connects pi
 
 **Human Commands:**
 - `/vaults` — List all templates
-- `/vault:name` — Load template (with autocomplete)
+- `/vault:name` — Load template (Tab for autocomplete)
 - `/vault-search query` — Search content
 - `/route <context>` — Get tool recommendation
 - `/vault-stats` — Usage statistics

@@ -32,3 +32,4 @@ read_when:
   - Tag-based: most used tags, best rated tags
   - Trend: rating over time, usage patterns
   - Health: low-rated templates, high errors, unused templates
+- [ ] **Resolve ptx autocomplete conflict:** Update prompt-template-accelerator to use the autocomplete wrapper registry pattern (see `~/.pi/agent/extensions/vault-client/autocompleteRegistry.ts`)
