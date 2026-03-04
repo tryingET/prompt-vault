@@ -5,6 +5,9 @@ date: 2026-03-03
 owners:
   - prompt-vault
   - prompt-template-accelerator
+read_when:
+  - "Changing PTX or vault-client selector behavior"
+  - "Validating assumptions from unified FZF architecture"
 ---
 
 # ADR-0001 — Unified FZF Selection for PTX + vault-client

@@ -1,3 +1,10 @@
+---
+summary: "How to capture and structure durable learnings in this repo."
+read_when:
+  - "Writing a new learning entry"
+  - "Converting diary signals into crystallized learnings"
+---
+
 # Learnings
 
 Capture what works, what doesn't, and what to try next.

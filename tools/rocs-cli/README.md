@@ -1,3 +1,10 @@
+---
+summary: "Command reference for the minimal ROCS CLI used in ai-society repos."
+read_when:
+  - "Running ROCS CLI commands"
+  - "Checking ROCS validation/build capabilities"
+---
+
 # rocs-cli
 
 Minimal ROCS CLI for ai-society.

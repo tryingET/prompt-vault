@@ -1,3 +1,10 @@
+---
+summary: "Manual navigation index for repo-local ontology assets."
+read_when:
+  - "Browsing ontology files manually"
+  - "Finding bridge/concepts/manifest entrypoints"
+---
+
 # Ontology Index (repo)
 
 Start here when browsing manually.

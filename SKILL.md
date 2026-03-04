@@ -1,6 +1,10 @@
 ---
 name: prompt-vault
+summary: "Skill guide for operating Prompt Vault workflows and commands."
 description: Version-controlled prompt templates using Dolt SQL database. Use when creating, iterating on, or collaborating around prompts with analytics and A/B testing.
+read_when:
+  - "Using Prompt Vault as a skill workflow"
+  - "Needing command-level guidance for vault operations"
 license: MIT
 ---
 

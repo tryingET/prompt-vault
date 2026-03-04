@@ -1,3 +1,10 @@
+---
+summary: "How to record repo-local raw session logs for KES crystallization."
+read_when:
+  - "Starting a new diary entry"
+  - "Reviewing diary filename and content conventions"
+---
+
 # Diary
 
 Repo-local session capture for KES (Knowledge Evolution System).

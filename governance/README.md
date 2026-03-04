@@ -1,3 +1,10 @@
+---
+summary: "Governance work-item structure and lifecycle reference for project planning artifacts."
+read_when:
+  - "Reviewing work-item model and states"
+  - "Clarifying governance artifact scope"
+---
+
 # Project Work Items
 
 This file tracks project-specific work (features, bugs, improvements).

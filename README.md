@@ -1,3 +1,10 @@
+---
+summary: "Prompt Vault overview, architecture, and usage entrypoint."
+read_when:
+  - "Onboarding to this repository"
+  - "Looking for command and integration overview"
+---
+
 # Prompt Vault
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
@@ -173,15 +180,19 @@ The vault-client extension connects pi directly to the vault:
 
 **Human Commands:**
 ```
+/vault                      # Open fuzzy picker with all templates
+/vault:inversion            # Fuzzy-pick using query text
+/vault:nexus::my problem    # Fuzzy-pick + inject with context
+/vault-browse nexus         # Show ranked browser view, then pick
 /vaults                     # List all templates
-/vault:inversion            # Load inversion framework (Tab for autocomplete)
-/vault:nexus "my problem"   # Load with context
 /vault-search bug           # Search content
 /route I'm stuck on X       # Get tool recommendation
 /vault-stats                # Show usage statistics
 ```
 
-**Autocomplete:** Type `/vault:` and press Tab to see template suggestions.
+**Picker UX:** `/vault` and `/vault:<query>` use a ranked selector (fzf-ranked when available, deterministic fallback otherwise). Use `/vault-browse` when you want an explicit visible ranked list before selection.
+
+**Live typing trigger (optional):** if `pi-input-triggers` is loaded, typing `/vault:` in the editor opens a live picker after a short debounce (no Enter required).
 
 **LLM Tools (autonomous access):**
 ```

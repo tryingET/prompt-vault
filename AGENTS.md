@@ -1,3 +1,10 @@
+---
+summary: "Repo-specific operating guardrails and command references for prompt-vault."
+read_when:
+  - "Starting work in prompt-vault"
+  - "Before running repo-specific workflows or changing docs policy"
+---
+
 # AGENTS.md — prompt-vault
 
 ## Intent
