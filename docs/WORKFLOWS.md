@@ -271,6 +271,14 @@ for p in prompts:
 
 ## Recovery
 
+For stage-gated DB mutation policy, see: `docs/reference/db-stage-backup-policy.md` and run:
+
+```bash
+./scripts/db-change-preflight.sh --stage db-test
+./scripts/db-change-preflight.sh --stage db-stage
+./scripts/db-change-preflight.sh --stage db-prod --exception-file governance/db-backup-exceptions.md
+```
+
 ```bash
 # Undo last commit
 dolt reset --hard HEAD~1

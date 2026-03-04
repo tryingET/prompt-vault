@@ -1,3 +1,9 @@
+---
+summary: "Session baseline validation and no-churn preflight evidence."
+read_when:
+  - "Reviewing the initial 2026-03-04 preflight baseline session"
+---
+
 # 2026-03-04 — Session Preflight Baseline
 
 ## What I Did
