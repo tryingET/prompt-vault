@@ -1,49 +1,48 @@
 ---
-summary: "Post-ADR-0001 hardening follow-up after deep-review + atomic completion pass."
+summary: "Post-cleanup handoff: docs are strict-compliant and DRY; continue source-first extension work only if new runtime issues appear."
 read_when:
-  - "Starting the next selector/runtime stabilization session"
-  - "Before touching PTX or vault-client selection behavior"
+  - "Starting the next session in prompt-vault"
+  - "Before editing vault-client or pi-input-triggers again"
 system4d:
-  container: "Cross-extension reliability hardening."
-  compass: "Eliminate remaining non-UI ambiguity and enforce shared behavior with tests."
-  engine: "Fix deterministic error paths -> add mixed-extension CI smoke -> reduce drift risk."
-  fog: "Without integration tests, PTX/vault-client behavior can drift silently."
+  container: "Prompt-vault docs normalized; selector/hardening contracts currently closed"
+  compass: "Preserve DRY docs + source-first extension workflow"
+  engine: "Validate first, then patch minimally, then re-validate"
+  fog: "Terminal-specific key behavior can still vary by emulator"
 ---
 
-# Next Session Prompt — Deep-Review Follow-up
+# Next Session Prompt — Stable Baseline
 
-## Completed
+## Current baseline
 
-- ADR-0001 slices 0-4 completed and documented.
-- PTX + vault-client legacy editor-conflict paths removed.
-- Failure-mode docs + validation matrix captured.
-- Atomic completion fixes applied:
-  - PTX non-UI `$$ /<known-non-prompt>` now transforms stripped command instead of `continue` passthrough.
-  - vault-client DB execution hardened from shell-string `execSync("cd ... && dolt ...")` to `execFileSync("dolt", ..., { cwd: VAULT_DIR })` via `runDolt(...)`.
+- Docs metadata strict check passes:
+  - `node ~/ai-society/core/agent-scripts/scripts/docs-list.mjs --docs . --strict`
+- DRY canonical references established:
+  - Validation evidence: [[docs/dev/live-trigger-helper-validation-matrix.md]]
+  - Deferred contracts: [[docs/dev/deferred-contracts.md]]
+- Redundant selector draft docs removed; cross-doc duplication reduced.
 
-Evidence:
-- `docs/dev/fzf-spike-slice0.md`
-- `docs/dev/slice4-validation-matrix.md`
-- `docs/decisions/ADR-0001-unified-fzf-selection-ptx-vault-client.md`
+## If no new bug report arrives
 
-## Remaining high-leverage work
+1. Do not churn extension code.
+2. Keep docs updates link-first (canonical source + `[[...]]` references).
+3. Maintain diary entries for any non-trivial change.
 
-1. PTX non-UI parse/usage branches still return `handled` silently (`$$` malformed/empty path) — make deterministic transform errors.
-2. Add mixed-extension non-UI smoke checks in CI for:
-   - `$$ /...`
-   - `/vault...`
-   - load-order permutations.
-3. Reduce selector drift risk by extracting/shared packaging of `fuzzySelector` contract implementation.
-4. Operational safety: move `~/.pi/agent/extensions/vault-client` under git (or scripted reproducible sync) to restore deterministic rollback.
+## If a new `/vault:` or selector issue appears
 
-## Notes
+1. Reproduce with terminal details (`echo $TERM`, key sequence, path to failure).
+2. Edit source repos first:
+   - `~/programming/pi-extensions/pi-input-triggers`
+   - `~/programming/pi-extensions/vault-client`
+3. Sync source -> runtime copies:
+   - `~/.pi/agent/extensions/pi-input-triggers`
+   - `~/.pi/agent/extensions/vault-client`
+4. Re-run validation and record evidence in:
+   - [[docs/dev/live-trigger-helper-validation-matrix.md]]
+   - `diary/YYYY-MM-DD--...md`
 
-- Prompt Vault repo currently has unrelated local script edits (`scripts/init-vault.sh`, `scripts/pv-lib.sh`) in working tree; avoid mixing with selector follow-up commits unless intended.
+## Guardrails
 
-## Quick start
-
-```bash
-cd ~/ai-society/core/prompt-vault
-cd ~/.pi/agent/extensions/prompt-template-accelerator
-cd ~/.pi/agent/extensions/vault-client
-```
+- Source-first edits only (never start from runtime copies).
+- Prefer minimal, reversible patches.
+- No duplicated numeric validation claims across docs; link to canonical evidence instead.
+- Track any new deferral only in [[docs/dev/deferred-contracts.md]] with full contract fields (rationale, owner, trigger, deadline, blast radius).
