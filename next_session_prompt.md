@@ -94,5 +94,8 @@ If `vault-client` work resumes, first read `docs/dev/vault-client-relocation-int
 - No compatibility adapter/view for legacy `type`.
 - No new prompt-loop template until the 3 routers land and the facet model is in place.
 
+## Emerging next slice after cutover
+After the hard-cut facet model is stable, add a controlled vocabulary layer above the core ontology for governed retrieval/orchestration semantics. Start with `docs/dev/controlled-vocabulary-layer-plan.md` and prove fit on the 3 router prompts before broad rollout.
+
 ## First concrete next action
 Create the 3 router prompt templates and write down their exact metadata using the new facet model, then start the Prompt Vault v2 schema migration from that grounded example set.
