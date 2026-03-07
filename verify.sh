@@ -69,6 +69,7 @@ echo ""
 echo -e "${YELLOW}Quality & Lint:${NC}"
 check "pv quality check" "$SCRIPTS_DIR/pv" quality check
 check_output "pv-lint runs" "Linting" "$SCRIPTS_DIR/pv-lint"
+check_output "pv-verify-ontology-contract" "Ontology contract verified" "$SCRIPTS_DIR/pv-verify-ontology-contract"
 echo ""
 
 # Subcommands exist

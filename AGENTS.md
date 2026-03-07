@@ -35,7 +35,7 @@ Version-controlled prompt templates using Dolt SQL database with Git semantics, 
 
 ### Schema
 ```
-prompt_templates: id, name, content, description, tags (JSON), type, version, status
+prompt_templates: id, name, content, description, artifact_kind, control_mode, formalization_level, tags (JSON), version, status
 executions:       id, entity_type, entity_id, latency_ms, success
 feedback:         id, execution_id, rating, notes, issues
 schema_version:   id, version, description, applied_at
@@ -54,10 +54,10 @@ The vault-client extension at `~/.pi/agent/extensions/vault-client/` connects pi
 **Autocomplete:** Type `/vault:` and press Tab to see template suggestions.
 
 **LLM Tools:**
-- `vault_query({ tags, keywords, limit, include_content })` — Query by tags/keywords
+- `vault_query({ artifact_kind, control_mode, formalization_level, tags, keywords, limit, include_content })` — Query by facets/tags/keywords
 - `vault_retrieve({ names, include_content })` — Get templates by name
-- `vault_vocabulary()` — List tag vocabulary
-- `vault_insert({ name, content, description, tags, source, confirm_new_tags })` — Insert with validation
+- `vault_vocabulary()` — List ontology facet values + tag vocabulary
+- `vault_insert({ name, content, description, artifact_kind, control_mode, formalization_level, tags, confirm_new_tags })` — Insert with validation
 - `vault_rate({ template_name, rating, success, notes })` — Rate for feedback
 
 ### Tag Vocabulary
@@ -114,9 +114,9 @@ Forbidden:
 
 **To find templates by purpose:**
 ```
-vault_query({ tags: ["action:invert"] })     # Find inversion tools
-vault_query({ tags: ["phase:validation"] })  # Find validation tools
-vault_query({ keywords: ["security"] })      # Search by keyword
+vault_query({ artifact_kind: ["cognitive"], tags: ["action:invert"] })     # Find inversion tools
+vault_query({ control_mode: ["router"], formalization_level: ["structured"] }) # Find structured routers
+vault_query({ keywords: ["security"] })                                   # Search by keyword
 ```
 
 **To get a template:**

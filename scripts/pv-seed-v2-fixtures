@@ -1,0 +1,116 @@
+#!/usr/bin/env bash
+# Seed Prompt Vault v2 ontology fixtures into the database
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR/pv-lib.sh"
+
+FIXTURE_DIR="${FIXTURE_DIR:-$SCRIPT_DIR/../ontology/fixtures/prompt-templates}"
+
+ensure_vault
+check_deps python3
+
+[ -d "$FIXTURE_DIR" ] || { error "Fixture directory not found: $FIXTURE_DIR"; exit 1; }
+
+sql_file=$(mktemp --suffix=.sql)
+trap 'rm -f "$sql_file"' EXIT
+
+python3 - "$FIXTURE_DIR" > "$sql_file" <<'PY'
+import json
+import pathlib
+import sys
+
+fixture_dir = pathlib.Path(sys.argv[1])
+fixture_paths = sorted(fixture_dir.glob("*.md"))
+if not fixture_paths:
+    raise SystemExit(f"no fixture files found in {fixture_dir}")
+
+
+def sql_escape(value: str) -> str:
+    return value.replace("\\", "\\\\").replace("'", "''").replace("\0", "")
+
+
+def parse_frontmatter(raw: str):
+    if not raw.startswith("---\n"):
+        raise SystemExit("fixture missing frontmatter")
+    try:
+        _start, frontmatter, body = raw.split("---\n", 2)
+    except ValueError as exc:
+        raise SystemExit(f"malformed frontmatter: {exc}") from exc
+
+    meta = {}
+    current_list = None
+    for line in frontmatter.strip().splitlines():
+        if not line.strip():
+            continue
+        if line.startswith("  - "):
+            if current_list is None:
+                raise SystemExit(f"list item without active key: {line}")
+            meta.setdefault(current_list, []).append(line[4:].strip())
+            continue
+        if ":" not in line:
+            raise SystemExit(f"malformed frontmatter line: {line}")
+        key, value = line.split(":", 1)
+        key = key.strip()
+        value = value.strip()
+        if value == "":
+            current_list = key
+            meta[key] = []
+        else:
+            current_list = None
+            meta[key] = value
+    return meta, body.strip() + "\n"
+
+print("START TRANSACTION;")
+for path in fixture_paths:
+    raw = path.read_text()
+    meta, body = parse_frontmatter(raw)
+    name = meta["name"]
+    desc = meta.get("description", "")
+    artifact_kind = meta["artifact_kind"]
+    control_mode = meta["control_mode"]
+    formalization_level = meta["formalization_level"]
+    status = meta.get("status", "draft")
+    tags_json = json.dumps(meta.get("tags", []))
+
+    print(f"""
+INSERT INTO prompt_templates (
+    name,
+    description,
+    content,
+    artifact_kind,
+    control_mode,
+    formalization_level,
+    tags,
+    status,
+    version
+) VALUES (
+    '{sql_escape(name)}',
+    '{sql_escape(desc)}',
+    '{sql_escape(body)}',
+    '{sql_escape(artifact_kind)}',
+    '{sql_escape(control_mode)}',
+    '{sql_escape(formalization_level)}',
+    '{sql_escape(tags_json)}',
+    '{sql_escape(status)}',
+    1
+)
+ON DUPLICATE KEY UPDATE
+    description = VALUES(description),
+    content = VALUES(content),
+    artifact_kind = VALUES(artifact_kind),
+    control_mode = VALUES(control_mode),
+    formalization_level = VALUES(formalization_level),
+    tags = VALUES(tags),
+    status = VALUES(status),
+    updated_at = CURRENT_TIMESTAMP;
+""")
+print("COMMIT;")
+PY
+
+dolt sql < "$sql_file"
+
+dolt add . >/dev/null 2>&1 || true
+dolt commit -m "Seed Prompt Vault v2 ontology fixtures" >/dev/null 2>&1 || true
+
+success "Seeded Prompt Vault v2 fixtures from $FIXTURE_DIR"

@@ -28,21 +28,27 @@ cmd_export() {
 
 cmd_templates() {
     ensure_vault
-    local type_filter="${1:-}"
+    local facet_filter="${1:-}"
     local where=""
-    
-    if [ -n "$type_filter" ]; then
-        where="WHERE type = '$type_filter'"
-        echo "=== Prompt Templates (type=$type_filter) ==="
+
+    if [ -n "$facet_filter" ]; then
+        if [[ "$facet_filter" == *=* ]]; then
+            local facet_name="${facet_filter%%=*}"
+            local facet_value="${facet_filter#*=}"
+            where="WHERE ${facet_name} = '${facet_value}'"
+        else
+            where="WHERE artifact_kind = '$facet_filter' OR control_mode = '$facet_filter' OR formalization_level = '$facet_filter'"
+        fi
+        echo "=== Prompt Templates ($facet_filter) ==="
     else
         echo "=== Prompt Templates ==="
     fi
-    
+
     dolt sql -q "
-        SELECT name, type, status, version 
-        FROM prompt_templates 
+        SELECT name, artifact_kind, control_mode, formalization_level, status, version
+        FROM prompt_templates
         $where
-        ORDER BY type, name
+        ORDER BY artifact_kind, control_mode, formalization_level, name
     " -r tabular
 }
 
@@ -60,24 +66,36 @@ cmd_new_template() {
     ensure_vault
     local name="${1:-}"
     [ -z "$name" ] && { error "Usage: pv new-template <name>"; exit 1; }
-    
+
     info "Creating template: $name"
-    
-    # Get description
+
     echo -n "Description: "
     read -r description
-    
+
+    echo -n "Artifact kind [procedure]: "
+    read -r artifact_kind
+    artifact_kind=${artifact_kind:-procedure}
+
+    echo -n "Control mode [one_shot]: "
+    read -r control_mode
+    control_mode=${control_mode:-one_shot}
+
+    echo -n "Formalization level [structured]: "
+    read -r formalization_level
+    formalization_level=${formalization_level:-structured}
+
     echo "Content (Ctrl+D to finish):"
     content=$(cat)
-    
+
+    local escaped_name=$(echo "$name" | sed "s/'/''/g")
     local escaped_content=$(echo "$content" | sed "s/'/''/g")
     local escaped_desc=$(echo "$description" | sed "s/'/''/g")
-    
+
     dolt sql -q "
-        INSERT INTO prompt_templates (name, description, content, status)
-        VALUES ('$name', '$escaped_desc', '$escaped_content', 'draft')
+        INSERT INTO prompt_templates (name, description, content, artifact_kind, control_mode, formalization_level, status)
+        VALUES ('$escaped_name', '$escaped_desc', '$escaped_content', '$artifact_kind', '$control_mode', '$formalization_level', 'draft')
     "
-    
+
     success "Created template '$name' (draft)"
     info "Edit with: pv edit-template $name"
     info "Activate with: pv activate template $name"
@@ -252,10 +270,10 @@ cmd_show() {
         if [ -n "$version" ]; then
             dolt sql -q "SELECT * FROM prompt_templates WHERE name = '$name' AND version = $version" -r tabular
         else
-            dolt sql -q "SELECT name, description, status, version, created_at, updated_at FROM prompt_templates WHERE name = '$name' AND status = 'active' ORDER BY version DESC LIMIT 1" -r tabular
+            dolt sql -q "SELECT name, description, artifact_kind, control_mode, formalization_level, status, version, created_at, updated_at FROM prompt_templates WHERE name = '$name' AND status IN ('active', 'draft') ORDER BY version DESC LIMIT 1" -r tabular
             echo ""
             echo "Content:"
-            dolt sql -r csv -q "SELECT content FROM prompt_templates WHERE name = '$name' AND status = 'active' ORDER BY version DESC LIMIT 1" | tail -1
+            dolt sql -r csv -q "SELECT content FROM prompt_templates WHERE name = '$name' AND status IN ('active', 'draft') ORDER BY version DESC LIMIT 1" | tail -1
         fi
     elif [ "$type" = "skill" ]; then
         dolt sql -q "SELECT * FROM skills WHERE name = '$name' AND status = 'active' ORDER BY version DESC LIMIT 1" -r tabular
@@ -487,6 +505,12 @@ cmd_migrate() {
     "$SCRIPT_DIR/pv-migrate" "$@"
 }
 
+cmd_seed_v2() {
+    ensure_vault
+    export VAULT_DIR
+    "$SCRIPT_DIR/pv-seed-v2-fixtures" "$@"
+}
+
 cmd_lint() {
     ensure_vault
     export VAULT_DIR
@@ -661,6 +685,7 @@ Setup:
   init                     Initialize a new vault
   clone <url>              Clone from DoltHub
   migrate up               Run database migrations
+  seed-v2                  Seed v2 ontology fixtures into the vault
   hooks install            Install git hooks
 
 Import/Export:
@@ -670,7 +695,7 @@ Import/Export:
   watch                    Watch and auto-export changes
 
 Templates:
-  templates                List all templates
+  templates [facet|k=v]    List templates, optionally filtered by ontology facet
   new-template <name>      Create new template
   edit-template <name>     Edit template
   show template <name>     Show template content
@@ -741,6 +766,7 @@ Advanced:
 Examples:
   pv init                          # Initialize vault
   pv import                        # Import existing templates
+  pv templates router              # Filter templates by a facet value
   pv search review                 # Search for "review"
   pv vars                          # Show all template variables
   pv quality dashboard             # View quality scores
@@ -788,6 +814,7 @@ case "${1:-}" in
     analytics) shift; cmd_analytics "$@" ;;
     collection) shift; cmd_collection "$@" ;;
     migrate) shift; cmd_migrate "$@" ;;
+    seed-v2) shift; cmd_seed_v2 "$@" ;;
     lint) shift; cmd_lint "$@" ;;
     backup) shift; cmd_backup "$@" ;;
     integrate) shift; cmd_integrate "$@" ;;

@@ -64,11 +64,14 @@ import_templates() {
                 local escaped_desc=$(sql_escape_content "$description")
                 
                 exec_sql "
-                    INSERT INTO prompt_templates (name, description, content, status)
-                    VALUES ('$name', '$escaped_desc', '$escaped_content', 'active')
+                    INSERT INTO prompt_templates (name, description, content, artifact_kind, control_mode, formalization_level, status)
+                    VALUES ('$name', '$escaped_desc', '$escaped_content', 'procedure', 'one_shot', 'structured', 'active')
                     ON DUPLICATE KEY UPDATE 
                         content = VALUES(content),
                         description = VALUES(description),
+                        artifact_kind = VALUES(artifact_kind),
+                        control_mode = VALUES(control_mode),
+                        formalization_level = VALUES(formalization_level),
                         updated_at = CURRENT_TIMESTAMP
                 " || warn "Could not import $name"
                 

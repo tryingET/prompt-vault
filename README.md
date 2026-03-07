@@ -33,7 +33,7 @@ Flat files can't answer these. Git gives you file history, not prompt history. T
 A Dolt database where prompts are rows, not files.
 
 ```
-prompt_templates: id, name, content, description, tags, version, status
+prompt_templates: id, name, content, artifact_kind, control_mode, formalization_level, tags, version, status
 executions:       id, entity_type, entity_id, latency_ms, success, tokens
 feedback:         id, execution_id, rating, notes, issues
 ```
@@ -196,10 +196,10 @@ The vault-client extension connects pi directly to the vault:
 
 **LLM Tools (autonomous access):**
 ```
-vault_query({ tags: ["action:invert"], limit: 3 })
+vault_query({ artifact_kind: ["cognitive"], tags: ["action:invert"], limit: 3 })
 vault_retrieve({ names: ["inversion", "nexus"], include_content: true })
 vault_vocabulary()
-vault_insert({ name: "my-tool", content: "...", tags: ["action:validate"] })
+vault_insert({ name: "my-tool", content: "...", artifact_kind: "procedure", control_mode: "one_shot", formalization_level: "structured", tags: ["action:validate"] })
 vault_rate({ template_name: "inversion", rating: 4, success: true })
 ```
 
