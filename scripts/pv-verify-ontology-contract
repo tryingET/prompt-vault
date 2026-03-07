@@ -1,0 +1,134 @@
+#!/usr/bin/env bash
+# Verify Prompt Vault v2 ontology contract fixtures
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_DIR="$SCRIPT_DIR/.."
+CONTRACT="$REPO_DIR/ontology/v2-contract.json"
+FIXTURE_DIR="$REPO_DIR/ontology/fixtures/prompt-templates"
+
+require_file() {
+    local path="$1"
+    [ -f "$path" ] || { echo "Missing required file: $path" >&2; exit 1; }
+}
+
+require_file "$CONTRACT"
+[ -d "$FIXTURE_DIR" ] || { echo "Missing fixture directory: $FIXTURE_DIR" >&2; exit 1; }
+command -v jq >/dev/null 2>&1 || { echo "jq is required" >&2; exit 1; }
+command -v python3 >/dev/null 2>&1 || { echo "python3 is required" >&2; exit 1; }
+
+python3 - "$CONTRACT" "$FIXTURE_DIR" <<'PY'
+import json
+import pathlib
+import sys
+
+contract_path = pathlib.Path(sys.argv[1])
+fixture_dir = pathlib.Path(sys.argv[2])
+contract = json.loads(contract_path.read_text())
+
+required_contract_keys = [
+    "contract_version",
+    "prompt_vault_schema_target",
+    "facets",
+    "classification_rules",
+    "mode_outputs",
+    "seed_prompts",
+    "golden_queries",
+]
+for key in required_contract_keys:
+    if key not in contract:
+        raise SystemExit(f"contract missing key: {key}")
+
+facets = contract["facets"]
+for facet_name in ["artifact_kind", "control_mode", "formalization_level"]:
+    values = facets.get(facet_name)
+    if not isinstance(values, list) or not values:
+        raise SystemExit(f"facet missing or empty: {facet_name}")
+
+expected_modes = ["DECIDE", "DIVERGE", "PLAN", "IMPLEMENT", "VERIFY"]
+if contract["mode_outputs"] != expected_modes:
+    raise SystemExit("mode_outputs must exactly equal DECIDE,DIVERGE,PLAN,IMPLEMENT,VERIFY")
+
+seed_prompts = contract["seed_prompts"]
+if len(seed_prompts) != 3:
+    raise SystemExit("seed_prompts must contain exactly 3 prompt definitions")
+
+fixture_paths = sorted(fixture_dir.glob("*.md"))
+if len(fixture_paths) != 3:
+    raise SystemExit(f"expected exactly 3 fixture files, found {len(fixture_paths)}")
+
+seed_by_name = {item["name"]: item for item in seed_prompts}
+if sorted(seed_by_name) != [
+    "analysis-router",
+    "post-review-router",
+    "review-closeout-router",
+]:
+    raise SystemExit("seed prompt names do not match the expected router set")
+
+required_body_tokens = [
+    "DECIDE",
+    "DIVERGE",
+    "PLAN",
+    "IMPLEMENT",
+    "VERIFY",
+    "NEXT PROMPT:",
+]
+
+for fixture_path in fixture_paths:
+    raw = fixture_path.read_text()
+    if not raw.startswith("---\n"):
+        raise SystemExit(f"fixture missing frontmatter: {fixture_path.name}")
+    try:
+        _start, frontmatter, body = raw.split("---\n", 2)
+    except ValueError:
+        raise SystemExit(f"fixture has malformed frontmatter delimiters: {fixture_path.name}")
+
+    meta = {}
+    current_list = None
+    for line in frontmatter.strip().splitlines():
+        if not line.strip():
+            continue
+        if line.startswith("  - "):
+            if current_list is None:
+                raise SystemExit(f"list item without active key in {fixture_path.name}")
+            meta.setdefault(current_list, []).append(line[4:].strip())
+            continue
+        if ":" not in line:
+            raise SystemExit(f"malformed frontmatter line in {fixture_path.name}: {line}")
+        key, value = line.split(":", 1)
+        key = key.strip()
+        value = value.strip()
+        if value == "":
+            current_list = key
+            meta[key] = []
+        else:
+            current_list = None
+            meta[key] = value
+
+    name = meta.get("name")
+    if name not in seed_by_name:
+        raise SystemExit(f"unexpected fixture name: {name}")
+
+    seed = seed_by_name[name]
+    for facet in ["artifact_kind", "control_mode", "formalization_level"]:
+        value = meta.get(facet)
+        if value != seed[facet]:
+            raise SystemExit(f"{fixture_path.name}: {facet}={value!r} does not match contract value {seed[facet]!r}")
+        if value not in facets[facet]:
+            raise SystemExit(f"{fixture_path.name}: {facet} value not in vocabulary: {value}")
+
+    if meta.get("status") != "draft":
+        raise SystemExit(f"{fixture_path.name}: status must be draft for seed fixtures")
+
+    tags = meta.get("tags", [])
+    if not isinstance(tags, list) or not tags:
+        raise SystemExit(f"{fixture_path.name}: tags must be a non-empty list")
+    if "formalization:structured" not in tags:
+        raise SystemExit(f"{fixture_path.name}: missing formalization:structured tag")
+
+    for token in required_body_tokens:
+        if token not in body:
+            raise SystemExit(f"{fixture_path.name}: missing body token: {token}")
+
+print("Ontology contract verified")
+PY

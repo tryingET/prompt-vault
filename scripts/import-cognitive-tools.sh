@@ -53,7 +53,7 @@ validate_template() {
 
 import_trigger() {
     local file="$1"
-    local type="${2:-cognitive}"
+    local legacy_type="${2:-cognitive}"
     local name=$(basename "$file" .md | tr '[:upper:]' '[:lower:]')
     
     # Skip INDEX and validate
@@ -110,24 +110,61 @@ import_trigger() {
         fi
     fi
     
-    # If no tags found, set default based on type
+    # If no tags found, set default based on facet mapping
     if [ "$tags" = "null" ]; then
-        if [ "$type" = "cognitive" ]; then
-            tags='["cognitive"]'
+        if [ "$legacy_type" = "cognitive" ]; then
+            tags='["scope:self"]'
         else
-            tags='["task"]'
+            tags='["domain:planning"]'
         fi
     fi
-    
-    info "Importing: $name ($type)"
-    
+
+    local artifact_kind="procedure"
+    local control_mode="one_shot"
+    local formalization_level="structured"
+
+    case "$legacy_type" in
+        cognitive)
+            artifact_kind="cognitive"
+            formalization_level="napkin"
+            ;;
+        session)
+            artifact_kind="session"
+            formalization_level="structured"
+            ;;
+        loop)
+            artifact_kind="procedure"
+            control_mode="loop"
+            formalization_level="workflow"
+            ;;
+        *)
+            artifact_kind="procedure"
+            control_mode="one_shot"
+            formalization_level="structured"
+            ;;
+    esac
+
+    if echo "$tags" | grep -q 'formalization:workflow'; then
+        formalization_level="workflow"
+    elif echo "$tags" | grep -q 'formalization:structured'; then
+        formalization_level="structured"
+    elif echo "$tags" | grep -q 'formalization:bounded'; then
+        formalization_level="bounded"
+    elif echo "$tags" | grep -q 'formalization:napkin'; then
+        formalization_level="napkin"
+    fi
+
+    info "Importing: $name ($artifact_kind/$control_mode/$formalization_level)"
+
     dolt sql -q "
-        INSERT INTO prompt_templates (name, description, content, type, status, tags)
-        VALUES ('$name', '$escaped_desc', '$escaped_content', '$type', 'active', '$tags')
+        INSERT INTO prompt_templates (name, description, content, artifact_kind, control_mode, formalization_level, status, tags)
+        VALUES ('$name', '$escaped_desc', '$escaped_content', '$artifact_kind', '$control_mode', '$formalization_level', 'active', '$tags')
         ON DUPLICATE KEY UPDATE 
             description = VALUES(description),
             content = VALUES(content),
-            type = VALUES(type),
+            artifact_kind = VALUES(artifact_kind),
+            control_mode = VALUES(control_mode),
+            formalization_level = VALUES(formalization_level),
             status = VALUES(status),
             tags = VALUES(tags),
             updated_at = CURRENT_TIMESTAMP
@@ -176,4 +213,4 @@ echo "=== Summary ==="
 echo "Imported: $imported"
 echo "Failed:   $failed"
 echo ""
-dolt sql -q "SELECT type, COUNT(*) as count FROM prompt_templates GROUP BY type" -r tabular
+dolt sql -q "SELECT artifact_kind, control_mode, formalization_level, COUNT(*) as count FROM prompt_templates GROUP BY artifact_kind, control_mode, formalization_level ORDER BY artifact_kind, control_mode, formalization_level" -r tabular

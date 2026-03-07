@@ -4,6 +4,7 @@ set -euo pipefail
 
 VAULT_DIR="${VAULT_DIR:-./prompt-vault-db}"
 VAULT_NAME="${VAULT_NAME:-prompt-vault}"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 echo "=== Initializing Prompt Vault ==="
 
@@ -30,7 +31,6 @@ dolt init
 echo "✓ Created Dolt repository: $VAULT_NAME"
 
 # Apply schema
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 dolt sql < "$SCRIPT_DIR/../schema/schema.sql"
 echo "✓ Applied schema"
 

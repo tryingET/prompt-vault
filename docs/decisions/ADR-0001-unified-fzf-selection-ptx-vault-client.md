@@ -1,17 +1,20 @@
 ---
 summary: "Adopt a unified FZF-based selection architecture for PTX and vault-client to remove custom editor conflicts and standardize fuzzy framework/template selection UX."
-status: proposed
+status: accepted
 date: 2026-03-03
 owners:
   - prompt-vault
   - prompt-template-accelerator
+read_when:
+  - "Changing PTX or vault-client selector behavior"
+  - "Validating assumptions from unified FZF architecture"
 ---
 
 # ADR-0001 — Unified FZF Selection for PTX + vault-client
 
 ## Status
 
-**Proposed** (ready for implementation slices)
+**Accepted** (Slices 0-4 implemented; validation evidence captured)
 
 ## Context
 
@@ -152,6 +155,11 @@ Exit criteria:
 - clear yes/no on interactive fzf viability
 - documented fallback path if no
 
+Result (2026-03-03):
+- interactive fzf from extension execution path is not reliable (`ioctl`/TTY failure)
+- non-interactive `fzf --filter` works and is now used for ranking
+- documented in [Slice 0 spike notes](../dev/fzf-spike-slice0.md)
+
 ## Slice 1 — Shared selector contract
 
 Goal: align both extensions on candidate/result contract.
@@ -200,6 +208,11 @@ Tasks:
 Exit criteria:
 - both extensions coexist predictably in one session
 
+Result (2026-03-03):
+- removed deprecated editor-exclusive paths (`setEditorComponent`) from PTX + vault-client
+- added troubleshooting docs and failure-mode signaling in non-UI mode
+- smoke matrix captured in [Slice 4 validation](../dev/slice4-validation-matrix.md)
+
 ---
 
 ## Acceptance criteria (global)
@@ -240,9 +253,9 @@ Expected behavior in each failure mode must be explicit and non-silent.
 
 If migration causes instability:
 
-1. Toggle feature flag to re-enable legacy autocomplete path.
-2. Revert selector integration commits per extension.
-3. Keep shared contract scaffolding (non-invasive) if harmless.
+1. Revert selector migration commits per extension (PTX and/or vault-client).
+2. Restore previously removed editor/autocomplete modules from VCS history if needed.
+3. Keep shared contract scaffolding if harmless to avoid repeated migration churn.
 
 Rollback command guidance should be documented per repo before merge.
 
@@ -267,10 +280,10 @@ Rollback command guidance should be documented per repo before merge.
 
 ## Execution checklist (copy/paste)
 
-- [ ] Slice 0 spike complete and documented
-- [ ] Slice 1 contract merged in both repos
-- [ ] Slice 2 PTX migrated + tests green
-- [ ] Slice 3 vault-client migrated + tests green
-- [ ] Slice 4 cleanup done
-- [ ] Docs/changelog updated
-- [ ] Mixed-session smoke test passed
+- [x] Slice 0 spike complete and documented
+- [x] Slice 1 contract merged in both repos
+- [x] Slice 2 PTX migrated + tests green
+- [x] Slice 3 vault-client migrated + tests green
+- [x] Slice 4 cleanup done
+- [x] Docs/changelog updated
+- [x] Mixed-session smoke test passed

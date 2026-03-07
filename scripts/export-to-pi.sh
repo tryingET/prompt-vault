@@ -7,6 +7,8 @@ VAULT_DIR="${VAULT_DIR:-$SCRIPT_DIR/../prompt-vault-db}"
 
 TEMPLATES_DIR="${TEMPLATES_DIR:-$HOME/.pi/agent/prompts}"
 SKILLS_DIR="${SKILLS_DIR:-$HOME/.pi/agent/skills}"
+TEMPLATE_MANIFEST="$TEMPLATES_DIR/.prompt-vault-managed-files"
+SKILL_MANIFEST="$SKILLS_DIR/.prompt-vault-managed-files"
 
 if [ ! -d "$VAULT_DIR/.dolt" ]; then
     echo "Error: Vault not initialized. Run init-vault.sh first."
@@ -21,11 +23,28 @@ echo "=== Exporting to pi format ==="
 mkdir -p "$TEMPLATES_DIR"
 mkdir -p "$SKILLS_DIR"
 
+clean_managed_outputs() {
+    local manifest="$1"
+    local root_dir="$2"
+
+    [ -f "$manifest" ] || return 0
+
+    while IFS= read -r rel_path; do
+        [ -z "$rel_path" ] && continue
+        rm -rf "$root_dir/$rel_path"
+    done < "$manifest"
+
+    rm -f "$manifest"
+}
+
 # Export templates
 export_templates() {
     local count=0
     local template_names=$(dolt sql -r csv -q "SELECT name FROM prompt_templates WHERE status = 'active'" | tail -n +2)
-    
+
+    clean_managed_outputs "$TEMPLATE_MANIFEST" "$TEMPLATES_DIR"
+    : > "$TEMPLATE_MANIFEST"
+
     for name in $template_names; do
         [ -z "$name" ] && continue
         
@@ -39,7 +58,8 @@ export_templates() {
         # Write file
         local output_file="$TEMPLATES_DIR/${name}.md"
         echo "$content" > "$output_file"
-        
+        echo "${name}.md" >> "$TEMPLATE_MANIFEST"
+
         ((count++)) || true
         echo "  ✓ Exported template: $name"
     done
@@ -51,7 +71,10 @@ export_templates() {
 export_skills() {
     local count=0
     local skill_names=$(dolt sql -r csv -q "SELECT name FROM skills WHERE status = 'active'" | tail -n +2)
-    
+
+    clean_managed_outputs "$SKILL_MANIFEST" "$SKILLS_DIR"
+    : > "$SKILL_MANIFEST"
+
     for name in $skill_names; do
         [ -z "$name" ] && continue
         
@@ -63,6 +86,7 @@ export_skills() {
         # Create skill directory
         local skill_dir="$SKILLS_DIR/$name"
         mkdir -p "$skill_dir"
+        echo "$name" >> "$SKILL_MANIFEST"
         
         # Write SKILL.md
         echo "$readme" > "$skill_dir/SKILL.md"

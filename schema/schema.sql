@@ -7,8 +7,10 @@
 -- - Executions/feedback enable the quality feedback loop
 -- - Collections provide logical grouping without hierarchy
 --
--- Schema Version: 1
+-- Schema Version: 3
 -- Changelog:
+--   v3: Hard-cut prompt ontology facets (artifact_kind, control_mode, formalization_level)
+--   v2: Add loop template type for phase-gated iteration patterns
 --   v1: Initial schema with schema_version table
 --   v0: Pre-versioning (no schema_version table)
 
@@ -23,17 +25,19 @@ CREATE TABLE IF NOT EXISTS schema_version (
 );
 
 -- Insert initial version if not exists
-INSERT IGNORE INTO schema_version (version, description) VALUES (1, 'Initial schema with version tracking');
+INSERT IGNORE INTO schema_version (version, description) VALUES (3, 'Prompt ontology facets hard-cut baseline');
 
 -- Core entity: reusable prompt templates
 -- Variables use pi syntax: $1, $2, $@, ${@:N}
--- Types: cognitive (epistemic frameworks), task (domain-specific), session (state)
+-- Prompt ontology is modeled as orthogonal facets, not a single overloaded type axis.
 CREATE TABLE IF NOT EXISTS prompt_templates (
     id INT AUTO_INCREMENT PRIMARY KEY,
-    name VARCHAR(64) NOT NULL UNIQUE,        -- kebab-case identifier
+    name VARCHAR(64) NOT NULL UNIQUE,         -- kebab-case identifier
     description VARCHAR(1024),                -- shown in listings
     content TEXT NOT NULL,                    -- the actual prompt
-    type ENUM('cognitive', 'task', 'session') DEFAULT 'task',  -- categorization
+    artifact_kind ENUM('cognitive', 'procedure', 'session') NOT NULL DEFAULT 'procedure',
+    control_mode ENUM('one_shot', 'router', 'loop') NOT NULL DEFAULT 'one_shot',
+    formalization_level ENUM('napkin', 'bounded', 'structured', 'workflow') NOT NULL DEFAULT 'structured',
     variables JSON,                           -- extracted ["$1", "$@"]
     tags JSON,                                -- ["code-review", "security"]
     version INT DEFAULT 1,                    -- increments on edit
@@ -43,7 +47,9 @@ CREATE TABLE IF NOT EXISTS prompt_templates (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     INDEX idx_name (name),
     INDEX idx_status (status),
-    INDEX idx_type (type)
+    INDEX idx_artifact_kind (artifact_kind),
+    INDEX idx_control_mode (control_mode),
+    INDEX idx_formalization_level (formalization_level)
 );
 
 -- Complex multi-file capabilities (Agent Skills spec)

@@ -1,3 +1,10 @@
+---
+summary: "Install and run Prompt Vault in a minimal 5-minute flow."
+read_when:
+  - "Setting up Prompt Vault for the first time"
+  - "Needing the shortest path to a working local setup"
+---
+
 # Quick Start
 
 > [← Back to README](README.md) · [Full Docs](docs/WORKFLOWS.md) · [Changelog](CHANGELOG.md)
@@ -90,27 +97,19 @@ Shows all tags grouped by namespace (action, phase, formalization, domain, scope
 
 ## Pi Integration
 
-The vault-client extension connects pi directly:
+For the canonical Pi command surface and UX notes, see [[README.md]] → **Pi Integration**.
 
-**Human Commands:**
-```
-/vaults                     # List all templates
-/vault:inversion            # Load inversion (Tab for autocomplete)
-/vault:nexus "my problem"   # Load with context
-/vault-search bug           # Search content
-/route I'm stuck on X       # Get tool recommendation
-/vault-stats                # Show usage statistics
+Minimal quickstart commands:
+
+```bash
+/vault            # open template picker
+/vault:query      # open picker pre-filtered by query
+/vaults           # list templates
+/vault-search X   # search template content
 ```
 
-**Autocomplete:** Type `/vault:` and press Tab for template suggestions.
-
-**LLM Tools (autonomous):**
-```
-vault_query({ tags: ["action:invert"], limit: 3 })
-vault_retrieve({ names: ["inversion", "nexus"] })
-vault_vocabulary()
-vault_rate({ template_name: "inversion", rating: 4, success: true })
-```
+Troubleshooting and selector behavior:
+- [[docs/reference/fuzzy-selector-troubleshooting.md]]
 
 ## Maintenance
 

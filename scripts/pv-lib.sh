@@ -4,7 +4,9 @@ set -euo pipefail
 
 # Resolve VAULT_DIR relative to scripts directory
 SCRIPTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-: "${VAULT_DIR:=$SCRIPTS_DIR/../prompt-vault-db}"
+if [ -z "${VAULT_DIR:-}" ]; then
+    VAULT_DIR="$SCRIPTS_DIR/../prompt-vault-db"
+fi
 
 # Colors
 RED='\033[0;31m'

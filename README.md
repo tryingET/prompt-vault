@@ -1,3 +1,10 @@
+---
+summary: "Prompt Vault overview, architecture, and usage entrypoint."
+read_when:
+  - "Onboarding to this repository"
+  - "Looking for command and integration overview"
+---
+
 # Prompt Vault
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
@@ -26,7 +33,7 @@ Flat files can't answer these. Git gives you file history, not prompt history. T
 A Dolt database where prompts are rows, not files.
 
 ```
-prompt_templates: id, name, content, description, tags, version, status
+prompt_templates: id, name, content, artifact_kind, control_mode, formalization_level, tags, version, status
 executions:       id, entity_type, entity_id, latency_ms, success, tokens
 feedback:         id, execution_id, rating, notes, issues
 ```
@@ -165,6 +172,7 @@ bats tests/      # Full suite
 | [WORKFLOWS.md](docs/WORKFLOWS.md) | Team collaboration, CI/CD, advanced patterns |
 | [COMPARISON.md](docs/COMPARISON.md) | Deciding vault vs flat files |
 | [CRYSTALLIZED.md](docs/CRYSTALLIZED.md) | Patterns, anti-patterns, lessons learned |
+| [Fuzzy selector troubleshooting](docs/reference/fuzzy-selector-troubleshooting.md) | PTX or vault selectors report "selection unavailable" / fzf issues |
 
 ## Pi Integration
 
@@ -172,22 +180,26 @@ The vault-client extension connects pi directly to the vault:
 
 **Human Commands:**
 ```
+/vault                      # Open fuzzy picker with all templates
+/vault:inversion            # Fuzzy-pick using query text
+/vault:nexus::my problem    # Fuzzy-pick + inject with context
+/vault-browse nexus         # Show ranked browser view, then pick
 /vaults                     # List all templates
-/vault:inversion            # Load inversion framework (Tab for autocomplete)
-/vault:nexus "my problem"   # Load with context
 /vault-search bug           # Search content
 /route I'm stuck on X       # Get tool recommendation
 /vault-stats                # Show usage statistics
 ```
 
-**Autocomplete:** Type `/vault:` and press Tab to see template suggestions.
+**Picker UX:** `/vault` and `/vault:<query>` use a ranked selector (fzf-ranked when available, deterministic fallback otherwise). Use `/vault-browse` when you want an explicit visible ranked list before selection.
+
+**Live typing trigger (optional):** if `pi-input-triggers` is loaded, typing `/vault:` in the editor opens a live picker after a short debounce (no Enter required).
 
 **LLM Tools (autonomous access):**
 ```
-vault_query({ tags: ["action:invert"], limit: 3 })
+vault_query({ artifact_kind: ["cognitive"], tags: ["action:invert"], limit: 3 })
 vault_retrieve({ names: ["inversion", "nexus"], include_content: true })
 vault_vocabulary()
-vault_insert({ name: "my-tool", content: "...", tags: ["action:validate"] })
+vault_insert({ name: "my-tool", content: "...", artifact_kind: "procedure", control_mode: "one_shot", formalization_level: "structured", tags: ["action:validate"] })
 vault_rate({ template_name: "inversion", rating: 4, success: true })
 ```
 

@@ -17,6 +17,7 @@ read_when:
 - [x] LLM tools for autonomous vault access (v1.2.0)
 - [x] Tag vocabulary for all templates
 - [x] `pv vocabulary` command
+- [x] PTX/vault-client editor conflict removed via ADR-0001 unified fuzzy selector transition (slices 0-4)
 
 ### In Progress
 - [ ] Add output capture to executions (with privacy flag)
@@ -32,4 +33,3 @@ read_when:
   - Tag-based: most used tags, best rated tags
   - Trend: rating over time, usage patterns
   - Health: low-rated templates, high errors, unused templates
-- [ ] **Resolve ptx autocomplete conflict:** Update prompt-template-accelerator to use the autocomplete wrapper registry pattern (see `~/.pi/agent/extensions/vault-client/autocompleteRegistry.ts`)

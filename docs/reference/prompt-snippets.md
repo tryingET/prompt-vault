@@ -1,3 +1,10 @@
+---
+summary: "Reference catalog of invocable prompt/cognitive snippets used in this project context."
+read_when:
+  - "Looking for reusable review/thinking snippets"
+  - "Selecting a snippet for structured reasoning"
+---
+
 # Apply These Prompt Snippets to This Project
 
 **Goal:** Would reading this feel like receiving transmission from a higher intelligence?

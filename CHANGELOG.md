@@ -1,9 +1,33 @@
+---
+summary: "Versioned record of notable project changes."
+read_when:
+  - "Preparing releases"
+  - "Auditing what changed between versions"
+---
+
 # Changelog
 
 > [← Back to README](README.md) · [Workflows](docs/WORKFLOWS.md) · [Patterns](docs/CRYSTALLIZED.md)
 
 All notable changes to prompt-vault are documented here.
 
+## [Unreleased]
+
+### Added
+
+- `docs/dev/fzf-spike-slice0.md` with cross-context fzf viability evidence for ADR-0001.
+- `docs/dev/slice4-validation-matrix.md` with mixed-session smoke and failure-mode evidence.
+
+### Changed
+
+- Canonical `prompt-vault-db` recovered from `~/programming/archive/prompt-vault-db` after reinit drift (50 active templates restored).
+- Namespaced tag vocabulary reapplied across all templates (`action:`, `phase:`, `formalization:`, `domain:`, `scope:`) and revalidated via `pv vocabulary`.
+- `next-10-expert-suggestions` recovered from session history with command-first framework-grounding refinements.
+- `docs/decisions/ADR-0001-unified-fzf-selection-ptx-vault-client.md` updated to reflect Slice 0-4 completion and validated checklist.
+- Vault-client query hardening closeout verified post-`/reload` (live `limit=5` keyword lookup success, explicit backend failure signaling contract, fresh extension test pass).
+- `next_session_prompt.md` and `docs/dev/status.md` updated to reflect that no deferred hardening contract items remain.
+- Added canonical deferred-contract registry at [[docs/dev/deferred-contracts.md]] to keep deferrals DRY and auditable.
+- Pi integration command/selector docs were normalized and de-duplicated across [[README.md]], [[QUICKSTART.md]], and [[docs/reference/fuzzy-selector-troubleshooting.md]] (current picker UX, `/vault-browse`, and optional live `/vault:` trigger).
 ## [1.2.0] - 2026-03-03
 
 ### LLM Tools & Tag Vocabulary
