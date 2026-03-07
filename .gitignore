@@ -10,6 +10,10 @@ backups/
 
 # Session artifacts (regenerated each session)
 .next_session.md
+.pi-subagent-sessions/
+
+# Local database artifacts
+*.db
 
 # Editor
 *.swp
