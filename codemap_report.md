@@ -50,7 +50,6 @@ prompt-vault
 │   │   ├── model.md
 │   │   ├── purpose.md
 │   │   ├── strategic_goals.md
-│   │   ├── tactical_goals.md
 │   │   └── vision.md
 │   ├── reference/
 │   │   ├── fuzzy-selector-troubleshooting.md

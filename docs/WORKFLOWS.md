@@ -274,6 +274,10 @@ for p in prompts:
 For stage-gated DB mutation policy, see: `docs/reference/db-stage-backup-policy.md` and run:
 
 ```bash
+# Low-risk local exact-name row/content edit
+./scripts/db-change-preflight.sh --stage db-dev
+
+# Promotion gates beyond db-dev
 ./scripts/db-change-preflight.sh --stage db-test
 ./scripts/db-change-preflight.sh --stage db-stage
 ./scripts/db-change-preflight.sh --stage db-prod --exception-file governance/db-backup-exceptions.md

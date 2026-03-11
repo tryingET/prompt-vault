@@ -6,26 +6,30 @@ read_when:
 
 # Status
 
-**Last Updated:** 2026-03-04
+**Last Updated:** 2026-03-10
 
 ## Health
 
 | Metric | Status |
 |--------|--------|
-| Verification | ✅ 34/34 checks pass |
-| Templates | 50 (30 cognitive, 20 task) |
-| Tagged | 50/50 (100%) |
-| Schema Version | 1 |
-| Extension | ✅ 5 LLM tools + human commands |
+| Verification | ✅ 39/39 checks pass |
+| Templates | 73 total (31 cognitive, 42 procedure) |
+| Controlled vocabulary | 3 governed routers |
+| Company visibility boundary | 7 governed companies |
+| Schema Version | 9 |
+| Extension | ✅ current monorepo vault-client package + diagnostics/query/mutation/execution tools |
 | Vault Recovery | ✅ archive restore + session refinements reapplied |
 
 ## Recent Changes
 
-- **Live trigger helper rewrite complete** — `pi-input-triggers` now owns and exports a reusable interaction helper (live matching/debounce/backspace-safe cancellation/fuzzy ranking/picker UI), and `vault-client` registers `/vault:` via that helper with `::context` parsing, non-TTY fallback, and telemetry hooks.
-- **Validation matrix captured** — [[docs/dev/live-trigger-helper-validation-matrix.md]] is the canonical evidence record for lint/typecheck/tests + runtime checks.
-- **Vault selector UX polish** — `/vault` now surfaces full picker inventory, `/vault:<query>` uses full suffix (not first-token only), explicit `::` context separator added, picker title exposes ranking mode/count, `/vault-browse` presents a visible ranked browser before selection, and optional live `/vault:` typing trigger is integrated via `pi-input-triggers`.
-- **Vault-client hardening closeout complete** — Post-`/reload` runtime checks confirmed `vault_query` low-limit keyword lookup (`meta-orchestration`, `limit=5`) and explicit backend failure signaling (`Vault query failed: ...` / `Vault search failed: ...`). See [[docs/dev/live-trigger-helper-validation-matrix.md]].
-- **Vault recovery checkpoint complete** — Canonical `prompt-vault-db` restored from archive, namespaced tags rebuilt for all 50 templates, and `next-10-expert-suggestions` framework-grounding refinements recovered from session history.
+- **Execution output capture added in schema v9** — `executions` now records `output_capture_mode` (`none`/`private`/`public`) plus optional `output_text`, and `pv-exec` supports `--output-file` / `--output-text` with privacy-defaulted capture and explicit public opt-in.
+- **Feedback uniqueness preserved into schema v9** — `feedback.execution_id` remains unique at the DB layer, and downstream clients should continue to bind ratings to exact execution rows.
+- **Vault-client schema-v9 alignment complete** — the canonical client now expects schema `9`, understands execution output capture columns, and exposes detailed diagnostics rather than only a boolean startup gate.
+- **Diagnostic-mode startup now exists in the client** — on schema mismatch, the client can still expose `/vault-check` and `vault_schema_diagnostics()` while gating risky query/mutation surfaces.
+- **Current live selector contract** — `/vault` opens the full visible picker, `/vault <exact-name>` exact-loads, and live `/vault:` uses the shared interaction runtime with explicit `::context` support; `/vault-browse` is no longer part of the current client contract.
+- **Prompt Vault hard cutover is complete** — live schema is facet-native (`artifact_kind`, `control_mode`, `formalization_level`), legacy `prompt_templates.type` is gone, and the three router exemplars are seeded as `procedure / router / structured`.
+- **Company visibility boundary complete** — Prompts and skills now carry `owner_company` + `visibility_companies`, with `core` artifacts visible across all governed companies by default.
+- **Tag hard cut complete** — Free-form prompt tags were removed from schema and governed router prompts; governed semantics now live only in facets + controlled vocabulary.
 - **Unified selector transition (slice 4 complete)** — ADR-0001 slices 0-4 implemented across PTX + vault-client (fzf-ranked fuzzy selector, deterministic fallback, editor-conflict pathways removed)
 - **Validation evidence captured** — `docs/dev/fzf-spike-slice0.md`, `docs/dev/slice4-validation-matrix.md`
 - **v1.2.0** — LLM tools, tag vocabulary, pv-tag-templates

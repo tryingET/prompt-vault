@@ -13,6 +13,8 @@ read_when:
 
 **Version-controlled prompt templates with SQL, Git semantics, and analytics.**
 
+Prompt Vault now treats prompt semantics as ontology, not tags: primary classification lives in facets, governed orchestration semantics live in `controlled_vocabulary`, and organizational visibility lives in `owner_company` + `visibility_companies`.
+
 Prompts are programs. They deserve the same rigor as code: version control, testing, metrics, and collaborative review.
 
 Prompt Vault treats prompts as structured data in a SQL database with Git-style version control. Every prompt has a history. Every change is tracked. Every execution measured.
@@ -33,8 +35,8 @@ Flat files can't answer these. Git gives you file history, not prompt history. T
 A Dolt database where prompts are rows, not files.
 
 ```
-prompt_templates: id, name, content, artifact_kind, control_mode, formalization_level, tags, version, status
-executions:       id, entity_type, entity_id, latency_ms, success, tokens
+prompt_templates: id, name, content, artifact_kind, control_mode, formalization_level, owner_company, visibility_companies, controlled_vocabulary, version, status
+executions:       id, entity_type, entity_id, output_capture_mode, output_text, latency_ms, success, input_tokens, output_tokens
 feedback:         id, execution_id, rating, notes, issues
 ```
 
@@ -48,7 +50,8 @@ cd scripts
 ./pv init        # Create the database
 ./pv import      # Pull in existing pi templates
 ./pv templates   # List what you have
-./pv search review --tag security  # Find by content or tag
+./pv search review                 # Find by content
+./pv templates visibility_company=software  # What software can see
 
 ./pv branch experiment/faster-review   # Try something new
 ./pv edit-template code-review         # Make changes
@@ -176,41 +179,41 @@ bats tests/      # Full suite
 
 ## Pi Integration
 
-The vault-client extension connects pi directly to the vault:
+The canonical pi integration now lives in the monorepo package:
+
+- `~/ai-society/softwareco/owned/pi-extensions/packages/pi-vault-client`
 
 **Human Commands:**
 ```
-/vault                      # Open fuzzy picker with all templates
-/vault:inversion            # Fuzzy-pick using query text
-/vault:nexus::my problem    # Fuzzy-pick + inject with context
-/vault-browse nexus         # Show ranked browser view, then pick
-/vaults                     # List all templates
-/vault-search bug           # Search content
-/route I'm stuck on X       # Get tool recommendation
-/vault-stats                # Show usage statistics
+/vault                         # Open picker with all visible templates
+/vault meta-orchestration      # Exact-name load into the editor
+/vault:meta-orchestration      # Live picker / exact-name transform path
+/vault-search bug              # Search visible template content
+/route I'm stuck on X          # Load routing prompt via meta-orchestration
+/vault-stats                   # Show visible execution statistics
+/vault-check                   # Show schema/company/visibility diagnostics
+/vault-live-telemetry          # Show recent live /vault: trigger telemetry
+/vault-fzf-spike              # Probe selector runtime viability
 ```
 
-**Picker UX:** `/vault` and `/vault:<query>` use a ranked selector (fzf-ranked when available, deterministic fallback otherwise). Use `/vault-browse` when you want an explicit visible ranked list before selection.
+**Picker UX:** `/vault` opens the full visible picker, `/vault <query>` falls back to picker mode with that query, and `/vault:<query>` uses the shared interaction runtime for live or exact-name selection. Use explicit `::context` when you want additional context injected into the prepared prompt.
 
-**Live typing trigger (optional):** if `pi-input-triggers` is loaded, typing `/vault:` in the editor opens a live picker after a short debounce (no Enter required).
+**Live typing trigger (optional):** if the pi-interaction trigger surfaces are loaded (`@tryinget/pi-trigger-adapter` / `@tryinget/pi-interaction`), typing `/vault:` in the editor can open the live picker after a short debounce. `/vault` still works without the live trigger.
 
 **LLM Tools (autonomous access):**
 ```
-vault_query({ artifact_kind: ["cognitive"], tags: ["action:invert"], limit: 3 })
+vault_schema_diagnostics()
+vault_query({ artifact_kind: ["cognitive"], limit: 3 })
 vault_retrieve({ names: ["inversion", "nexus"], include_content: true })
 vault_vocabulary()
-vault_insert({ name: "my-tool", content: "...", artifact_kind: "procedure", control_mode: "one_shot", formalization_level: "structured", tags: ["action:validate"] })
-vault_rate({ template_name: "inversion", rating: 4, success: true })
+vault_insert({ name: "my-tool", content: "...", artifact_kind: "procedure", control_mode: "one_shot", formalization_level: "structured", owner_company: "core", visibility_companies: ["core"] })
+vault_update({ name: "my-tool", description: "Refined description" })
+vault_executions({ template_name: "inversion", limit: 10 })
+vault_rate({ execution_id: 42, rating: 4, success: true })
 ```
 
-**Tag Vocabulary:**
-| Namespace | Purpose | Values |
-|-----------|---------|--------|
-| `action:` | What it does | invert, reduce, expand, generate, validate, project, crystallize |
-| `phase:` | When to apply | sensemaking, hypothesis, probing, validation, execution |
-| `formalization:` | Rigor level | napkin, bounded, structured, workflow |
-| `domain:` | Subject area | backend, frontend, infrastructure, security, governance |
-| `scope:` | Application level | self, code, system, portfolio |
+**Governed Vocabulary:**
+Use `./scripts/pv vocabulary` to inspect ontology facets, controlled vocabulary, and company visibility contracts.
 
 ## Maintenance
 

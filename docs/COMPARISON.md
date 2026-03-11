@@ -55,7 +55,7 @@ Vault: Execution counts, latency, success rates, average ratings.
 *Find all prompts about security.*
 
 Pi: `grep -r security ~/.pi/agent/prompts/`
-Vault: `pv search security` or `pv templates --tag security`
+Vault: `pv search security` or `pv templates cv.input_artifact=review_findings`
 
 ### 5. Collaboration
 *Review this prompt change.*

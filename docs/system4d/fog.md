@@ -10,7 +10,7 @@ read_when:
 
 - Dolt not widely adopted — may have ecosystem gaps
 - Single-user model limits team collaboration
-- No output capture breaks full feedback loop
+- Private execution outputs need explicit handling discipline to avoid accidental disclosure
 
 ## Assumptions
 
@@ -28,6 +28,5 @@ read_when:
 | Item | Status |
 |------|--------|
 | HTTP API abstraction | Deferred until third client |
-| Output capture | Planned |
 | Rate limiting | Planned |
 | Template validation | Planned |

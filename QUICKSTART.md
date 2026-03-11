@@ -41,8 +41,9 @@ cd prompt-vault
 
 ```bash
 ./scripts/pv templates
-./scripts/pv templates cognitive  # Just cognitive tools
-./scripts/pv templates task       # Just task templates
+./scripts/pv templates cognitive              # Just cognitive tools
+./scripts/pv templates control_mode=router    # Just routers
+./scripts/pv templates formalization_level=workflow  # Workflow-grade prompts
 ```
 
 ### 2. View a Template
@@ -130,7 +131,7 @@ Troubleshooting and selector behavior:
 ~/steve/prompts/          prompt-vault/           pi
 ┌─────────────┐          ┌─────────────┐      ┌─────────────┐
 │ triggers/   │ import   │ Dolt DB     │      │ extension   │
-│ 30 tools    │ ───────► │ 50 templates│ ──── │ vault-client│
+│ source set  │ ───────► │ 73 templates│ ──── │ vault-client│
 └─────────────┘          │ +5 LLM tools│      │ 5 tools     │
                          └─────────────┘      └─────────────┘
 ```

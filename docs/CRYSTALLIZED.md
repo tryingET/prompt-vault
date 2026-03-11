@@ -21,11 +21,11 @@ Knowledge extracted from development and review sessions.
 - **Apply when:** Building tools for both human operators and AI agents
 - **Implementation:** Commands transform user input; tools return structured data for LLM reasoning
 
-### Tag Vocabulary with Namespaces
-- **Pattern:** Tags as `namespace:value` strings (e.g., `action:invert`, `phase:sensemaking`)
-- **Why not enums:** Flexible, no schema migrations, queryable with LIKE/JSON_CONTAINS
-- **Apply when:** Taxonomy that will evolve over time
-- **Implementation:** Query existing tags from DB, validate on insert with confirmation flag
+### Governed Vocabulary over Free Tags
+- **Pattern:** Keep prompt semantics in facets plus controlled vocabulary, not free-form tags
+- **Why:** Preserves ontological category boundaries and avoids shadow taxonomies
+- **Apply when:** Retrieval/orchestration semantics affect selection, validation, or client behavior
+- **Implementation:** Contract-backed dimensions with explicit cardinality and semantic category metadata
 
 ### Dolt as Application Database
 - **Pattern:** Using Dolt (Git-for-data) as the primary storage for versioned content
@@ -122,7 +122,7 @@ Knowledge extracted from development and review sessions.
 | Finding | Why It's Specific |
 |---------|-------------------|
 | Dolt as database | Requires single-user model; multi-tenant needs different approach |
-| No output capture | Privacy-focused use case; others need full telemetry |
+| Output capture policy needs explicit defaults | Privacy-sensitive use cases should stay opt-in/private by default even when telemetry expands |
 | Local-only | Remote collaboration needs DoltHub or similar |
 
 ### When Patterns Break
@@ -145,9 +145,9 @@ Knowledge extracted from development and review sessions.
 - [x] Tag all templates with vocabulary
 - [x] Add vocabulary command to CLI
 
-### Pending (tracked in docs/project/tactical_goals.md)
+### Pending
 
-See tactical goals for current work items.
+See [docs/dev/status.md](dev/status.md) and [next_session_prompt.md](../next_session_prompt.md) for current work items and handoff state.
 
 ## For Contributors
 

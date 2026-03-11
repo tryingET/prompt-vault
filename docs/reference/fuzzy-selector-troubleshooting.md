@@ -47,8 +47,8 @@ These probes report interactive vs filter-mode behavior and are useful for bug r
 ## Selector usage tips (vault)
 
 - `/vault` opens the full template picker (not capped to a small subset).
-- `/vault:<query>` uses the full suffix as fuzzy query.
+- `/vault <query>` falls back to picker mode using that query.
+- `/vault:<query>` uses the full suffix as fuzzy/live query.
 - To inject extra context, use explicit separator: `/vault:<query>::<context>`.
-- Use `/vault-browse [query][::context]` for a full ranked browser report before selecting.
-- If live `/vault:` typing does not pop picker, ensure `pi-input-triggers` is loaded and enabled.
+- If live `/vault:` typing does not pop picker, ensure the current vault-client package and pi-interaction trigger surfaces are loaded; `/vault` still works without the live trigger.
 - Picker title shows ranking mode and visible/total count, e.g. `mode=fzf [visible/total]`.

@@ -20,6 +20,8 @@ All notable changes to prompt-vault are documented here.
 
 ### Changed
 
+- Prompt-vault-side client boundary docs were normalized to the current schema-v9 contract (commands, diagnostics, execution-bound rating, and trigger-surface wording).
+- Historical validation and relocation notes were marked more explicitly as historical where they still reference pre-monorepo or pre-v9 integration phases.
 - Canonical `prompt-vault-db` recovered from `~/programming/archive/prompt-vault-db` after reinit drift (50 active templates restored).
 - Namespaced tag vocabulary reapplied across all templates (`action:`, `phase:`, `formalization:`, `domain:`, `scope:`) and revalidated via `pv vocabulary`.
 - `next-10-expert-suggestions` recovered from session history with command-first framework-grounding refinements.

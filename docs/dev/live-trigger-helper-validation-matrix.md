@@ -1,11 +1,14 @@
 ---
-summary: "Validation evidence for the pi-input-triggers interaction-helper rewrite + vault-client live /vault: migration."
+summary: "Historical validation evidence for the earlier pi-input-triggers interaction-helper rewrite and live /vault: migration."
 read_when:
-  - "Before declaring the live /vault: helper rewrite complete"
-  - "When auditing zero-regression claims for lint/typecheck/tests/runtime behavior"
+  - "You need provenance from the earlier pre-monorepo live-trigger rewrite."
+  - "You are auditing historical zero-regression claims rather than the current canonical runtime path."
 ---
 
-# Live Trigger Helper Rewrite — Validation Matrix
+# Live Trigger Helper Rewrite — Validation Matrix (historical)
+
+> Historical note: this matrix records an earlier `pi-input-triggers` / `~/.pi/.../vault-client` phase.
+> The current canonical client lives in `~/ai-society/softwareco/owned/pi-extensions/packages/pi-vault-client` and now uses the shared pi-interaction trigger surfaces plus schema-v9 diagnostics.
 
 Date: 2026-03-04
 

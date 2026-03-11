@@ -16,6 +16,22 @@ Applies to all Prompt Vault database mutations (schema/data/migration) for Dolt-
 3. `db-stage` — production-like rehearsal.
 4. `db-prod` — controlled change window only.
 
+## Stage intent
+
+### `db-dev`
+Use for low-risk local Prompt Vault edits such as:
+- exact-name row/content updates
+- single-template metadata corrections
+- other Dolt-versioned prompt content changes with clear rollback
+
+Required in `db-dev`:
+- database identity verified (`prompt-vault.db` or `prompt-vault-db/.dolt` exists)
+- exact target and blast radius understood
+- Dolt commit recorded after the change
+
+Backup quorum is **not** required for `db-dev`.
+Escalate to `db-test` or beyond for bulk mutations, destructive changes, migration rehearsal, or anything with broader blast radius.
+
 ## Promotion gates
 
 ### Gate A (required for all stages beyond `db-dev`)
@@ -47,7 +63,10 @@ When immutable snapshot cannot be produced:
 
 ## Minimal command workflow (non-destructive)
 ```bash
-# Preflight checks only
+# Low-risk local content edit
+./scripts/db-change-preflight.sh --stage db-dev
+
+# Promotion gates beyond db-dev
 ./scripts/db-change-preflight.sh --stage db-test
 ./scripts/db-change-preflight.sh --stage db-stage
 ./scripts/db-change-preflight.sh --stage db-prod --exception-file governance/db-backup-exceptions.md

@@ -11,9 +11,9 @@ read_when:
 Version-controlled prompt templates using Dolt SQL database with Git semantics, analytics, and A/B testing.
 
 ## Current State
-- **Templates:** 50 (30 cognitive, 20 task) — all tagged
-- **Verification:** 34/34 checks pass
-- **Version:** v1.2.0
+- **Templates:** 73 total (70 active, 3 seeded routers)
+- **Verification:** see `docs/dev/status.md` for the current snapshot
+- **Schema:** v9 with ontology facets (`artifact_kind` / `control_mode` / `formalization_level`), governed `controlled_vocabulary`, company visibility, and execution output capture
 
 ## Guardrails
 - No secrets in git.
@@ -28,48 +28,49 @@ Version-controlled prompt templates using Dolt SQL database with Git semantics, 
 ./scripts/pv templates              # List all templates
 ./scripts/pv show template <name>   # View template
 ./scripts/pv search <query>         # Search content
-./scripts/pv vocabulary             # Show tag vocabulary
+./scripts/pv vocabulary             # Show governed vocabulary / contract values
 ./scripts/pv cleanup 30             # Remove old execution logs
 ./scripts/pv migrate status         # Check schema version
 ```
 
 ### Schema
 ```
-prompt_templates: id, name, content, description, artifact_kind, control_mode, formalization_level, tags (JSON), version, status
-executions:       id, entity_type, entity_id, latency_ms, success
+prompt_templates: id, name, content, description, artifact_kind, control_mode, formalization_level, owner_company, visibility_companies, controlled_vocabulary, version, status
+executions:       id, entity_type, entity_id, output_capture_mode, output_text, latency_ms, success
 feedback:         id, execution_id, rating, notes, issues
 schema_version:   id, version, description, applied_at
 ```
 
 ### Pi Integration
-The vault-client extension at `~/.pi/agent/extensions/vault-client/` connects pi directly:
+The canonical vault-client package now lives at:
+
+- `~/ai-society/softwareco/owned/pi-extensions/packages/pi-vault-client`
 
 **Human Commands:**
-- `/vaults` — List all templates
-- `/vault:name` — Load template (Tab for autocomplete)
-- `/vault-search query` — Search content
-- `/route <context>` — Get tool recommendation
+- `/vault` — Open picker with all visible templates or exact-load a visible name
+- live `/vault:` — Use the shared interaction runtime for exact-name/live selection
+- `/vault-search <query>` — Search visible template content
+- `/route <context>` — Load routing prompt
 - `/vault-stats` — Usage statistics
-
-**Autocomplete:** Type `/vault:` and press Tab to see template suggestions.
+- `/vault-check` — Schema/company/visibility diagnostics
+- `/vault-live-telemetry` — Live trigger telemetry
+- `/vault-fzf-spike` — Selector runtime probe
 
 **LLM Tools:**
-- `vault_query({ artifact_kind, control_mode, formalization_level, tags, keywords, limit, include_content })` — Query by facets/tags/keywords
+- `vault_schema_diagnostics()` — Report schema compatibility details
+- `vault_query({ artifact_kind, control_mode, formalization_level, owner_company, visibility_company, controlled_vocabulary, intent_text, limit, include_content })` — Query by governed facets/visibility semantics
 - `vault_retrieve({ names, include_content })` — Get templates by name
-- `vault_vocabulary()` — List ontology facet values + tag vocabulary
-- `vault_insert({ name, content, description, artifact_kind, control_mode, formalization_level, tags, confirm_new_tags })` — Insert with validation
-- `vault_rate({ template_name, rating, success, notes })` — Rate for feedback
+- `vault_vocabulary()` — List governed ontology, controlled-vocabulary, and company values
+- `vault_insert({ name, content, artifact_kind, control_mode, formalization_level, owner_company, visibility_companies, ... })` — Insert with governed validation
+- `vault_update({ name, ...patch })` — Explicit in-place update path
+- `vault_executions({ template_name, limit })` — List execution provenance rows
+- `vault_rate({ execution_id, rating, success, notes })` — Rate an exact execution row
 
-### Tag Vocabulary
-Templates are tagged with namespaced values:
-
-| Namespace | Purpose | Values |
-|-----------|---------|--------|
-| `action:` | What the tool does | invert, reduce, expand, generate, validate, project, crystallize, control, mode |
-| `phase:` | When to apply | sensemaking, hypothesis, probing, validation, execution |
-| `formalization:` | Rigor level | napkin (0-1), bounded (2), structured (3), workflow (4) |
-| `domain:` | Subject area | backend, frontend, infrastructure, security, governance, planning |
-| `scope:` | Application level | self, code, system, portfolio |
+### Governed Vocabulary
+Templates are governed by:
+- ontology facets (`artifact_kind`, `control_mode`, `formalization_level`)
+- controlled vocabulary for routers (`controlled_vocabulary`)
+- company visibility (`owner_company`, `visibility_companies`)
 
 ### Key Files
 | File | Purpose |
@@ -106,17 +107,17 @@ Forbidden:
 1) `README.md` — Project overview
 2) `QUICKSTART.md` — Get started in 5 minutes
 3) `docs/CRYSTALLIZED.md` — Design decisions and patterns
-4) `docs/project/tactical_goals.md` — Current work items
-5) `docs/WORKFLOWS.md` — Team collaboration patterns
-6) `docs/dev/status.md` — Health metrics
+4) `docs/WORKFLOWS.md` — Team collaboration patterns
+5) `docs/dev/status.md` — Health metrics
+6) `next_session_prompt.md` — Current handoff and next slice
 
 ## Quick reference for agents
 
 **To find templates by purpose:**
 ```
-vault_query({ artifact_kind: ["cognitive"], tags: ["action:invert"] })     # Find inversion tools
-vault_query({ control_mode: ["router"], formalization_level: ["structured"] }) # Find structured routers
-vault_query({ keywords: ["security"] })                                   # Search by keyword
+vault_query({ artifact_kind: ["cognitive"], limit: 5 })
+vault_query({ control_mode: ["router"], formalization_level: ["structured"] })
+vault_query({ intent_text: "security review hardening" })
 ```
 
 **To get a template:**
@@ -124,7 +125,7 @@ vault_query({ keywords: ["security"] })                                   # Sear
 vault_retrieve({ names: ["inversion"], include_content: true })
 ```
 
-**To see available tags:**
+**To inspect governed values:**
 ```
 vault_vocabulary()
 ```

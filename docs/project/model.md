@@ -20,7 +20,8 @@ Prompt Vault is a version-controlled prompt template system using Dolt (Git for 
 
 See:
 - [Strategic Goals](strategic_goals.md) — 6-12 month horizon
-- [Tactical Goals](tactical_goals.md) — Current quarter
+- [Project Status](../dev/status.md) — Current state and active focus
+- [Next Session Prompt](../../next_session_prompt.md) — Current handoff and next slice
 
 ## System4D
 

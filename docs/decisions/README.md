@@ -15,7 +15,7 @@ See [CRYSTALLIZED.md](../CRYSTALLIZED.md) for the full set of patterns and desig
 | Dolt as database | Git-for-data semantics, per-entity versioning |
 | JSON over CSV | CSV parsing fails on edge cases |
 | Schema versioning | Enables safe migrations |
-| No output capture | Privacy-first, optional future |
+| Optional output capture with explicit privacy mode | Preserve privacy-by-default while allowing auditable execution evidence when explicitly captured |
 | [ADR-0001: Unified FZF Selection](./ADR-0001-unified-fzf-selection-ptx-vault-client.md) | Eliminate PTX/vault-client editor conflicts with shared fuzzy selection flow |
 
 ## Template
