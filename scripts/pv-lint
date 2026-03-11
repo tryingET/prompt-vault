@@ -68,12 +68,13 @@ lint_template() {
         pass "Content present ($content_len chars)"
     fi
     
-    # Get actual content for variable check
-    local content=$(dolt sql -r csv -q "
-        SELECT content FROM prompt_templates 
-        WHERE name = '$name' AND status = 'active' 
+    # Get full content for variable / section checks
+    local content
+    content=$(json_first_field "
+        SELECT content FROM prompt_templates
+        WHERE name = '$name' AND status = 'active'
         ORDER BY version DESC LIMIT 1
-    " 2>/dev/null | tail -1)
+    " content)
     
     # Check for variable definitions
     local vars=$(echo "$content" | grep -oE '\$[0-9]+|\$@|\$ARGUMENTS|\${@[0-9:]*}' | sort -u || true)
@@ -167,12 +168,13 @@ lint_skill() {
         pass "Readme present ($readme_len chars)"
     fi
     
-    # Get readme for frontmatter check
-    local readme=$(dolt sql -r csv -q "
-        SELECT readme FROM skills 
-        WHERE name = '$name' AND status = 'active' 
+    # Get full readme for frontmatter / section checks
+    local readme
+    readme=$(json_first_field "
+        SELECT readme FROM skills
+        WHERE name = '$name' AND status = 'active'
         ORDER BY version DESC LIMIT 1
-    " 2>/dev/null | tail -1)
+    " readme)
     
     # Check frontmatter in readme
     if ! echo "$readme" | head -1 | grep -q "^---"; then
