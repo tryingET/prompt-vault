@@ -1,7 +1,7 @@
 {
   "contract_version": "0.1.0",
   "prompt_vault_schema_target": "v2",
-  "status": "draft",
+  "status": "active",
   "summary": "Canonical ontology contract for the Prompt Vault v2 facet cutover.",
   "facets": {
     "artifact_kind": ["cognitive", "procedure", "session"],

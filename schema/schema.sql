@@ -7,8 +7,14 @@
 -- - Executions/feedback enable the quality feedback loop
 -- - Collections provide logical grouping without hierarchy
 --
--- Schema Version: 3
+-- Schema Version: 9
 -- Changelog:
+--   v9: Add optional execution output capture with explicit privacy mode
+--   v8: Enforce one feedback row per execution via schema-level uniqueness
+--   v7: Add owner_company + visibility_companies governance boundary for prompts and skills
+--   v6: Remove free-form tags from prompts and skills; keep only facets + controlled_vocabulary
+--   v5: Add controlled_vocabulary JSON for governed retrieval/orchestration metadata
+--   v4: Add export_to_pi publishing flag for selective pi prompt export
 --   v3: Hard-cut prompt ontology facets (artifact_kind, control_mode, formalization_level)
 --   v2: Add loop template type for phase-gated iteration patterns
 --   v1: Initial schema with schema_version table
@@ -25,7 +31,7 @@ CREATE TABLE IF NOT EXISTS schema_version (
 );
 
 -- Insert initial version if not exists
-INSERT IGNORE INTO schema_version (version, description) VALUES (3, 'Prompt ontology facets hard-cut baseline');
+INSERT IGNORE INTO schema_version (version, description) VALUES (9, 'Add optional execution output capture with explicit privacy mode');
 
 -- Core entity: reusable prompt templates
 -- Variables use pi syntax: $1, $2, $@, ${@:N}
@@ -38,15 +44,20 @@ CREATE TABLE IF NOT EXISTS prompt_templates (
     artifact_kind ENUM('cognitive', 'procedure', 'session') NOT NULL DEFAULT 'procedure',
     control_mode ENUM('one_shot', 'router', 'loop') NOT NULL DEFAULT 'one_shot',
     formalization_level ENUM('napkin', 'bounded', 'structured', 'workflow') NOT NULL DEFAULT 'structured',
+    owner_company ENUM('core', 'software', 'finance', 'house', 'health', 'teaching', 'holding') NOT NULL DEFAULT 'core',
+    visibility_companies JSON NOT NULL,       -- governed query visibility boundary
     variables JSON,                           -- extracted ["$1", "$@"]
-    tags JSON,                                -- ["code-review", "security"]
+    controlled_vocabulary JSON,               -- governed retrieval/orchestration metadata
     version INT DEFAULT 1,                    -- increments on edit
     parent_id INT,                            -- previous version for history
     status ENUM('draft', 'active', 'deprecated', 'archived') DEFAULT 'draft',
+    export_to_pi BOOLEAN NOT NULL DEFAULT FALSE, -- explicit pi publishing switch
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     INDEX idx_name (name),
     INDEX idx_status (status),
+    INDEX idx_export_to_pi (export_to_pi),
+    INDEX idx_owner_company (owner_company),
     INDEX idx_artifact_kind (artifact_kind),
     INDEX idx_control_mode (control_mode),
     INDEX idx_formalization_level (formalization_level)
@@ -62,7 +73,8 @@ CREATE TABLE IF NOT EXISTS skills (
     compatibility VARCHAR(500),               -- environment requirements
     license VARCHAR(100),
     metadata JSON,
-    tags JSON,
+    owner_company ENUM('core', 'software', 'finance', 'house', 'health', 'teaching', 'holding') NOT NULL DEFAULT 'core',
+    visibility_companies JSON NOT NULL,
     version INT DEFAULT 1,
     parent_id INT,
     status ENUM('draft', 'active', 'deprecated', 'archived') DEFAULT 'draft',
@@ -100,6 +112,8 @@ CREATE TABLE IF NOT EXISTS executions (
     input_tokens INT,
     latency_ms INT,                           -- wall-clock time
     model VARCHAR(100),                       -- claude-3-sonnet, gpt-4, etc
+    output_capture_mode ENUM('none', 'private', 'public') NOT NULL DEFAULT 'none',
+    output_text LONGTEXT,                     -- optional captured execution output when policy allows
     success BOOLEAN DEFAULT TRUE,
     error_message TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -118,6 +132,7 @@ CREATE TABLE IF NOT EXISTS feedback (
     would_use_again BOOLEAN,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (execution_id) REFERENCES executions(id) ON DELETE CASCADE,
+    UNIQUE KEY unique_feedback_execution (execution_id),
     INDEX idx_rating (rating)
 );
 

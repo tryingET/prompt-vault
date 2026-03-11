@@ -1,11 +1,13 @@
 #!/usr/bin/env bash
-# Verify Prompt Vault v2 ontology contract fixtures
+# Verify Prompt Vault ontology contracts against canonical DB-seeded router prompts
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_DIR="$SCRIPT_DIR/.."
 CONTRACT="$REPO_DIR/ontology/v2-contract.json"
-FIXTURE_DIR="$REPO_DIR/ontology/fixtures/prompt-templates"
+CONTROLLED_CONTRACT="$REPO_DIR/ontology/controlled-vocabulary-contract.json"
+COMPANY_CONTRACT="$REPO_DIR/ontology/company-visibility-contract.json"
+VAULT_DIR="$REPO_DIR/prompt-vault-db"
 
 require_file() {
     local path="$1"
@@ -13,18 +15,25 @@ require_file() {
 }
 
 require_file "$CONTRACT"
-[ -d "$FIXTURE_DIR" ] || { echo "Missing fixture directory: $FIXTURE_DIR" >&2; exit 1; }
-command -v jq >/dev/null 2>&1 || { echo "jq is required" >&2; exit 1; }
+require_file "$CONTROLLED_CONTRACT"
+require_file "$COMPANY_CONTRACT"
+[ -d "$VAULT_DIR/.dolt" ] || { echo "Missing Prompt Vault DB: $VAULT_DIR/.dolt" >&2; exit 1; }
+command -v dolt >/dev/null 2>&1 || { echo "dolt is required" >&2; exit 1; }
 command -v python3 >/dev/null 2>&1 || { echo "python3 is required" >&2; exit 1; }
 
-python3 - "$CONTRACT" "$FIXTURE_DIR" <<'PY'
+python3 - "$CONTRACT" "$CONTROLLED_CONTRACT" "$COMPANY_CONTRACT" "$VAULT_DIR" <<'PY'
 import json
 import pathlib
+import subprocess
 import sys
 
 contract_path = pathlib.Path(sys.argv[1])
-fixture_dir = pathlib.Path(sys.argv[2])
+controlled_contract_path = pathlib.Path(sys.argv[2])
+company_contract_path = pathlib.Path(sys.argv[3])
+vault_dir = pathlib.Path(sys.argv[4])
 contract = json.loads(contract_path.read_text())
+controlled_contract = json.loads(controlled_contract_path.read_text())
+company_contract = json.loads(company_contract_path.read_text())
 
 required_contract_keys = [
     "contract_version",
@@ -35,11 +44,41 @@ required_contract_keys = [
     "seed_prompts",
     "golden_queries",
 ]
+required_controlled_keys = [
+    "contract_version",
+    "applies_to",
+    "dimension_semantics",
+    "dimensions",
+    "router_required_dimensions",
+    "fixture_expectations",
+    "rules",
+]
+required_company_keys = [
+    "contract_version",
+    "companies",
+    "fields",
+    "rules",
+    "defaults",
+    "fixture_expectations",
+]
 for key in required_contract_keys:
     if key not in contract:
         raise SystemExit(f"contract missing key: {key}")
+for key in required_controlled_keys:
+    if key not in controlled_contract:
+        raise SystemExit(f"controlled contract missing key: {key}")
+for key in required_company_keys:
+    if key not in company_contract:
+        raise SystemExit(f"company contract missing key: {key}")
 
 facets = contract["facets"]
+controlled_dimensions = controlled_contract["dimensions"]
+dimension_semantics = controlled_contract["dimension_semantics"]
+required_router_dimensions = controlled_contract["router_required_dimensions"]
+fixture_expectations = controlled_contract["fixture_expectations"]
+companies = company_contract["companies"]
+company_defaults = company_contract["defaults"]
+company_fixture_expectations = company_contract["fixture_expectations"]
 for facet_name in ["artifact_kind", "control_mode", "formalization_level"]:
     values = facets.get(facet_name)
     if not isinstance(values, list) or not values:
@@ -49,21 +88,36 @@ expected_modes = ["DECIDE", "DIVERGE", "PLAN", "IMPLEMENT", "VERIFY"]
 if contract["mode_outputs"] != expected_modes:
     raise SystemExit("mode_outputs must exactly equal DECIDE,DIVERGE,PLAN,IMPLEMENT,VERIFY")
 
+allowed_cards = {"exactly_one", "one_or_more"}
+for dimension in required_router_dimensions:
+    values = controlled_dimensions.get(dimension)
+    if not isinstance(values, list) or not values:
+        raise SystemExit(f"controlled vocabulary dimension missing or empty: {dimension}")
+    semantics = dimension_semantics.get(dimension)
+    if not isinstance(semantics, dict):
+        raise SystemExit(f"dimension semantics missing for: {dimension}")
+    for key in ["ontological_category", "question", "cardinality", "must_not_encode"]:
+        if key not in semantics:
+            raise SystemExit(f"dimension semantics incomplete for {dimension}: missing {key}")
+    if semantics["cardinality"] not in allowed_cards:
+        raise SystemExit(
+            f"dimension semantics cardinality invalid for {dimension}: {semantics['cardinality']}"
+        )
+    if not isinstance(semantics["must_not_encode"], list) or not semantics["must_not_encode"]:
+        raise SystemExit(f"dimension semantics must_not_encode missing/empty for {dimension}")
+
 seed_prompts = contract["seed_prompts"]
 if len(seed_prompts) != 3:
     raise SystemExit("seed_prompts must contain exactly 3 prompt definitions")
 
-fixture_paths = sorted(fixture_dir.glob("*.md"))
-if len(fixture_paths) != 3:
-    raise SystemExit(f"expected exactly 3 fixture files, found {len(fixture_paths)}")
-
 seed_by_name = {item["name"]: item for item in seed_prompts}
-if sorted(seed_by_name) != [
-    "analysis-router",
-    "post-review-router",
-    "review-closeout-router",
-]:
+expected_seed_names = ["analysis-router", "post-review-router", "review-closeout-router"]
+if sorted(seed_by_name) != expected_seed_names:
     raise SystemExit("seed prompt names do not match the expected router set")
+
+first_golden = contract["golden_queries"][0]
+if sorted(first_golden.get("expected_names", [])) != expected_seed_names:
+    raise SystemExit("golden query expected_names do not match the expected router set")
 
 required_body_tokens = [
     "DECIDE",
@@ -74,61 +128,116 @@ required_body_tokens = [
     "NEXT PROMPT:",
 ]
 
-for fixture_path in fixture_paths:
-    raw = fixture_path.read_text()
-    if not raw.startswith("---\n"):
-        raise SystemExit(f"fixture missing frontmatter: {fixture_path.name}")
-    try:
-        _start, frontmatter, body = raw.split("---\n", 2)
-    except ValueError:
-        raise SystemExit(f"fixture has malformed frontmatter delimiters: {fixture_path.name}")
+query = """
+SELECT
+  name,
+  description,
+  content,
+  artifact_kind,
+  control_mode,
+  formalization_level,
+  owner_company,
+  visibility_companies,
+  controlled_vocabulary,
+  status
+FROM prompt_templates
+WHERE name IN ('analysis-router', 'post-review-router', 'review-closeout-router')
+ORDER BY name
+"""
+raw = subprocess.check_output(
+    ["dolt", "--data-dir", str(vault_dir), "sql", "-r", "json", "-q", query],
+    text=True,
+)
+rows = json.loads(raw).get("rows", [])
+if len(rows) != 3:
+    raise SystemExit(f"expected exactly 3 seeded router rows in DB, found {len(rows)}")
 
-    meta = {}
-    current_list = None
-    for line in frontmatter.strip().splitlines():
-        if not line.strip():
-            continue
-        if line.startswith("  - "):
-            if current_list is None:
-                raise SystemExit(f"list item without active key in {fixture_path.name}")
-            meta.setdefault(current_list, []).append(line[4:].strip())
-            continue
-        if ":" not in line:
-            raise SystemExit(f"malformed frontmatter line in {fixture_path.name}: {line}")
-        key, value = line.split(":", 1)
-        key = key.strip()
-        value = value.strip()
-        if value == "":
-            current_list = key
-            meta[key] = []
-        else:
-            current_list = None
-            meta[key] = value
 
-    name = meta.get("name")
+def normalize_json_field(value):
+    if isinstance(value, (list, dict)):
+        return value
+    if value in (None, ""):
+        return None
+    if isinstance(value, str):
+        return json.loads(value)
+    raise SystemExit(f"unexpected JSON field value: {value!r}")
+
+
+for row in rows:
+    name = row.get("name")
     if name not in seed_by_name:
-        raise SystemExit(f"unexpected fixture name: {name}")
+        raise SystemExit(f"unexpected seeded router row in DB: {name}")
 
     seed = seed_by_name[name]
     for facet in ["artifact_kind", "control_mode", "formalization_level"]:
-        value = meta.get(facet)
+        value = row.get(facet)
         if value != seed[facet]:
-            raise SystemExit(f"{fixture_path.name}: {facet}={value!r} does not match contract value {seed[facet]!r}")
+            raise SystemExit(f"{name}: {facet}={value!r} does not match contract value {seed[facet]!r}")
         if value not in facets[facet]:
-            raise SystemExit(f"{fixture_path.name}: {facet} value not in vocabulary: {value}")
+            raise SystemExit(f"{name}: {facet} value not in vocabulary: {value}")
 
-    if meta.get("status") != "draft":
-        raise SystemExit(f"{fixture_path.name}: status must be draft for seed fixtures")
+    if row.get("status") != "active":
+        raise SystemExit(f"{name}: status must be active")
 
-    tags = meta.get("tags", [])
-    if not isinstance(tags, list) or not tags:
-        raise SystemExit(f"{fixture_path.name}: tags must be a non-empty list")
-    if "formalization:structured" not in tags:
-        raise SystemExit(f"{fixture_path.name}: missing formalization:structured tag")
+    owner_company = row.get("owner_company")
+    visibility_companies = normalize_json_field(row.get("visibility_companies"))
+    expected_company = company_fixture_expectations.get(name)
+    if expected_company is None:
+        raise SystemExit(f"{name}: missing company-visibility fixture expectation")
+    if owner_company not in companies:
+        raise SystemExit(f"{name}: owner_company not in governed company list: {owner_company}")
+    if owner_company != expected_company["owner_company"]:
+        raise SystemExit(
+            f"{name}: owner_company={owner_company!r} does not match company contract value {expected_company['owner_company']!r}"
+        )
+    if not isinstance(visibility_companies, list) or not visibility_companies:
+        raise SystemExit(f"{name}: visibility_companies must be a non-empty list")
+    for company in visibility_companies:
+        if company not in companies:
+            raise SystemExit(f"{name}: unknown company in visibility_companies: {company}")
+    if owner_company not in visibility_companies:
+        raise SystemExit(f"{name}: visibility_companies must include owner_company")
+    if visibility_companies != expected_company["visibility_companies"]:
+        raise SystemExit(
+            f"{name}: visibility_companies={visibility_companies!r} does not match company contract value {expected_company['visibility_companies']!r}"
+        )
+    if owner_company == "core" and visibility_companies != company_defaults["visibility_companies"]:
+        raise SystemExit(f"{name}: core-owned governed routers must be visible to all governed companies")
 
+    expected_controlled = fixture_expectations.get(name)
+    if expected_controlled is None:
+        raise SystemExit(f"{name}: missing controlled-vocabulary fixture expectation")
+
+    actual_controlled = normalize_json_field(row.get("controlled_vocabulary"))
+    if not isinstance(actual_controlled, dict):
+        raise SystemExit(f"{name}: controlled_vocabulary must be an object")
+
+    for dimension in required_router_dimensions:
+        value = actual_controlled.get(dimension)
+        if value in (None, "") or value == []:
+            raise SystemExit(f"{name}: missing required controlled-vocabulary dimension: {dimension}")
+        allowed = controlled_dimensions[dimension]
+        card = dimension_semantics[dimension]["cardinality"]
+        if card == "exactly_one" and isinstance(value, list):
+            raise SystemExit(f"{name}: {dimension} must be scalar, found list")
+        if card == "one_or_more" and not isinstance(value, list):
+            raise SystemExit(f"{name}: {dimension} must be list-valued")
+        if isinstance(value, list):
+            for item in value:
+                if item not in allowed:
+                    raise SystemExit(f"{name}: {dimension} item not in vocabulary: {item}")
+        else:
+            if value not in allowed:
+                raise SystemExit(f"{name}: {dimension} value not in vocabulary: {value}")
+        if value != expected_controlled[dimension]:
+            raise SystemExit(
+                f"{name}: {dimension}={value!r} does not match controlled contract value {expected_controlled[dimension]!r}"
+            )
+
+    body = row.get("content") or ""
     for token in required_body_tokens:
         if token not in body:
-            raise SystemExit(f"{fixture_path.name}: missing body token: {token}")
+            raise SystemExit(f"{name}: missing body token: {token}")
 
 print("Ontology contract verified")
 PY

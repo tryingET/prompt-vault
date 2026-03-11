@@ -35,7 +35,24 @@ cmd_templates() {
         if [[ "$facet_filter" == *=* ]]; then
             local facet_name="${facet_filter%%=*}"
             local facet_value="${facet_filter#*=}"
-            where="WHERE ${facet_name} = '${facet_value}'"
+            if [ "$facet_name" = "export_to_pi" ]; then
+                case "$facet_value" in
+                    true|TRUE|1) where="WHERE export_to_pi = TRUE" ;;
+                    false|FALSE|0) where="WHERE export_to_pi = FALSE" ;;
+                    *) error "export_to_pi filter must be true/false"; exit 1 ;;
+                esac
+            elif [ "$facet_name" = "visibility_company" ]; then
+                where="WHERE JSON_SEARCH(visibility_companies, 'one', '${facet_value}') IS NOT NULL"
+            elif [[ "$facet_name" == cv.* ]]; then
+                local cv_key="${facet_name#cv.}"
+                if [ "$cv_key" = "selection_principles" ]; then
+                    where="WHERE JSON_SEARCH(controlled_vocabulary, 'one', '${facet_value}', NULL, '$.selection_principles[*]') IS NOT NULL"
+                else
+                    where="WHERE JSON_UNQUOTE(JSON_EXTRACT(controlled_vocabulary, '$.${cv_key}')) = '${facet_value}'"
+                fi
+            else
+                where="WHERE ${facet_name} = '${facet_value}'"
+            fi
         else
             where="WHERE artifact_kind = '$facet_filter' OR control_mode = '$facet_filter' OR formalization_level = '$facet_filter'"
         fi
@@ -45,7 +62,11 @@ cmd_templates() {
     fi
 
     dolt sql -q "
-        SELECT name, artifact_kind, control_mode, formalization_level, status, version
+        SELECT name, owner_company, artifact_kind, control_mode, formalization_level,
+               JSON_UNQUOTE(JSON_EXTRACT(controlled_vocabulary, '$.routing_context')) AS routing_context,
+               JSON_UNQUOTE(JSON_EXTRACT(controlled_vocabulary, '$.activity_phase')) AS activity_phase,
+               JSON_UNQUOTE(JSON_EXTRACT(controlled_vocabulary, '$.transition_target_type')) AS transition_target_type,
+               status, export_to_pi, version
         FROM prompt_templates
         $where
         ORDER BY artifact_kind, control_mode, formalization_level, name
@@ -56,7 +77,7 @@ cmd_skills() {
     ensure_vault
     echo "=== Skills ==="
     dolt sql -q "
-        SELECT name, description, status, version 
+        SELECT name, owner_company, description, status, version 
         FROM skills 
         ORDER BY name
     " -r tabular
@@ -84,6 +105,68 @@ cmd_new_template() {
     read -r formalization_level
     formalization_level=${formalization_level:-structured}
 
+    echo -n "Owner company [core]: "
+    read -r owner_company
+    owner_company=${owner_company:-core}
+
+    echo -n "Visibility companies (comma-separated) [core,software,finance,house,health,teaching,holding]: "
+    read -r visibility_companies_csv
+    visibility_companies_csv=${visibility_companies_csv:-core,software,finance,house,health,teaching,holding}
+
+    local visibility_companies_json visibility_companies_sql
+    visibility_companies_json=$(python3 - <<PY
+import json
+items = [item.strip() for item in """$visibility_companies_csv""".split(",") if item.strip()]
+print(json.dumps(items))
+PY
+)
+    visibility_companies_sql="'$(echo "$visibility_companies_json" | sed "s/'/''/g")'"
+
+    local controlled_vocabulary_sql="NULL"
+    if [ "$control_mode" = "router" ]; then
+        local routing_context activity_phase input_artifact transition_target_type selection_principles_csv output_commitment controlled_vocabulary_json escaped_controlled_vocabulary
+
+        echo -n "Routing context [analysis_followup]: "
+        read -r routing_context
+        routing_context=${routing_context:-analysis_followup}
+
+        echo -n "Activity phase [post_analysis]: "
+        read -r activity_phase
+        activity_phase=${activity_phase:-post_analysis}
+
+        echo -n "Input artifact [analysis_output]: "
+        read -r input_artifact
+        input_artifact=${input_artifact:-analysis_output}
+
+        echo -n "Transition target type [framework_mode]: "
+        read -r transition_target_type
+        transition_target_type=${transition_target_type:-framework_mode}
+
+        echo -n "Selection principles (comma-separated) [evidence_based]: "
+        read -r selection_principles_csv
+        selection_principles_csv=${selection_principles_csv:-evidence_based}
+
+        echo -n "Output commitment [exact_next_prompt]: "
+        read -r output_commitment
+        output_commitment=${output_commitment:-exact_next_prompt}
+
+        controlled_vocabulary_json=$(python3 - <<PY
+import json
+items = [item.strip() for item in """$selection_principles_csv""".split(",") if item.strip()]
+print(json.dumps({
+  "routing_context": """$routing_context""".strip(),
+  "activity_phase": """$activity_phase""".strip(),
+  "input_artifact": """$input_artifact""".strip(),
+  "transition_target_type": """$transition_target_type""".strip(),
+  "selection_principles": items,
+  "output_commitment": """$output_commitment""".strip(),
+}))
+PY
+)
+        escaped_controlled_vocabulary=$(echo "$controlled_vocabulary_json" | sed "s/'/''/g")
+        controlled_vocabulary_sql="'$escaped_controlled_vocabulary'"
+    fi
+
     echo "Content (Ctrl+D to finish):"
     content=$(cat)
 
@@ -92,8 +175,8 @@ cmd_new_template() {
     local escaped_desc=$(echo "$description" | sed "s/'/''/g")
 
     dolt sql -q "
-        INSERT INTO prompt_templates (name, description, content, artifact_kind, control_mode, formalization_level, status)
-        VALUES ('$escaped_name', '$escaped_desc', '$escaped_content', '$artifact_kind', '$control_mode', '$formalization_level', 'draft')
+        INSERT INTO prompt_templates (name, description, content, artifact_kind, control_mode, formalization_level, owner_company, visibility_companies, controlled_vocabulary, status)
+        VALUES ('$escaped_name', '$escaped_desc', '$escaped_content', '$artifact_kind', '$control_mode', '$formalization_level', '$owner_company', $visibility_companies_sql, $controlled_vocabulary_sql, 'draft')
     "
 
     success "Created template '$name' (draft)"
@@ -117,16 +200,32 @@ cmd_new_skill() {
     
     echo -n "Compatibility: "
     read -r compatibility
+
+    echo -n "Owner company [core]: "
+    read -r owner_company
+    owner_company=${owner_company:-core}
+
+    echo -n "Visibility companies (comma-separated) [core,software,finance,house,health,teaching,holding]: "
+    read -r visibility_companies_csv
+    visibility_companies_csv=${visibility_companies_csv:-core,software,finance,house,health,teaching,holding}
     
     echo "README content (Ctrl+D to finish):"
     readme=$(cat)
     
     local escaped_readme=$(echo "$readme" | sed "s/'/''/g")
     local escaped_desc=$(echo "$description" | sed "s/'/''/g")
+    local visibility_companies_json visibility_companies_sql
+    visibility_companies_json=$(python3 - <<PY
+import json
+items = [item.strip() for item in """$visibility_companies_csv""".split(",") if item.strip()]
+print(json.dumps(items))
+PY
+)
+    visibility_companies_sql="'$(echo "$visibility_companies_json" | sed "s/'/''/g")'"
     
     dolt sql -q "
-        INSERT INTO skills (name, description, readme, license, compatibility, status)
-        VALUES ('$name', '$escaped_desc', '$escaped_readme', '$license', '$compatibility', 'draft')
+        INSERT INTO skills (name, description, readme, license, compatibility, owner_company, visibility_companies, status)
+        VALUES ('$name', '$escaped_desc', '$escaped_readme', '$license', '$compatibility', '$owner_company', $visibility_companies_sql, 'draft')
     "
     
     success "Created skill '$name' (draft)"
@@ -140,16 +239,19 @@ cmd_edit_template() {
     
     # Export to temp file
     local tmp_file=$(mktemp --suffix=.md)
-    dolt sql -r csv -q "SELECT content FROM prompt_templates WHERE name = '$name' AND status = 'active' ORDER BY version DESC LIMIT 1" | tail -1 | sed "s/''/'/g" > "$tmp_file"
+    local escaped_name=$(sql_escape "$name")
+    json_first_field "SELECT content FROM prompt_templates WHERE name = '$escaped_name' AND status = 'active' ORDER BY version DESC LIMIT 1" content > "$tmp_file"
     
     # Open editor
     ${EDITOR:-nano} "$tmp_file"
     
     # Read back and update
-    local content=$(cat "$tmp_file")
-    local escaped_content=$(echo "$content" | sed "s/'/''/g")
+    local content
+    content=$(cat "$tmp_file")
+    local escaped_content
+    escaped_content=$(sql_escape "$content")
     
-    dolt sql -q "CALL create_template_version('$name', (SELECT description FROM prompt_templates WHERE name = '$name' LIMIT 1), '$escaped_content', NULL)"
+    dolt sql -q "CALL create_template_version('$escaped_name', (SELECT description FROM prompt_templates WHERE name = '$escaped_name' LIMIT 1), '$escaped_content', NULL)"
     
     rm "$tmp_file"
     success "Updated template '$name'"
@@ -172,6 +274,28 @@ cmd_activate() {
     fi
     
     success "Activated $type '$name'"
+}
+
+cmd_publish() {
+    ensure_vault
+    local name="${1:-}"
+    [ -z "$name" ] && { error "Usage: pv publish <template>"; exit 1; }
+
+    local escaped_name
+    escaped_name=$(sql_escape "$name")
+    dolt sql -q "UPDATE prompt_templates SET export_to_pi = TRUE WHERE name = '$escaped_name'"
+    success "Published template '$name' for pi export"
+}
+
+cmd_unpublish() {
+    ensure_vault
+    local name="${1:-}"
+    [ -z "$name" ] && { error "Usage: pv unpublish <template>"; exit 1; }
+
+    local escaped_name
+    escaped_name=$(sql_escape "$name")
+    dolt sql -q "UPDATE prompt_templates SET export_to_pi = FALSE WHERE name = '$escaped_name'"
+    success "Unpublished template '$name' from pi export"
 }
 
 cmd_deprecate() {
@@ -266,14 +390,17 @@ cmd_show() {
     
     [ -z "$type" ] || [ -z "$name" ] && { error "Usage: pv show <template|skill> <name> [version]"; exit 1; }
     
+    local escaped_name
+    escaped_name=$(sql_escape "$name")
+
     if [ "$type" = "template" ]; then
         if [ -n "$version" ]; then
-            dolt sql -q "SELECT * FROM prompt_templates WHERE name = '$name' AND version = $version" -r tabular
+            dolt sql -q "SELECT * FROM prompt_templates WHERE name = '$escaped_name' AND version = $version" -r tabular
         else
-            dolt sql -q "SELECT name, description, artifact_kind, control_mode, formalization_level, status, version, created_at, updated_at FROM prompt_templates WHERE name = '$name' AND status IN ('active', 'draft') ORDER BY version DESC LIMIT 1" -r tabular
+            dolt sql -q "SELECT name, description, owner_company, visibility_companies, artifact_kind, control_mode, formalization_level, controlled_vocabulary, status, export_to_pi, version, created_at, updated_at FROM prompt_templates WHERE name = '$escaped_name' AND status IN ('active', 'draft') ORDER BY version DESC LIMIT 1" -r tabular
             echo ""
             echo "Content:"
-            dolt sql -r csv -q "SELECT content FROM prompt_templates WHERE name = '$name' AND status IN ('active', 'draft') ORDER BY version DESC LIMIT 1" | tail -1
+            json_first_field "SELECT content FROM prompt_templates WHERE name = '$escaped_name' AND status IN ('active', 'draft') ORDER BY version DESC LIMIT 1" content
         fi
     elif [ "$type" = "skill" ]; then
         dolt sql -q "SELECT * FROM skills WHERE name = '$name' AND status = 'active' ORDER BY version DESC LIMIT 1" -r tabular
@@ -640,38 +767,24 @@ cmd_cleanup() {
 
 cmd_vocabulary() {
     ensure_vault
-    echo "=== Tag Vocabulary ==="
+    echo "=== Governed Vocabulary ==="
     echo ""
-    
-    # Export all tags and process with shell tools
-    local tmpfile=$(mktemp)
-    dolt sql -q "SELECT tags FROM prompt_templates WHERE status = 'active' AND tags IS NOT NULL" -r csv 2>/dev/null | tail -n +2 > "$tmpfile"
-    
-    # Extract and count tags by namespace
-    echo "## action:"
-    grep -oE '"action:[^"]+' "$tmpfile" | sed 's/"action://' | sort | uniq -c | sort -rn | awk '{print "  - " $2 " (" $1 ")"}'
-    echo ""
-    
-    echo "## phase:"
-    grep -oE '"phase:[^"]+' "$tmpfile" | sed 's/"phase://' | sort | uniq -c | sort -rn | awk '{print "  - " $2 " (" $1 ")"}'
-    echo ""
-    
-    echo "## formalization:"
-    grep -oE '"formalization:[^"]+' "$tmpfile" | sed 's/"formalization://' | sort | uniq -c | sort -rn | awk '{print "  - " $2 " (" $1 ")"}'
-    echo ""
-    
-    echo "## domain:"
-    grep -oE '"domain:[^"]+' "$tmpfile" | sed 's/"domain://' | sort | uniq -c | sort -rn | awk '{print "  - " $2 " (" $1 ")"}'
-    echo ""
-    
-    echo "## scope:"
-    grep -oE '"scope:[^"]+' "$tmpfile" | sed 's/"scope://' | sort | uniq -c | sort -rn | awk '{print "  - " $2 " (" $1 ")"}'
-    echo ""
-    
-    rm -f "$tmpfile"
-    
+
+    if [ -f "$SCRIPT_DIR/../ontology/controlled-vocabulary-contract.json" ]; then
+        echo "## controlled vocabulary"
+        jq -r '.dimensions | to_entries[] | "### " + .key + ":\n" + (.value | map("  - " + .) | join("\n")) + "\n"' "$SCRIPT_DIR/../ontology/controlled-vocabulary-contract.json"
+        echo "## semantic metamodel"
+        jq -r '.dimension_semantics | to_entries[] | "### " + .key + "\n  - category: " + .value.ontological_category + "\n  - cardinality: " + .value.cardinality + "\n  - question: " + .value.question + "\n"' "$SCRIPT_DIR/../ontology/controlled-vocabulary-contract.json"
+    fi
+
+    if [ -f "$SCRIPT_DIR/../ontology/company-visibility-contract.json" ]; then
+        echo "## company visibility"
+        jq -r '"### companies:\n" + (.companies | map("  - " + .) | join("\n")) + "\n"' "$SCRIPT_DIR/../ontology/company-visibility-contract.json"
+    fi
+
     echo "## Summary"
-    echo "  Tagged templates: $(dolt sql -q "SELECT COUNT(*) FROM prompt_templates WHERE status = 'active' AND tags IS NOT NULL" -r csv 2>/dev/null | tail -1)"
+    echo "  Controlled-vocabulary templates: $(dolt sql -q "SELECT COUNT(*) FROM prompt_templates WHERE status = 'active' AND controlled_vocabulary IS NOT NULL" -r csv 2>/dev/null | tail -1)"
+    echo "  Core-owned templates: $(dolt sql -q "SELECT COUNT(*) FROM prompt_templates WHERE status = 'active' AND owner_company = 'core'" -r csv 2>/dev/null | tail -1)"
     echo "  Total templates: $(dolt sql -q "SELECT COUNT(*) FROM prompt_templates WHERE status = 'active'" -r csv 2>/dev/null | tail -1)"
 }
 
@@ -685,7 +798,7 @@ Setup:
   init                     Initialize a new vault
   clone <url>              Clone from DoltHub
   migrate up               Run database migrations
-  seed-v2                  Seed v2 ontology fixtures into the vault
+  seed-v2                  Deprecated; router prompt bodies now live only in the canonical DB
   hooks install            Install git hooks
 
 Import/Export:
@@ -695,7 +808,7 @@ Import/Export:
   watch                    Watch and auto-export changes
 
 Templates:
-  templates [facet|k=v]    List templates, optionally filtered by ontology facet
+  templates [facet|k=v]    List templates, optionally filtered by ontology facet, owner/visibility field, or cv.<key>=<value>
   new-template <name>      Create new template
   edit-template <name>     Edit template
   show template <name>     Show template content
@@ -719,8 +832,8 @@ Search & Analytics:
   stats [name]             Usage statistics
   analytics [cmd]          Detailed analytics
   quality [cmd]            Quality scores and dashboard
-  vocabulary               Show tag vocabulary
-  exec <template> [args]   Execute template with tracking
+  vocabulary               Show governed controlled vocabulary
+  exec <template> [args]   Execute template with tracking (use --output-file/--output-text to capture output)
   rate <id> <rating>       Rate an execution
 
 Quality & Tools:
@@ -744,9 +857,11 @@ Status:
   status                   Working directory status
   commit [message]         Commit changes
   activate <t|s> <name>    Set status to active
+  publish <template>       Mark template for pi export
+  unpublish <template>     Remove template from pi export
   deprecate <t|s> <name>   Set status to deprecated
 
-Tags & Releases:
+Releases:
   tag list                 List all release tags
   tag release <version>    Create release tag
   tag status               Show current tag status
@@ -767,9 +882,12 @@ Examples:
   pv init                          # Initialize vault
   pv import                        # Import existing templates
   pv templates router              # Filter templates by a facet value
+  pv templates owner_company=core
+  pv templates cv.routing_context=review_followup
   pv search review                 # Search for "review"
   pv vars                          # Show all template variables
   pv quality dashboard             # View quality scores
+  pv exec review src/foo.ts --output-file /tmp/llm-output.txt --public-output
   pv scaffold template my-review   # Generate template scaffold
   pv lint                          # Lint all templates
   pv backup create                 # Create backup
@@ -801,6 +919,8 @@ case "${1:-}" in
     status) cmd_status "${@:2}" ;;
     commit) cmd_commit "${@:2}" ;;
     activate) cmd_activate "${@:2}" ;;
+    publish) cmd_publish "${@:2}" ;;
+    unpublish) cmd_unpublish "${@:2}" ;;
     deprecate) cmd_deprecate "${@:2}" ;;
     stats) cmd_stats "${@:2}" ;;
     push) cmd_push "${@:2}" ;;

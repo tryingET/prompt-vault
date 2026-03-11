@@ -8,18 +8,29 @@ setup() {
     skip_if_no_vault
 }
 
-@test "prompt_templates exposes v2 facet columns" {
+@test "prompt_templates exposes v2 facet columns plus export flag, controlled vocabulary, and company visibility" {
     run dolt --data-dir "$VAULT_DIR" sql -r csv -q "SHOW COLUMNS FROM prompt_templates"
     [ "$status" -eq 0 ]
     [[ "$output" == *"artifact_kind"* ]]
     [[ "$output" == *"control_mode"* ]]
     [[ "$output" == *"formalization_level"* ]]
+    [[ "$output" == *"owner_company"* ]]
+    [[ "$output" == *"visibility_companies"* ]]
+    [[ "$output" == *"controlled_vocabulary"* ]]
+    [[ "$output" == *"export_to_pi"* ]]
+    [[ "$output" != *"tags"* ]]
 }
 
-@test "schema version is 3 after v2 cutover" {
+@test "schema version is 9 after execution output capture cutover" {
     run dolt --data-dir "$VAULT_DIR" sql -r csv -q "SELECT MAX(version) FROM schema_version"
     [ "$status" -eq 0 ]
-    [[ "$output" == *$'3' ]]
+    [[ "$output" == *$'9' ]]
+}
+
+@test "feedback enforces one row per execution at schema level" {
+    run dolt --data-dir "$VAULT_DIR" sql -r csv -q "SHOW INDEX FROM feedback"
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"feedback,0,unique_feedback_execution,1,execution_id"* ]]
 }
 
 @test "seeded routers exist with canonical facets" {

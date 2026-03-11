@@ -54,15 +54,20 @@ else
   ok=false
 fi
 
-# Backup quorum
+# Backup quorum (required beyond db-dev)
 LOCAL_PATH="${PV_BACKUP_LOCAL_PATH:-./backups/local}"
 DS1621_PATH="${PV_BACKUP_DS1621_PATH:-/mnt/ds1621/prompt-vault}"
 OFFSITE_PATH="${PV_BACKUP_OFFSITE_PATH:-/mnt/offsite-nas/prompt-vault}"
 IMMUTABLE_PATH="${PV_BACKUP_IMMUTABLE_PATH:-/mnt/immutable/prompt-vault}"
 
-check_path "local backup" "$LOCAL_PATH" "yes"
-check_path "DS1621 backup" "$DS1621_PATH" "yes"
-check_path "offsite backup" "$OFFSITE_PATH" "yes"
+if [[ "$STAGE" == "db-dev" ]]; then
+  echo "OK   db-dev mode: backup quorum not required"
+  echo "INFO low-risk exact-name row/content updates may proceed in db-dev with Dolt history"
+else
+  check_path "local backup" "$LOCAL_PATH" "yes"
+  check_path "DS1621 backup" "$DS1621_PATH" "yes"
+  check_path "offsite backup" "$OFFSITE_PATH" "yes"
+fi
 
 if [[ "$STAGE" == "db-prod" ]]; then
   if [[ -e "$IMMUTABLE_PATH" ]]; then

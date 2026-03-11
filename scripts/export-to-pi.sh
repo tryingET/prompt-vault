@@ -4,6 +4,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 VAULT_DIR="${VAULT_DIR:-$SCRIPT_DIR/../prompt-vault-db}"
+source "$SCRIPT_DIR/pv-lib.sh"
 
 TEMPLATES_DIR="${TEMPLATES_DIR:-$HOME/.pi/agent/prompts}"
 SKILLS_DIR="${SKILLS_DIR:-$HOME/.pi/agent/skills}"
@@ -16,6 +17,7 @@ if [ ! -d "$VAULT_DIR/.dolt" ]; then
 fi
 
 cd "$VAULT_DIR"
+check_deps jq
 
 echo "=== Exporting to pi format ==="
 
@@ -40,29 +42,28 @@ clean_managed_outputs() {
 # Export templates
 export_templates() {
     local count=0
-    local template_names=$(dolt sql -r csv -q "SELECT name FROM prompt_templates WHERE status = 'active'" | tail -n +2)
+    local template_names
+    template_names=$(json_all_field "SELECT name FROM prompt_templates WHERE status = 'active' AND export_to_pi = true ORDER BY name" name)
 
     clean_managed_outputs "$TEMPLATE_MANIFEST" "$TEMPLATES_DIR"
     : > "$TEMPLATE_MANIFEST"
 
-    for name in $template_names; do
+    while IFS= read -r name; do
         [ -z "$name" ] && continue
-        
-        local content=$(dolt sql -r csv -q "SELECT content FROM prompt_templates WHERE name = '$name' AND status = 'active' ORDER BY version DESC LIMIT 1" | tail -1)
-        local description=$(dolt sql -r csv -q "SELECT description FROM prompt_templates WHERE name = '$name' AND status = 'active' ORDER BY version DESC LIMIT 1" | tail -1)
-        
-        # Unescape (basic)
-        content=$(echo "$content" | sed "s/''/'/g")
-        description=$(echo "$description" | sed "s/''/'/g")
+
+        local escaped_name
+        escaped_name=$(sql_escape "$name")
+        local content
+        content=$(json_first_field "SELECT content FROM prompt_templates WHERE name = '$escaped_name' AND status = 'active' ORDER BY version DESC LIMIT 1" content)
         
         # Write file
         local output_file="$TEMPLATES_DIR/${name}.md"
-        echo "$content" > "$output_file"
+        printf '%s\n' "$content" > "$output_file"
         echo "${name}.md" >> "$TEMPLATE_MANIFEST"
 
         ((count++)) || true
         echo "  ✓ Exported template: $name"
-    done
+    done <<< "$template_names"
     
     echo "Templates exported: $count → $TEMPLATES_DIR"
 }
@@ -70,18 +71,19 @@ export_templates() {
 # Export skills
 export_skills() {
     local count=0
-    local skill_names=$(dolt sql -r csv -q "SELECT name FROM skills WHERE status = 'active'" | tail -n +2)
+    local skill_names
+    skill_names=$(json_all_field "SELECT name FROM skills WHERE status = 'active' ORDER BY name" name)
 
     clean_managed_outputs "$SKILL_MANIFEST" "$SKILLS_DIR"
     : > "$SKILL_MANIFEST"
 
-    for name in $skill_names; do
+    while IFS= read -r name; do
         [ -z "$name" ] && continue
-        
-        local readme=$(dolt sql -r csv -q "SELECT readme FROM skills WHERE name = '$name' AND status = 'active' ORDER BY version DESC LIMIT 1" | tail -1)
-        
-        # Unescape
-        readme=$(echo "$readme" | sed "s/''/'/g")
+
+        local escaped_name
+        escaped_name=$(sql_escape "$name")
+        local readme
+        readme=$(json_first_field "SELECT readme FROM skills WHERE name = '$escaped_name' AND status = 'active' ORDER BY version DESC LIMIT 1" readme)
         
         # Create skill directory
         local skill_dir="$SKILLS_DIR/$name"
@@ -89,31 +91,37 @@ export_skills() {
         echo "$name" >> "$SKILL_MANIFEST"
         
         # Write SKILL.md
-        echo "$readme" > "$skill_dir/SKILL.md"
+        printf '%s\n' "$readme" > "$skill_dir/SKILL.md"
         
         # Export assets
-        local skill_id=$(dolt sql -r csv -q "SELECT id FROM skills WHERE name = '$name' ORDER BY version DESC LIMIT 1" | tail -1)
+        local skill_id
+        skill_id=$(json_first_field "SELECT id FROM skills WHERE name = '$escaped_name' ORDER BY version DESC LIMIT 1" id)
         
         if [ -n "$skill_id" ]; then
-            dolt sql -r csv -q "SELECT path FROM skill_assets WHERE skill_id = $skill_id" | tail -n +2 | while read -r asset_path; do
+            local asset_paths
+            asset_paths=$(json_all_field "SELECT path FROM skill_assets WHERE skill_id = $skill_id ORDER BY path" path)
+            while IFS= read -r asset_path; do
                 [ -z "$asset_path" ] && continue
+
+                local escaped_path
+                escaped_path=$(sql_escape "$asset_path")
+                local is_binary
+                is_binary=$(json_first_field "SELECT is_binary FROM skill_assets WHERE skill_id = $skill_id AND path = '$escaped_path'" is_binary)
                 
-                local is_binary=$(dolt sql -r csv -q "SELECT is_binary FROM skill_assets WHERE skill_id = $skill_id AND path = '$asset_path'" | tail -1)
-                
-                if [ "$is_binary" = "0" ] || [ "$is_binary" = "FALSE" ]; then
-                    local asset_content=$(dolt sql -r csv -q "SELECT content FROM skill_assets WHERE skill_id = $skill_id AND path = '$asset_path'" | tail -1)
-                    asset_content=$(echo "$asset_content" | sed "s/''/'/g")
+                if [ "$is_binary" = "0" ] || [ "$is_binary" = "false" ] || [ "$is_binary" = "FALSE" ]; then
+                    local asset_content
+                    asset_content=$(json_first_field "SELECT content FROM skill_assets WHERE skill_id = $skill_id AND path = '$escaped_path'" content)
                     
                     # Create directory structure
                     mkdir -p "$skill_dir/$(dirname "$asset_path")"
-                    echo "$asset_content" > "$skill_dir/$asset_path"
+                    printf '%s\n' "$asset_content" > "$skill_dir/$asset_path"
                 fi
-            done
+            done <<< "$asset_paths"
         fi
         
         ((count++)) || true
         echo "  ✓ Exported skill: $name"
-    done
+    done <<< "$skill_names"
     
     echo "Skills exported: $count → $SKILLS_DIR"
 }

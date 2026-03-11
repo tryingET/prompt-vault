@@ -1,22 +1,41 @@
 #!/usr/bin/env bash
 # pv-exec - Execute a prompt template with tracking
-# Usage: pv-exec <template-name> [args...] [--model <model>]
+# Usage: pv-exec <template-name> [args...] [--model <model>] [--output-file <path>|--output-text <text>] [--public-output]
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 VAULT_DIR="${VAULT_DIR:-$SCRIPT_DIR/../prompt-vault-db}"
+source "$SCRIPT_DIR/pv-lib.sh"
 
 # Parse args
 TEMPLATE="${1:-}"
 shift || true
 
 MODEL=""
+OUTPUT_TEXT=""
+OUTPUT_CAPTURE_MODE="none"
+PUBLIC_OUTPUT=false
 ARGS=()
 while [[ $# -gt 0 ]]; do
     case $1 in
         --model|-m)
             MODEL="$2"
             shift 2
+            ;;
+        --output-file)
+            [ $# -ge 2 ] || { echo "Error: --output-file requires a path" >&2; exit 1; }
+            [ -f "$2" ] || { echo "Error: output file not found: $2" >&2; exit 1; }
+            OUTPUT_TEXT=$(<"$2")
+            shift 2
+            ;;
+        --output-text)
+            [ $# -ge 2 ] || { echo "Error: --output-text requires a value" >&2; exit 1; }
+            OUTPUT_TEXT="$2"
+            shift 2
+            ;;
+        --public-output)
+            PUBLIC_OUTPUT=true
+            shift
             ;;
         --*)
             echo "Unknown option: $1" >&2
@@ -30,37 +49,50 @@ while [[ $# -gt 0 ]]; do
 done
 
 if [ -z "$TEMPLATE" ]; then
-    echo "Usage: pv-exec <template-name> [args...] [--model <model>]" >&2
+    echo "Usage: pv-exec <template-name> [args...] [--model <model>] [--output-file <path>|--output-text <text>] [--public-output]" >&2
     exit 1
+fi
+
+if [ -n "$OUTPUT_TEXT" ]; then
+    OUTPUT_CAPTURE_MODE="private"
+fi
+
+if [ "$PUBLIC_OUTPUT" = true ]; then
+    if [ -z "$OUTPUT_TEXT" ]; then
+        echo "Error: --public-output requires --output-file or --output-text" >&2
+        exit 1
+    fi
+    OUTPUT_CAPTURE_MODE="public"
 fi
 
 MODEL="${MODEL:-claude-3-sonnet}"
 ARGS_JSON=$(printf '%s\n' "${ARGS[@]}" | jq -Rs 'split("\n") | map(select(length > 0))')
+if [ -n "$OUTPUT_TEXT" ]; then
+    OUTPUT_TEXT_SQL="'$(sql_escape "$OUTPUT_TEXT")'"
+else
+    OUTPUT_TEXT_SQL="NULL"
+fi
 
 cd "$VAULT_DIR"
+check_deps jq
 
-# Get template ID and content
-RESULT=$(dolt sql -r csv -q "
+# Get template ID, content, and version safely via JSON
+ESCAPED_TEMPLATE=$(sql_escape "$TEMPLATE")
+RESULT=$(dolt_json_query "
     SELECT id, content, version 
     FROM prompt_templates 
-    WHERE name = '$TEMPLATE' AND status = 'active' 
+    WHERE name = '$ESCAPED_TEMPLATE' AND status = 'active' 
     ORDER BY version DESC LIMIT 1
 ")
 
-if [ -z "$RESULT" ] || [ "$RESULT" = "id,content,version" ]; then
+if [ "$(echo "$RESULT" | jq -r '.rows | length')" = "0" ]; then
     echo "Error: Template '$TEMPLATE' not found or not active" >&2
     exit 1
 fi
 
-TEMPLATE_ID=$(echo "$RESULT" | tail -1 | cut -d',' -f1)
-TEMPLATE_VERSION=$(echo "$RESULT" | tail -1 | cut -d',' -f3)
-
-# Get template content
-CONTENT=$(dolt sql -r csv -q "
-    SELECT content FROM prompt_templates 
-    WHERE name = '$TEMPLATE' AND status = 'active' 
-    ORDER BY version DESC LIMIT 1
-" | tail -1 | sed "s/''/'/g")
+TEMPLATE_ID=$(echo "$RESULT" | jq -r '.rows[0].id')
+TEMPLATE_VERSION=$(echo "$RESULT" | jq -r '.rows[0].version')
+CONTENT=$(echo "$RESULT" | jq -r '.rows[0].content // ""')
 
 # Substitute variables
 for i in "${!ARGS[@]}"; do
@@ -94,13 +126,14 @@ LATENCY=$((END - START))
 
 # Log execution
 EXEC_ID=$(dolt sql -r csv -q "
-    INSERT INTO executions (entity_type, entity_id, entity_version, input_args, model, latency_ms, success, input_tokens, output_tokens)
-    VALUES ('template', $TEMPLATE_ID, $TEMPLATE_VERSION, '$ARGS_JSON', '$MODEL', $LATENCY, $SUCCESS, $INPUT_TOKENS, $OUTPUT_TOKENS);
+    INSERT INTO executions (entity_type, entity_id, entity_version, input_args, model, output_capture_mode, output_text, latency_ms, success, input_tokens, output_tokens)
+    VALUES ('template', $TEMPLATE_ID, $TEMPLATE_VERSION, '$ARGS_JSON', '$MODEL', '$OUTPUT_CAPTURE_MODE', $OUTPUT_TEXT_SQL, $LATENCY, $SUCCESS, $INPUT_TOKENS, $OUTPUT_TOKENS);
     SELECT LAST_INSERT_ID();
 " | tail -1)
 
 echo "=== Execution logged ==="
 echo "Execution ID: $EXEC_ID"
 echo "Latency: ${LATENCY}ms"
+echo "Output capture: $OUTPUT_CAPTURE_MODE"
 echo ""
 echo "Rate this execution: pv-rate $EXEC_ID <1-5> [notes]"

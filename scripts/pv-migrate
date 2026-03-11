@@ -61,6 +61,9 @@ case "$cmd" in
         # Get current version
         CURRENT_VERSION=$(dolt sql -r csv -q "SELECT MAX(version) FROM schema_version" 2>/dev/null | tail -1)
         CURRENT_VERSION=${CURRENT_VERSION:-0}
+        if [ "$CURRENT_VERSION" = "NULL" ] || [ -z "$CURRENT_VERSION" ]; then
+            CURRENT_VERSION=0
+        fi
         
         # If no version, insert initial baseline
         if [ "$CURRENT_VERSION" = "NULL" ] || [ -z "$CURRENT_VERSION" ]; then

@@ -80,45 +80,6 @@ import_trigger() {
     local escaped_desc
     escaped_desc=$(sql_escape "$desc")
     
-    # Extract tags from frontmatter or content
-    local tags='null'
-    
-    # Check for YAML frontmatter (--- at start)
-    if echo "$content" | head -1 | grep -q '^---$'; then
-        # Extract frontmatter section
-        local frontmatter
-        frontmatter=$(echo "$content" | sed -n '2,/^---$/p' | head -n -1)
-        
-        # Look for tags: in frontmatter
-        if echo "$frontmatter" | grep -qi '^tags:'; then
-            local tag_line
-            tag_line=$(echo "$frontmatter" | grep -i '^tags:' | head -1 | sed 's/^tags://i' | tr -d '[]')
-            if [ -n "$tag_line" ]; then
-                # Convert to JSON array
-                tags=$(echo "$tag_line" | tr ',' '\n' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//' | grep -v '^$' | jq -R . | jq -s .)
-            fi
-        fi
-    else
-        # Check for tags: in content (non-frontmatter)
-        if echo "$content" | grep -qi '^tags:'; then
-            local tag_line
-            tag_line=$(echo "$content" | grep -i '^tags:' | head -1 | sed 's/^tags://i' | tr -d '[]')
-            if [ -n "$tag_line" ]; then
-                # Convert to JSON array
-                tags=$(echo "$tag_line" | tr ',' '\n' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//' | grep -v '^$' | jq -R . | jq -s .)
-            fi
-        fi
-    fi
-    
-    # If no tags found, set default based on facet mapping
-    if [ "$tags" = "null" ]; then
-        if [ "$legacy_type" = "cognitive" ]; then
-            tags='["scope:self"]'
-        else
-            tags='["domain:planning"]'
-        fi
-    fi
-
     local artifact_kind="procedure"
     local control_mode="one_shot"
     local formalization_level="structured"
@@ -144,29 +105,20 @@ import_trigger() {
             ;;
     esac
 
-    if echo "$tags" | grep -q 'formalization:workflow'; then
-        formalization_level="workflow"
-    elif echo "$tags" | grep -q 'formalization:structured'; then
-        formalization_level="structured"
-    elif echo "$tags" | grep -q 'formalization:bounded'; then
-        formalization_level="bounded"
-    elif echo "$tags" | grep -q 'formalization:napkin'; then
-        formalization_level="napkin"
-    fi
-
     info "Importing: $name ($artifact_kind/$control_mode/$formalization_level)"
 
     dolt sql -q "
-        INSERT INTO prompt_templates (name, description, content, artifact_kind, control_mode, formalization_level, status, tags)
-        VALUES ('$name', '$escaped_desc', '$escaped_content', '$artifact_kind', '$control_mode', '$formalization_level', 'active', '$tags')
+        INSERT INTO prompt_templates (name, description, content, artifact_kind, control_mode, formalization_level, owner_company, visibility_companies, status)
+        VALUES ('$name', '$escaped_desc', '$escaped_content', '$artifact_kind', '$control_mode', '$formalization_level', 'core', '["core","software","finance","house","health","teaching","holding"]', 'active')
         ON DUPLICATE KEY UPDATE 
             description = VALUES(description),
             content = VALUES(content),
             artifact_kind = VALUES(artifact_kind),
             control_mode = VALUES(control_mode),
             formalization_level = VALUES(formalization_level),
+            owner_company = VALUES(owner_company),
+            visibility_companies = VALUES(visibility_companies),
             status = VALUES(status),
-            tags = VALUES(tags),
             updated_at = CURRENT_TIMESTAMP
     " 2>/dev/null || { warn "  (skipped or error)"; return 1; }
     

@@ -24,7 +24,12 @@ case "$cmd" in
                     'template', content,
                     'metadata', JSON_OBJECT(
                         'description', description,
-                        'tags', tags
+                        'artifact_kind', artifact_kind,
+                        'control_mode', control_mode,
+                        'formalization_level', formalization_level,
+                        'owner_company', owner_company,
+                        'visibility_companies', visibility_companies,
+                        'controlled_vocabulary', controlled_vocabulary
                     )
                 )
             )
@@ -159,9 +164,6 @@ EOF
             cat > "$output_dir/Templates/${name}.md" << EOF
 ---
 type: prompt-template
-tags:
-  - prompt
-  - template
 description: $desc
 ---
 
@@ -185,9 +187,6 @@ EOF
             cat > "$output_dir/Skills/${name}.md" << EOF
 ---
 type: skill
-tags:
-  - prompt
-  - skill
 ---
 
 $readme

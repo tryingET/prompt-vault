@@ -5,14 +5,12 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 VAULT_DIR="${VAULT_DIR:-$SCRIPT_DIR/../prompt-vault-db}"
+source "$SCRIPT_DIR/pv-lib.sh"
 
 cd "$VAULT_DIR"
 
 # Check dependencies
-if ! command -v fzf &> /dev/null; then
-    echo "Error: fzf is required. Install with: apt install fzf or brew install fzf" >&2
-    exit 1
-fi
+check_deps fzf jq
 
 # Colors
 export FZF_DEFAULT_OPTS="
@@ -50,31 +48,37 @@ get_collections() {
 
 show_template() {
     local name="$1"
-    local content=$(dolt sql -r csv -q "
+    local escaped_name
+    escaped_name=$(sql_escape "$name")
+    local content
+    content=$(json_first_field "
         SELECT content FROM prompt_templates 
-        WHERE name = '$name' AND status = 'active' 
+        WHERE name = '$escaped_name' AND status = 'active' 
         ORDER BY version DESC LIMIT 1
-    " | tail -1 | sed "s/''/'/g")
+    " content)
     
     if command -v bat &> /dev/null; then
-        echo "$content" | bat --language=markdown --style=plain --paging=always
+        printf '%s' "$content" | bat --language=markdown --style=plain --paging=always
     else
-        echo "$content" | less -R
+        printf '%s' "$content" | less -R
     fi
 }
 
 show_skill() {
     local name="$1"
-    local readme=$(dolt sql -r csv -q "
+    local escaped_name
+    escaped_name=$(sql_escape "$name")
+    local readme
+    readme=$(json_first_field "
         SELECT readme FROM skills 
-        WHERE name = '$name' AND status = 'active' 
+        WHERE name = '$escaped_name' AND status = 'active' 
         ORDER BY version DESC LIMIT 1
-    " | tail -1 | sed "s/''/'/g")
+    " readme)
     
     if command -v bat &> /dev/null; then
-        echo "$readme" | bat --language=markdown --style=plain --paging=always
+        printf '%s' "$readme" | bat --language=markdown --style=plain --paging=always
     else
-        echo "$readme" | less -R
+        printf '%s' "$readme" | less -R
     fi
 }
 
@@ -100,10 +104,11 @@ main_menu() {
 }
 
 templates_menu() {
-    local name=$(dolt sql -r csv -q "
+    local name
+    name=$(json_all_field "
         SELECT name FROM prompt_templates ORDER BY name
-    " | tail -n +2 | fzf --prompt="Templates > " --preview="
-        dolt sql -r csv -q \"SELECT description, status, version FROM prompt_templates WHERE name = {}\" 2>/dev/null | tail -n +2
+    " name | fzf --prompt="Templates > " --preview="
+        dolt sql -q \"SELECT description, status, version FROM prompt_templates WHERE name = {}\" -r tabular 2>/dev/null
     ")
     
     [ -z "$name" ] && main_menu && return
@@ -140,10 +145,11 @@ templates_menu() {
 }
 
 skills_menu() {
-    local name=$(dolt sql -r csv -q "
+    local name
+    name=$(json_all_field "
         SELECT name FROM skills ORDER BY name
-    " | tail -n +2 | fzf --prompt="Skills > " --preview="
-        dolt sql -r csv -q \"SELECT LEFT(description, 80), status FROM skills WHERE name = {}\" 2>/dev/null | tail -n +2
+    " name | fzf --prompt="Skills > " --preview="
+        dolt sql -q \"SELECT LEFT(description, 80), status FROM skills WHERE name = {}\" -r tabular 2>/dev/null
     ")
     
     [ -z "$name" ] && main_menu && return
@@ -176,10 +182,11 @@ skills_menu() {
 }
 
 collections_menu() {
-    local name=$(dolt sql -r csv -q "
+    local name
+    name=$(json_all_field "
         SELECT name FROM collections ORDER BY name
-    " | tail -n +2 | fzf --prompt="Collections > " --preview="
-        dolt sql -r csv -q \"SELECT description FROM collections WHERE name = {}\" 2>/dev/null | tail -n +2
+    " name | fzf --prompt="Collections > " --preview="
+        dolt sql -q \"SELECT description FROM collections WHERE name = {}\" -r tabular 2>/dev/null
     ")
     
     [ -z "$name" ] && main_menu && return

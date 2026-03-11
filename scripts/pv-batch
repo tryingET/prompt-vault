@@ -26,41 +26,6 @@ case "$cmd" in
         done
         ;;
     
-    tag)
-        # Add tag to description
-        tag="${1:-}"
-        names="${@:2}"
-        
-        [ -z "$tag" ] && { echo "Usage: pv-batch tag <tag> <name...>" >&2; exit 1; }
-        
-        for name in $names; do
-            current=$(dolt sql -r csv -q "SELECT tags FROM prompt_templates WHERE name = '$name'" | tail -1)
-            if [ -z "$current" ] || [ "$current" = "NULL" ]; then
-                new_tags="[\"$tag\"]"
-            else
-                new_tags=$(echo "$current" | jq --arg t "$tag" '. + [$t]' 2>/dev/null || echo "$current")
-            fi
-            dolt sql -q "UPDATE prompt_templates SET tags = '$new_tags' WHERE name = '$name'" 2>/dev/null && \
-                echo "✓ Tagged '$name' with '$tag'"
-        done
-        ;;
-    
-    untag)
-        # Remove tag from description
-        tag="${1:-}"
-        names="${@:2}"
-        
-        [ -z "$tag" ] && { echo "Usage: pv-batch untag <tag> <name...>" >&2; exit 1; }
-        
-        for name in $names; do
-            current=$(dolt sql -r csv -q "SELECT tags FROM prompt_templates WHERE name = '$name'" | tail -1)
-            if [ -n "$current" ] && [ "$current" != "NULL" ]; then
-                new_tags=$(echo "$current" | jq --arg t "$tag" 'del(.[] | select(. == $t))' 2>/dev/null || echo "$current")
-                dolt sql -q "UPDATE prompt_templates SET tags = '$new_tags' WHERE name = '$name'" 2>/dev/null && \
-                    echo "✓ Removed tag '$tag' from '$name'"
-            fi
-        done
-        ;;
     
     find-missing)
         # Find templates missing certain fields
@@ -146,8 +111,6 @@ Usage: pv-batch <command> [args]
 
 Status Management:
   status <status> <names...>    Set status on multiple items
-  tag <tag> <names...>          Add tag to multiple items
-  untag <tag> <names...>        Remove tag from multiple items
 
 Discovery:
   find-missing [field]          Find items missing a field
@@ -163,7 +126,6 @@ Other:
 
 Examples:
   pv-batch status deprecated old-template-1 old-template-2
-  pv-batch tag review preflight commit
   pv-batch find-missing description
   pv-batch find-short 100
 EOF

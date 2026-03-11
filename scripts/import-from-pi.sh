@@ -64,14 +64,16 @@ import_templates() {
                 local escaped_desc=$(sql_escape_content "$description")
                 
                 exec_sql "
-                    INSERT INTO prompt_templates (name, description, content, artifact_kind, control_mode, formalization_level, status)
-                    VALUES ('$name', '$escaped_desc', '$escaped_content', 'procedure', 'one_shot', 'structured', 'active')
+                    INSERT INTO prompt_templates (name, description, content, artifact_kind, control_mode, formalization_level, owner_company, visibility_companies, status)
+                    VALUES ('$name', '$escaped_desc', '$escaped_content', 'procedure', 'one_shot', 'structured', 'core', '["core","software","finance","house","health","teaching","holding"]', 'active')
                     ON DUPLICATE KEY UPDATE 
                         content = VALUES(content),
                         description = VALUES(description),
                         artifact_kind = VALUES(artifact_kind),
                         control_mode = VALUES(control_mode),
                         formalization_level = VALUES(formalization_level),
+                        owner_company = VALUES(owner_company),
+                        visibility_companies = VALUES(visibility_companies),
                         updated_at = CURRENT_TIMESTAMP
                 " || warn "Could not import $name"
                 
@@ -127,11 +129,13 @@ import_skills() {
                 
                 # Insert skill
                 exec_sql "
-                    INSERT INTO skills (name, description, readme, license, compatibility, status)
-                    VALUES ('$skill_name', '$escaped_desc', '$escaped_content', '$escaped_license', '$escaped_compat', 'active')
+                    INSERT INTO skills (name, description, readme, license, compatibility, owner_company, visibility_companies, status)
+                    VALUES ('$skill_name', '$escaped_desc', '$escaped_content', '$escaped_license', '$escaped_compat', 'core', '["core","software","finance","house","health","teaching","holding"]', 'active')
                     ON DUPLICATE KEY UPDATE
                         readme = VALUES(readme),
                         description = VALUES(description),
+                        owner_company = VALUES(owner_company),
+                        visibility_companies = VALUES(visibility_companies),
                         updated_at = CURRENT_TIMESTAMP
                 " || { warn "Could not import skill $skill_name"; continue; }
                 

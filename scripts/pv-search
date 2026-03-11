@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # pv-search - Search templates and skills
-# Usage: pv-search <query> [--type template|skill|all] [--tag tag]
+# Usage: pv-search <query> [--type template|skill|all]
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -12,16 +12,11 @@ query="${1:-}"
 shift || true
 
 type="all"
-tag=""
 
 while [[ $# -gt 0 ]]; do
     case $1 in
         --type|-t)
             type="$2"
-            shift 2
-            ;;
-        --tag)
-            tag="$2"
             shift 2
             ;;
         *)
@@ -30,8 +25,8 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
-if [ -z "$query" ] && [ -z "$tag" ]; then
-    echo "Usage: pv-search <query> [--type template|skill|all] [--tag tag]" >&2
+if [ -z "$query" ]; then
+    echo "Usage: pv-search <query> [--type template|skill|all]" >&2
     exit 1
 fi
 

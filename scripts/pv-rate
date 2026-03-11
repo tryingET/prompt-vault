@@ -53,11 +53,30 @@ if [ "$EXISTS" = "0" ]; then
     exit 1
 fi
 
-# Insert feedback
-dolt sql -q "
+# Refuse duplicate feedback for the same execution before attempting insert.
+EXISTING_FEEDBACK=$(dolt sql -r csv -q "SELECT COUNT(*) FROM feedback WHERE execution_id = $EXEC_ID" | tail -1)
+if [ "$EXISTING_FEEDBACK" != "0" ]; then
+    echo "Error: Feedback already exists for execution $EXEC_ID" >&2
+    exit 1
+fi
+
+# Insert feedback. Schema-level uniqueness is the final concurrency guard.
+set +e
+INSERT_OUTPUT=$(dolt sql -q "
     INSERT INTO feedback (execution_id, rating, notes, issues, would_use_again)
     VALUES ($EXEC_ID, $RATING, '$NOTES', '$ISSUES', $WOULD_USE_AGAIN)
-"
+" 2>&1)
+INSERT_STATUS=$?
+set -e
+
+if [ "$INSERT_STATUS" -ne 0 ]; then
+    if [[ "$INSERT_OUTPUT" == *"unique_feedback_execution"* ]] || [[ "$INSERT_OUTPUT" == *"Duplicate entry"* ]]; then
+        echo "Error: Feedback already exists for execution $EXEC_ID" >&2
+    else
+        echo "$INSERT_OUTPUT" >&2
+    fi
+    exit 1
+fi
 
 echo "✓ Recorded feedback for execution $EXEC_ID"
 echo "  Rating: $RATING/5"

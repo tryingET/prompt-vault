@@ -68,6 +68,24 @@ sql_decode_base64() {
     printf '%s' "$encoded" | base64 -d
 }
 
+# JSON-safe Dolt query helpers for multiline / quoted content
+dolt_json_query() {
+    local sql="$1"
+    dolt sql -r json -q "$sql"
+}
+
+json_first_field() {
+    local sql="$1"
+    local field="$2"
+    dolt_json_query "$sql" | jq -r --arg field "$field" '(.rows // [])[0][$field] // empty'
+}
+
+json_all_field() {
+    local sql="$1"
+    local field="$2"
+    dolt_json_query "$sql" | jq -r --arg field "$field" '(.rows // [])[][$field] // empty'
+}
+
 # Export functions and variables for sourcing scripts
-export -f info success warn error ensure_vault check_deps sql_escape sql_escape_base64 sql_decode_base64
+export -f info success warn error ensure_vault check_deps sql_escape sql_escape_base64 sql_decode_base64 dolt_json_query json_first_field json_all_field
 export SCRIPTS_DIR VAULT_DIR RED GREEN YELLOW BLUE NC
