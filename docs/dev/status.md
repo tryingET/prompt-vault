@@ -22,6 +22,9 @@ read_when:
 
 ## Recent Changes
 
+- **Quality rollups landed** — `pv quality rollup <dimension>` now provides aggregate-only quality/evidence reporting by governed template facet (`artifact_kind`, `control_mode`, `formalization_level`, `owner_company`) without widening raw-output exposure.
+- **Quality evidence coverage landed** — `pv quality coverage` now shows per-entity feedback/capture rates, `pv quality dashboard` surfaces the biggest evidence gaps, and template/skill quality views expose richer capture-aware coverage without rendering raw output text.
+- **QUICKSTART schema-v9 alignment landed** — quickstart guidance now reflects governed vocabulary, current `/vault` command semantics, privacy-safe output capture, and no longer describes legacy tags or `/vaults`.
 - **Analytics + quality hardening landed** — `pv analytics` / `pv quality` now fail closed on bad subcommands and injected names, quality scoring no longer depends on external `bc`, overview uses typed entity identity, and public previews strip ANSI/control escapes before rendering.
 - **Safe output-capture analytics landed** — `pv analytics outputs` now summarizes capture coverage by entity, `pv analytics recent` includes capture mode + output length, `pv analytics template <name>` shows capture evidence, and only explicitly public captures render text previews.
 - **Execution output capture added in schema v9** — `executions` now records `output_capture_mode` (`none`/`private`/`public`) plus optional `output_text`, and `pv-exec` supports `--output-file` / `--output-text` with privacy-defaulted capture and explicit public opt-in.

@@ -140,7 +140,9 @@ skills ──► skill_assets
 ```bash
 ./pv stats                  # Usage overview
 ./pv analytics outputs      # Safe output-capture summary + public previews only
-./pv quality dashboard      # Health scores
+./pv quality dashboard      # Health scores + evidence gaps
+./pv quality coverage       # Feedback/capture coverage by active entity
+./pv quality rollup control_mode  # Aggregate quality/evidence by facet
 ./pv exec x "arg"           # Run with tracking
 ./pv rate <id> 4 "notes"    # Record feedback
 ```
@@ -163,7 +165,7 @@ skills ──► skill_assets
 ## Verification
 
 ```bash
-./verify.sh      # 34 checks
+./verify.sh      # 40 checks
 bats tests/      # Full suite
 ```
 

@@ -41,9 +41,10 @@ cd prompt-vault
 
 ```bash
 ./scripts/pv templates
-./scripts/pv templates cognitive              # Just cognitive tools
-./scripts/pv templates control_mode=router    # Just routers
-./scripts/pv templates formalization_level=workflow  # Workflow-grade prompts
+./scripts/pv templates cognitive                    # Just cognitive tools
+./scripts/pv templates control_mode=router          # Just routers
+./scripts/pv templates formalization_level=workflow # Workflow-grade prompts
+./scripts/pv templates visibility_company=software  # What software can see
 ```
 
 ### 2. View a Template
@@ -60,15 +61,32 @@ cd prompt-vault
 ./scripts/pv search "review"
 ```
 
-### 4. View Tag Vocabulary
+### 4. View Governed Vocabulary
 
 ```bash
 ./scripts/pv vocabulary
 ```
 
-Shows all tags grouped by namespace (action, phase, formalization, domain, scope).
+Shows:
+- ontology facets (`artifact_kind`, `control_mode`, `formalization_level`)
+- governed router controlled vocabulary
+- company visibility boundary
 
-### 5. Create a Template
+### 5. Inspect Quality + Evidence Coverage
+
+```bash
+./scripts/pv quality dashboard
+./scripts/pv quality coverage
+./scripts/pv quality rollup control_mode
+./scripts/pv analytics outputs
+```
+
+Notes:
+- capture remains privacy-defaulted
+- private captures stay aggregated-only in analytics/quality surfaces
+- only explicitly public captures render text previews
+
+### 6. Create a Template
 
 ```bash
 ./scripts/pv new-template my-review
@@ -76,7 +94,7 @@ Shows all tags grouped by namespace (action, phase, formalization, domain, scope
 ./scripts/pv activate template my-review
 ```
 
-### 5. A/B Test
+### 7. A/B Test
 
 ```bash
 # Create experiment branch
@@ -103,10 +121,11 @@ For the canonical Pi command surface and UX notes, see [[README.md]] → **Pi In
 Minimal quickstart commands:
 
 ```bash
-/vault            # open template picker
-/vault:query      # open picker pre-filtered by query
-/vaults           # list templates
-/vault-search X   # search template content
+/vault                  # open the full visible picker
+/vault inversion        # exact-load a visible template
+/vault:review           # live picker / exact-name transform path
+/vault-search review    # search visible template content
+/route I'm stuck on X   # route to the best next prompt
 ```
 
 Troubleshooting and selector behavior:
@@ -128,12 +147,12 @@ Troubleshooting and selector behavior:
 ## Architecture
 
 ```
-~/steve/prompts/          prompt-vault/           pi
-┌─────────────┐          ┌─────────────┐      ┌─────────────┐
-│ triggers/   │ import   │ Dolt DB     │      │ extension   │
-│ source set  │ ───────► │ 73 templates│ ──── │ vault-client│
-└─────────────┘          │ +5 LLM tools│      │ 5 tools     │
-                         └─────────────┘      └─────────────┘
+~/source/prompts/          prompt-vault/                 pi
+┌─────────────┐           ┌────────────────────────┐    ┌──────────────────┐
+│ source set  │  import   │ Dolt DB (schema v9)    │    │ vault-client     │
+│ + prompt IP │ ───────►  │ facets + vocabulary +  │───►│ picker + tools + │
+│             │           │ visibility + evidence  │    │ diagnostics      │
+└─────────────┘           └────────────────────────┘    └──────────────────┘
 ```
 
 ## Next Steps

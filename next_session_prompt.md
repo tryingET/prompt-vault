@@ -42,6 +42,14 @@ Prompt Vault has moved well beyond the old v2 cutover note:
   - only explicitly public captures render previews
   - previews strip ANSI/control escapes before rendering
   - analytics/quality name paths now fail closed on injected names or bad subcommands
+- richer quality evidence coverage is now live without widening raw-output exposure:
+  - `./scripts/pv quality coverage`
+  - `./scripts/pv quality dashboard` highlights the biggest evidence gaps
+  - template/skill quality views now show feedback/capture coverage rates and last evidence timestamps
+- aggregate quality rollups are now live without normalizing raw output exposure:
+  - `./scripts/pv quality rollup control_mode`
+  - supported dimensions currently include `artifact_kind`, `control_mode`, `formalization_level`, `owner_company`
+  - rollups stay metadata-only and facet/governance aligned
 - the 3 seeded router prompts exist and are active in the DB:
   - `analysis-router`
   - `post-review-router`
@@ -60,9 +68,9 @@ Prompt Vault has moved well beyond the old v2 cutover note:
 - do **not** resume vault-client product work from stale standalone or live-copy locations
 
 ## Current goal
-Focus the next session on the next truthful product slice after the first safe analytics surface landed:
+Focus the next session on the next truthful product slice after the first privacy-safe analytics + quality coverage surfaces landed:
 1. verify downstream docs/clients still reflect schema v9 execution capture semantics consistently
-2. build richer quality surfaces on top of capture metadata without weakening privacy defaults
+2. extend quality reporting only where it stays aggregate-first for private captures
 3. keep ontology/contracts distinct from prompt seed content
 4. finish remaining extension rate limiting work and validation updates
 
@@ -129,7 +137,7 @@ If the next slice changes execution capture, add focused tests for privacy/contr
 - No moving vault-client implementation work back into Prompt Vault beyond boundary-document updates.
 
 ## Canonical next slice after this one
-Once guidance drift is cleaned up and the first privacy-safe analytics surface is stable, move on to richer quality reporting and any remaining extension rate-limiting follow-through without broadening raw output exposure.
+With docs drift cleaned up and coverage-aware + rollup quality surfaces now in place, move on to any remaining extension rate-limiting follow-through plus deeper aggregate reporting that still avoids normalizing raw private output exposure.
 
 ## First concrete next action
-Open `docs/dev/status.md` and downstream client/docs boundary notes, confirm schema v9 execution capture semantics are still represented consistently, then scope the next quality surface that builds on capture counts/modes before considering any broader dashboard work.
+Open the remaining extension/client boundary notes, confirm no downstream rate-limiting or validation guidance still assumes pre-v9 behavior, then scope the next aggregate-only reporting improvement after rollups before considering any broader dashboard work.
