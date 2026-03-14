@@ -4,15 +4,75 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-VAULT_DIR="${VAULT_DIR:-$SCRIPT_DIR/../prompt-vault-db}"
+source "$SCRIPT_DIR/pv-lib.sh"
 
-cd "$VAULT_DIR"
+check_deps dolt jq python3 base64
+ensure_vault
 
 cmd="${1:-overview}"
 shift || true
 
 run_query() {
     dolt sql -q "$1" -r tabular
+}
+
+render_public_previews() {
+    local sql="$1"
+    local rows_json
+    local row_count
+
+    rows_json=$(dolt sql -r json -q "$sql")
+    row_count=$(echo "$rows_json" | jq -r '.rows | length')
+
+    if [ "${row_count:-0}" -eq 0 ]; then
+        return 0
+    fi
+
+    printf "%-6s %-24s %-12s %-12s %s\n" "id" "name" "type" "chars" "public_preview"
+    echo "$rows_json" | jq -r '.rows[] | @base64' | while read -r row_b64; do
+        row_json=$(printf '%s' "$row_b64" | base64 -d)
+        id=$(echo "$row_json" | jq -r '.id')
+        name=$(echo "$row_json" | jq -r '.name // ""')
+        entity_type=$(echo "$row_json" | jq -r '.entity_type // ""')
+        output_chars=$(echo "$row_json" | jq -r '.output_chars // ""')
+        created_at=$(echo "$row_json" | jq -r '.created_at // ""')
+        output_text=$(echo "$row_json" | jq -r '.output_text // ""')
+        public_preview=$(printf '%s' "$output_text" | terminal_safe_preview 120)
+
+        printf "%-6s %-24s %-12s %-12s %s (%s)\n" "$id" "$name" "$entity_type" "$output_chars" "$public_preview" "$created_at"
+    done
+}
+
+require_active_template() {
+    local name="$1"
+    local escaped_name
+    local count
+
+    escaped_name=$(sql_escape "$name")
+    count=$(dolt sql -r csv -q "SELECT COUNT(*) FROM prompt_templates WHERE name = '$escaped_name' AND status = 'active'" | tail -1)
+
+    if [ "${count:-0}" -eq 0 ]; then
+        error "Active template '$name' not found" >&2
+        exit 1
+    fi
+
+    printf '%s' "$escaped_name"
+}
+
+require_active_skill() {
+    local name="$1"
+    local escaped_name
+    local count
+
+    escaped_name=$(sql_escape "$name")
+    count=$(dolt sql -r csv -q "SELECT COUNT(*) FROM skills WHERE name = '$escaped_name' AND status = 'active'" | tail -1)
+
+    if [ "${count:-0}" -eq 0 ]; then
+        error "Active skill '$name' not found" >&2
+        exit 1
+    fi
+
+    printf '%s' "$escaped_name"
 }
 
 case "$cmd" in
@@ -39,9 +99,23 @@ case "$cmd" in
         run_query "
             SELECT 
                 COUNT(*) as total_executions,
-                COUNT(DISTINCT entity_id) as unique_entities,
+                COUNT(DISTINCT CONCAT(entity_type, ':', entity_id)) as unique_entities,
                 AVG(latency_ms) as avg_latency_ms,
                 SUM(CASE WHEN success = FALSE THEN 1 ELSE 0 END) as failures
+            FROM executions
+        "
+        echo ""
+        run_query "
+            SELECT
+                COUNT(*) as total_executions,
+                SUM(CASE WHEN output_text IS NOT NULL THEN 1 ELSE 0 END) as captured_executions,
+                SUM(CASE WHEN output_capture_mode = 'private' AND output_text IS NOT NULL THEN 1 ELSE 0 END) as private_captures,
+                SUM(CASE WHEN output_capture_mode = 'public' AND output_text IS NOT NULL THEN 1 ELSE 0 END) as public_captures,
+                ROUND(
+                    SUM(CASE WHEN output_text IS NOT NULL THEN 1 ELSE 0 END) * 100.0 / NULLIF(COUNT(*), 0),
+                    1
+                ) as capture_rate_pct,
+                ROUND(AVG(CASE WHEN output_text IS NOT NULL THEN CHAR_LENGTH(output_text) END)) as avg_captured_chars
             FROM executions
         "
         ;;
@@ -109,12 +183,74 @@ case "$cmd" in
         "
         ;;
 
+    outputs)
+        limit="${1:-10}"
+        require_numeric "$limit" "limit"
+
+        echo "=== Output Capture Analytics ==="
+        echo "Private captures are summarized only. Only explicitly public captures render text previews."
+        echo ""
+        run_query "
+            SELECT
+                COUNT(*) as total_executions,
+                SUM(CASE WHEN output_text IS NOT NULL THEN 1 ELSE 0 END) as captured_executions,
+                SUM(CASE WHEN output_capture_mode = 'private' AND output_text IS NOT NULL THEN 1 ELSE 0 END) as private_captures,
+                SUM(CASE WHEN output_capture_mode = 'public' AND output_text IS NOT NULL THEN 1 ELSE 0 END) as public_captures,
+                ROUND(
+                    SUM(CASE WHEN output_text IS NOT NULL THEN 1 ELSE 0 END) * 100.0 / NULLIF(COUNT(*), 0),
+                    1
+                ) as capture_rate_pct,
+                ROUND(AVG(CASE WHEN output_text IS NOT NULL THEN CHAR_LENGTH(output_text) END)) as avg_captured_chars
+            FROM executions
+        "
+        echo ""
+        echo "=== Captured Output Coverage by Entity ==="
+        run_query "
+            SELECT
+                CASE e.entity_type WHEN 'template' THEN t.name ELSE s.name END as name,
+                e.entity_type,
+                COUNT(*) as executions,
+                SUM(CASE WHEN e.output_text IS NOT NULL THEN 1 ELSE 0 END) as captured_executions,
+                SUM(CASE WHEN e.output_capture_mode = 'private' AND e.output_text IS NOT NULL THEN 1 ELSE 0 END) as private_captures,
+                SUM(CASE WHEN e.output_capture_mode = 'public' AND e.output_text IS NOT NULL THEN 1 ELSE 0 END) as public_captures,
+                ROUND(AVG(CASE WHEN e.output_text IS NOT NULL THEN CHAR_LENGTH(e.output_text) END)) as avg_captured_chars,
+                MAX(CASE WHEN e.output_text IS NOT NULL THEN e.created_at ELSE NULL END) as last_capture_at
+            FROM executions e
+            LEFT JOIN prompt_templates t ON e.entity_type = 'template' AND e.entity_id = t.id
+            LEFT JOIN skills s ON e.entity_type = 'skill' AND e.entity_id = s.id
+            GROUP BY name, e.entity_type
+            HAVING SUM(CASE WHEN e.output_text IS NOT NULL THEN 1 ELSE 0 END) > 0
+            ORDER BY captured_executions DESC, public_captures DESC, name
+            LIMIT 20
+        "
+        echo ""
+        echo "=== Recent Public Output Previews ==="
+        render_public_previews "
+            SELECT
+                e.id,
+                CASE e.entity_type WHEN 'template' THEN t.name ELSE s.name END as name,
+                e.entity_type,
+                CHAR_LENGTH(e.output_text) as output_chars,
+                e.output_text,
+                e.created_at
+            FROM executions e
+            LEFT JOIN prompt_templates t ON e.entity_type = 'template' AND e.entity_id = t.id
+            LEFT JOIN skills s ON e.entity_type = 'skill' AND e.entity_id = s.id
+            WHERE e.output_capture_mode = 'public'
+              AND e.output_text IS NOT NULL
+            ORDER BY e.created_at DESC
+            LIMIT $limit
+        "
+        ;;
+
     template)
         name="${1:-}"
         if [ -z "$name" ]; then
-            echo "Usage: pv-analytics template <name>" >&2
+            error "Usage: pv-analytics template <name>"
             exit 1
         fi
+        escaped_name=$(require_active_template "$name")
+
         echo "=== Analytics for: $name ==="
         run_query "
             SELECT 
@@ -123,7 +259,7 @@ case "$cmd" in
                 t.created_at,
                 t.updated_at
             FROM prompt_templates t
-            WHERE t.name = '$name'
+            WHERE t.name = '$escaped_name'
             ORDER BY t.version
         "
         echo ""
@@ -138,16 +274,50 @@ case "$cmd" in
             FROM prompt_templates t
             LEFT JOIN executions e ON e.entity_type = 'template' AND e.entity_id = t.id
             LEFT JOIN feedback f ON f.execution_id = e.id
-            WHERE t.name = '$name' AND t.status = 'active'
+            WHERE t.name = '$escaped_name' AND t.status = 'active'
+        "
+        echo ""
+        run_query "
+            SELECT
+                COUNT(e.id) as total_executions,
+                SUM(CASE WHEN e.output_text IS NOT NULL THEN 1 ELSE 0 END) as captured_executions,
+                SUM(CASE WHEN e.output_capture_mode = 'private' AND e.output_text IS NOT NULL THEN 1 ELSE 0 END) as private_captures,
+                SUM(CASE WHEN e.output_capture_mode = 'public' AND e.output_text IS NOT NULL THEN 1 ELSE 0 END) as public_captures,
+                ROUND(AVG(CASE WHEN e.output_text IS NOT NULL THEN CHAR_LENGTH(e.output_text) END)) as avg_captured_chars,
+                MAX(CASE WHEN e.output_text IS NOT NULL THEN e.created_at ELSE NULL END) as last_capture_at
+            FROM prompt_templates t
+            LEFT JOIN executions e ON e.entity_type = 'template' AND e.entity_id = t.id
+            WHERE t.name = '$escaped_name' AND t.status = 'active'
+        "
+        echo ""
+        echo "=== Recent Public Output Previews ==="
+        render_public_previews "
+            SELECT
+                e.id,
+                t.name,
+                e.entity_type,
+                CHAR_LENGTH(e.output_text) as output_chars,
+                e.output_text,
+                e.created_at
+            FROM executions e
+            JOIN prompt_templates t ON e.entity_type = 'template' AND e.entity_id = t.id
+            WHERE t.name = '$escaped_name'
+              AND t.status = 'active'
+              AND e.output_capture_mode = 'public'
+              AND e.output_text IS NOT NULL
+            ORDER BY e.created_at DESC
+            LIMIT 5
         "
         ;;
 
     skill)
         name="${1:-}"
         if [ -z "$name" ]; then
-            echo "Usage: pv-analytics skill <name>" >&2
+            error "Usage: pv-analytics skill <name>"
             exit 1
         fi
+        escaped_name=$(require_active_skill "$name")
+
         run_query "
             SELECT 
                 s.version,
@@ -157,7 +327,7 @@ case "$cmd" in
             FROM skills s
             LEFT JOIN executions e ON e.entity_type = 'skill' AND e.entity_id = s.id
             LEFT JOIN feedback f ON f.execution_id = e.id
-            WHERE s.name = '$name'
+            WHERE s.name = '$escaped_name'
             GROUP BY s.version, s.status
             ORDER BY s.version
         "
@@ -165,6 +335,7 @@ case "$cmd" in
 
     recent)
         limit="${1:-10}"
+        require_numeric "$limit" "limit"
         echo "=== Recent Executions ==="
         run_query "
             SELECT 
@@ -174,6 +345,8 @@ case "$cmd" in
                 e.model,
                 e.latency_ms,
                 e.success,
+                e.output_capture_mode,
+                CASE WHEN e.output_text IS NOT NULL THEN CHAR_LENGTH(e.output_text) ELSE NULL END as output_chars,
                 f.rating,
                 e.created_at
             FROM executions e
@@ -189,9 +362,12 @@ case "$cmd" in
         t1="${1:-}"
         t2="${2:-}"
         if [ -z "$t1" ] || [ -z "$t2" ]; then
-            echo "Usage: pv-analytics compare <template1> <template2>" >&2
+            error "Usage: pv-analytics compare <template1> <template2>"
             exit 1
         fi
+        escaped_t1=$(require_active_template "$t1")
+        escaped_t2=$(require_active_template "$t2")
+
         echo "=== Comparing: $t1 vs $t2 ==="
         run_query "
             SELECT 
@@ -203,7 +379,7 @@ case "$cmd" in
             FROM prompt_templates t
             LEFT JOIN executions e ON e.entity_type = 'template' AND e.entity_id = t.id
             LEFT JOIN feedback f ON f.execution_id = e.id
-            WHERE t.name IN ('$t1', '$t2') AND t.status = 'active'
+            WHERE t.name IN ('$escaped_t1', '$escaped_t2') AND t.status = 'active'
             GROUP BY t.name
         "
         ;;
@@ -221,6 +397,8 @@ case "$cmd" in
                         e.model,
                         e.latency_ms,
                         e.success,
+                        e.output_capture_mode,
+                        CASE WHEN e.output_text IS NOT NULL THEN CHAR_LENGTH(e.output_text) ELSE NULL END as output_chars,
                         f.rating,
                         f.notes,
                         e.created_at
@@ -240,6 +418,8 @@ case "$cmd" in
                         e.model,
                         e.latency_ms,
                         e.success,
+                        e.output_capture_mode,
+                        CASE WHEN e.output_text IS NOT NULL THEN CHAR_LENGTH(e.output_text) ELSE NULL END as output_chars,
                         f.rating,
                         f.notes,
                         e.created_at
@@ -250,12 +430,16 @@ case "$cmd" in
                     ORDER BY e.created_at
                 " -r json
                 ;;
+            *)
+                error "Unknown export format: $format"
+                exit 1
+                ;;
         esac
         ;;
 
     *)
-        echo "Unknown command: $cmd" >&2
-        echo "Commands: overview, top-templates, ratings, issues, trends, template, skill, recent, compare, export" >&2
+        error "Unknown command: $cmd"
+        echo "Commands: overview, top-templates, ratings, issues, trends, outputs, template, skill, recent, compare, export" >&2
         exit 1
         ;;
 esac

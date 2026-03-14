@@ -50,4 +50,5 @@ setup() {
 @test "pv quality check runs" {
     run "$SCRIPTS_DIR/pv" quality check
     [ "$status" -eq 0 ]
+    [[ "$output" == *"Quality checks passed"* ]]
 }

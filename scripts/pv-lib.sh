@@ -46,13 +46,39 @@ check_deps() {
 
 # Safely escape content for SQL
 # Handles: single quotes, backslashes, null bytes, newlines
+# Accepts either a single argument or raw stdin for byte-preserving paths.
 sql_escape() {
-    local content="$1"
-    # Order matters: backslash first, then quotes
-    # Remove null bytes, escape backslashes, escape single quotes
-    printf '%s' "$content" | \
-        tr -d '\0' | \
-        sed 's/\\/\\\\/g; s/'\''/'\'''\''/g'
+    if [ "$#" -gt 0 ]; then
+        printf '%s' "$1"
+    else
+        cat
+    fi | tr -d '\0' | sed 's/\\/\\\\/g; s/'\''/'\'''\''/g'
+}
+
+require_numeric() {
+    local value="${1:-}"
+    local label="${2:-value}"
+
+    if ! [[ "$value" =~ ^[0-9]+$ ]]; then
+        error "$label must be a non-negative integer"
+        exit 1
+    fi
+}
+
+float_gt() {
+    local left="${1:-0}"
+    local right="${2:-0}"
+    awk -v left="$left" -v right="$right" 'BEGIN { exit !(left > right) }'
+}
+
+sanitize_terminal_text() {
+    python3 -c "import re, sys; text = sys.stdin.read(); text = re.sub(r'\\x1B\\][^\\x07]*(?:\\x07|\\x1B\\\\)', '', text); text = re.sub(r'\\x1B\\[[0-9;]*[A-Za-z]', '', text); text = text.replace('\\r', ' ').replace('\\n', ' ').replace('\\t', ' '); text = re.sub(r'[\\x00-\\x08\\x0B\\x0C\\x0E-\\x1F\\x7F]', ' ', text); print(text, end='')"
+}
+
+terminal_safe_preview() {
+    local max_len="${1:-120}"
+
+    sanitize_terminal_text | python3 -c "import sys; max_len = int(sys.argv[1]); text = sys.stdin.read(); text = text[:max_len] + ('…' if len(text) > max_len else ''); print(text, end='')" "$max_len"
 }
 
 # Alternative: Use base64 encoding for complex content
@@ -87,5 +113,5 @@ json_all_field() {
 }
 
 # Export functions and variables for sourcing scripts
-export -f info success warn error ensure_vault check_deps sql_escape sql_escape_base64 sql_decode_base64 dolt_json_query json_first_field json_all_field
+export -f info success warn error ensure_vault check_deps sql_escape require_numeric float_gt sanitize_terminal_text terminal_safe_preview sql_escape_base64 sql_decode_base64 dolt_json_query json_first_field json_all_field
 export SCRIPTS_DIR VAULT_DIR RED GREEN YELLOW BLUE NC

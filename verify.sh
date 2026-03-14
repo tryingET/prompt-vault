@@ -67,7 +67,8 @@ echo ""
 
 # Quality & lint
 echo -e "${YELLOW}Quality & Lint:${NC}"
-check "pv quality check" "$SCRIPTS_DIR/pv" quality check
+check_output "pv quality check" "Quality checks passed" "$SCRIPTS_DIR/pv" quality check
+check_output "pv analytics outputs" "Output Capture Analytics" "$SCRIPTS_DIR/pv" analytics outputs
 check_output "pv-lint runs" "Linting" "$SCRIPTS_DIR/pv-lint"
 check_output "pv-verify-ontology-contract" "Ontology contract verified" "$SCRIPTS_DIR/pv-verify-ontology-contract"
 check "pv templates controlled-vocabulary filter" bash -c "$SCRIPTS_DIR/pv templates cv.routing_context=analysis_followup >/dev/null"

@@ -830,7 +830,7 @@ Collections:
 Search & Analytics:
   search <query>           Search templates and skills
   stats [name]             Usage statistics
-  analytics [cmd]          Detailed analytics
+  analytics [cmd]          Detailed analytics (including safe output-capture summaries)
   quality [cmd]            Quality scores and dashboard
   vocabulary               Show governed controlled vocabulary
   exec <template> [args]   Execute template with tracking (use --output-file/--output-text to capture output)
@@ -887,6 +887,7 @@ Examples:
   pv search review                 # Search for "review"
   pv vars                          # Show all template variables
   pv quality dashboard             # View quality scores
+  pv analytics outputs             # Safe output-capture analytics (public previews only)
   pv exec review src/foo.ts --output-file /tmp/llm-output.txt --public-output
   pv scaffold template my-review   # Generate template scaffold
   pv lint                          # Lint all templates

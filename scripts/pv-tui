@@ -206,7 +206,7 @@ search_menu() {
 }
 
 analytics_menu() {
-    local cmd=$(echo -e "Overview\nTop Templates\nRatings\nRecent\nTrends\nBack" | 
+    local cmd=$(echo -e "Overview\nTop Templates\nRatings\nRecent\nTrends\nOutput Capture\nBack" | 
         fzf --prompt="Analytics > " --preview="")
     
     case "$cmd" in
@@ -229,6 +229,10 @@ analytics_menu() {
         Trends)
             export VAULT_DIR
             "$SCRIPT_DIR/pv-analytics" trends | less
+            ;;
+        "Output Capture")
+            export VAULT_DIR
+            "$SCRIPT_DIR/pv-analytics" outputs 20 | less
             ;;
         Back) main_menu && return ;;
     esac

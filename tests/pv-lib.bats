@@ -56,7 +56,7 @@ line2")
 
 @test "pv-lib: sql_escape handles backslashes" {
     result=$(sql_escape "path\\to\\file")
-    [[ "$result" == *"\\\\\\\\"* ]]  # Double backslashes
+    [[ "$result" == "path\\\\to\\\\file" ]]
 }
 
 @test "pv-lib: sql_escape handles backslash-quote sequences" {
@@ -66,9 +66,8 @@ line2")
 }
 
 @test "pv-lib: sql_escape removes null bytes" {
-    result=$(sql_escape $'line1\x00line2')
-    [[ "$result" == *"line1line2"* ]]
-    [[ "$result" != *$'\x00'* ]]
+    result=$(printf 'line1\0line2' | sql_escape)
+    [[ "$result" == "line1line2" ]]
 }
 
 @test "pv-lib: sql_escape handles commas" {
@@ -85,7 +84,8 @@ line2")
 @test "pv-lib: sql_escape handles mixed adversarial content" {
     result=$(sql_escape "it's a\\test, with 'quotes', \\backslashes\\, and commas")
     [[ "$result" == *"''"* ]]      # Escaped quotes
-    [[ "$result" == *'\\\\'* ]]    # Escaped backslashes
+    [[ "$result" == *"a\\\\test"* ]]
+    [[ "$result" == *"\\\\backslashes\\\\"* ]]
     [[ "$result" == *","* ]]       # Commas preserved
 }
 
@@ -100,6 +100,22 @@ line2")
     encoded=$(sql_escape_base64 "$original")
     decoded=$(sql_decode_base64 "$encoded")
     [[ "$decoded" == "$original" ]]
+}
+
+@test "pv-lib: require_numeric rejects non-numeric values" {
+    run require_numeric "12x" "limit"
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"limit must be a non-negative integer"* ]]
+}
+
+@test "pv-lib: terminal_safe_preview strips ansi sequences" {
+    result=$(printf 'hello \033[31mRED\033[0m world' | terminal_safe_preview 120)
+    [[ "$result" == "hello RED world" ]]
+}
+
+@test "pv-lib: terminal_safe_preview strips osc hyperlinks and tabs" {
+    result=$(printf 'hello \033]8;;https://example.com\aLINK\033]8;;\a\tworld' | terminal_safe_preview 120)
+    [[ "$result" == "hello LINK world" ]]
 }
 
 @test "pv-lib: ensure_vault fails when vault missing" {

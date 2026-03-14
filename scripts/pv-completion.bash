@@ -56,7 +56,7 @@ _pv() {
             ;;
 
         analytics)
-            local analytics_cmds="overview top-templates ratings issues trends template skill recent compare export"
+            local analytics_cmds="overview top-templates ratings issues trends outputs template skill recent compare export"
             COMPREPLY=($(compgen -W "$analytics_cmds" -- "$cur"))
             return
             ;;

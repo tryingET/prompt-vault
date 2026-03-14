@@ -116,6 +116,8 @@ test_cli_commands() {
         "lint --help"
         "backup list"
         "analytics overview"
+        "analytics outputs"
+        "quality check"
         "quality low 100"
     )
     
