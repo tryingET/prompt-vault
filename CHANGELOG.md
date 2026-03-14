@@ -17,9 +17,14 @@ All notable changes to prompt-vault are documented here.
 
 - `docs/dev/fzf-spike-slice0.md` with cross-context fzf viability evidence for ADR-0001.
 - `docs/dev/slice4-validation-matrix.md` with mixed-session smoke and failure-mode evidence.
+- `pv analytics outputs` for privacy-safe output-capture analytics: aggregate private/public coverage, per-entity capture counts, and public-only preview rows.
+- `tests/pv-analytics.bats` covering output-capture analytics behavior and private-output non-leakage.
 
 ### Changed
 
+- `pv analytics` and `pv quality` are now fail-closed on bad subcommands / injected names, use shared escaping helpers, and no longer silently degrade scoring when `bc` is missing.
+- Public output previews are now terminal-safe as well as privacy-safe: ANSI/control escape sequences are stripped before rendering.
+- `pv analytics overview`, `pv analytics recent`, `pv analytics template`, and analytics export surfaces now account for execution capture metadata without exposing private `output_text`.
 - Prompt-vault-side client boundary docs were normalized to the current schema-v9 contract (commands, diagnostics, execution-bound rating, and trigger-surface wording).
 - Historical validation and relocation notes were marked more explicitly as historical where they still reference pre-monorepo or pre-v9 integration phases.
 - Canonical `prompt-vault-db` recovered from `~/programming/archive/prompt-vault-db` after reinit drift (50 active templates restored).

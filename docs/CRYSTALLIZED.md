@@ -45,6 +45,12 @@ Knowledge extracted from development and review sessions.
 - **Apply when:** Querying Dolt from code that consumes the output
 - **Lesson:** "Simple CSV parse" is never simple enough for production data
 
+### Fail-Closed Analytics and Quality Surfaces
+- **Pattern:** Analytics/quality commands should reject bad subcommands, reject injected names, and share one escaping/sanitization layer
+- **Why:** A green script that silently returns usage or broadens a query is worse than a loud failure
+- **Apply when:** CLI surfaces feed operator trust, dashboards, or release decisions
+- **Implementation:** shared `pv-lib.sh` helpers for SQL escaping, numeric validation, typed identity, and terminal-safe preview rendering
+
 ### Schema Versioning from Day One
 - **Pattern:** `schema_version` table tracking applied migrations
 - **Why:** Without it, schema changes become uncoordinated disasters
@@ -70,6 +76,12 @@ Knowledge extracted from development and review sessions.
 - **Why it was wrong:** Hides real problems, makes debugging impossible
 - **The fix:** Log errors, return meaningful exit codes, fail visibly
 - **General lesson:** Silent failures compound into mysterious bugs
+
+### Process Success Without Semantic Success
+- **What looked right:** health checks returned `0` and printed help text, so verification looked green
+- **Why it was wrong:** a nonexistent or wrong subcommand can pass CI while doing no real validation
+- **The fix:** assert contract-bearing output, fail non-zero on unknown commands, and test negative paths explicitly
+- **General lesson:** if a health check can pass against the wrong behavior, it is not a health check
 
 ### Hardcoded Paths
 - **What looked right:** `VAULT_DIR = "/home/user/..."` - works on my machine

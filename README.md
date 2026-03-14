@@ -58,7 +58,7 @@ cd scripts
 ./pv diff main experiment/faster-review # Compare
 ./pv merge experiment/faster-review    # Ship it
 
-./pv exec template code-review "Button.tsx"  # Run with tracking
+./pv exec code-review "Button.tsx"  # Run with tracking
 ./pv rate 42 4 "Good but missed error handling"  # Leave feedback
 ./pv stats       # See what's working
 ```
@@ -139,8 +139,9 @@ skills ──► skill_assets
 **Analytics:**
 ```bash
 ./pv stats                  # Usage overview
+./pv analytics outputs      # Safe output-capture summary + public previews only
 ./pv quality dashboard      # Health scores
-./pv exec template x "arg"  # Run with tracking
+./pv exec x "arg"           # Run with tracking
 ./pv rate <id> 4 "notes"    # Record feedback
 ```
 

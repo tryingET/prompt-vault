@@ -6,15 +6,15 @@ read_when:
 
 # Status
 
-**Last Updated:** 2026-03-10
+**Last Updated:** 2026-03-14
 
 ## Health
 
 | Metric | Status |
 |--------|--------|
-| Verification | ✅ 39/39 checks pass |
-| Templates | 73 total (31 cognitive, 42 procedure) |
-| Controlled vocabulary | 3 governed routers |
+| Verification | ✅ 40/40 checks pass |
+| Templates | 82 total (81 active; 32 cognitive, 49 procedure) |
+| Controlled vocabulary | 4 active controlled-vocabulary templates |
 | Company visibility boundary | 7 governed companies |
 | Schema Version | 9 |
 | Extension | ✅ current monorepo vault-client package + diagnostics/query/mutation/execution tools |
@@ -22,6 +22,8 @@ read_when:
 
 ## Recent Changes
 
+- **Analytics + quality hardening landed** — `pv analytics` / `pv quality` now fail closed on bad subcommands and injected names, quality scoring no longer depends on external `bc`, overview uses typed entity identity, and public previews strip ANSI/control escapes before rendering.
+- **Safe output-capture analytics landed** — `pv analytics outputs` now summarizes capture coverage by entity, `pv analytics recent` includes capture mode + output length, `pv analytics template <name>` shows capture evidence, and only explicitly public captures render text previews.
 - **Execution output capture added in schema v9** — `executions` now records `output_capture_mode` (`none`/`private`/`public`) plus optional `output_text`, and `pv-exec` supports `--output-file` / `--output-text` with privacy-defaulted capture and explicit public opt-in.
 - **Feedback uniqueness preserved into schema v9** — `feedback.execution_id` remains unique at the DB layer, and downstream clients should continue to bind ratings to exact execution rows.
 - **Vault-client schema-v9 alignment complete** — the canonical client now expects schema `9`, understands execution output capture columns, and exposes detailed diagnostics rather than only a boolean startup gate.

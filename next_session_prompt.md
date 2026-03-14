@@ -1,5 +1,5 @@
 ---
-summary: "Prompt Vault is now on schema v9 with governed facets, controlled vocabulary, company visibility, feedback uniqueness, and execution output capture; next session should focus on analytics surfaces, remaining downstream doc alignment, and any still-stale boundary guidance rather than replaying old cutover work."
+summary: "Prompt Vault is now on schema v9 with governed facets, controlled vocabulary, company visibility, feedback uniqueness, execution output capture, and a first privacy-safe analytics surface; next session should focus on richer quality surfaces, remaining downstream doc alignment, and any still-stale boundary guidance rather than replaying old cutover work."
 read_when:
   - "Starting the next session in prompt-vault"
   - "Before choosing the next post-cutover implementation slice"
@@ -36,6 +36,12 @@ Prompt Vault has moved well beyond the old v2 cutover note:
   - `output_capture_mode` = `none | private | public`
   - `output_text` is nullable and populated only when capture is explicitly requested
 - free-form prompt tags are no longer part of the canonical prompt model
+- the first privacy-safe output analytics surface is live and hardened:
+  - `./scripts/pv analytics outputs`
+  - private captures are aggregated-only
+  - only explicitly public captures render previews
+  - previews strip ANSI/control escapes before rendering
+  - analytics/quality name paths now fail closed on injected names or bad subcommands
 - the 3 seeded router prompts exist and are active in the DB:
   - `analysis-router`
   - `post-review-router`
@@ -54,9 +60,9 @@ Prompt Vault has moved well beyond the old v2 cutover note:
 - do **not** resume vault-client product work from stale standalone or live-copy locations
 
 ## Current goal
-Focus the next session on the next truthful product slice after execution capture landed:
-1. verify downstream docs/clients reflect schema v9 execution capture semantics
-2. build the first analytics/quality surfaces that responsibly use captured execution outputs
+Focus the next session on the next truthful product slice after the first safe analytics surface landed:
+1. verify downstream docs/clients still reflect schema v9 execution capture semantics consistently
+2. build richer quality surfaces on top of capture metadata without weakening privacy defaults
 3. keep ontology/contracts distinct from prompt seed content
 4. finish remaining extension rate limiting work and validation updates
 
@@ -85,12 +91,12 @@ Prompt Vault should remain the prompt-body / authoring substrate in that design,
 ## Recommended work order
 1. Confirm that no repo guidance/tooling still assumes markdown prompt fixtures are the source of truth for seeded router content.
 2. Clean up any remaining stale guidance that still describes the pre-v8 state.
-3. Design the smallest safe slice for execution output capture:
-   - decide where output is stored
-   - add a privacy flag / opt-out boundary
-   - keep capture policy explicit and auditable
-4. Update schema/scripts/tests only as needed for that slice.
-5. Update docs/status/handoff in the same pass.
+3. Extend the new analytics/quality layer using capture metadata only where privacy posture stays explicit:
+   - prefer aggregate counts and coverage metrics for private captures
+   - render text previews only for explicitly public captures
+   - avoid broad dashboarding that normalizes raw output exposure
+4. Update scripts/tests/docs only as needed for that slice.
+5. Update status/handoff in the same pass.
 
 ## Practical warnings
 - The main failure mode is resuming from stale handoff text instead of current repo reality.
@@ -119,11 +125,11 @@ If the next slice changes execution capture, add focused tests for privacy/contr
 ## Explicit deferrals
 - No ROCS-backed contract compiler in this pass.
 - No rollback to legacy `type` or tag semantics.
-- No broad analytics/dashboard push before execution output capture semantics are settled.
+- No broad raw-output dashboard push that normalizes exposing captured text beyond the explicit public-preview boundary.
 - No moving vault-client implementation work back into Prompt Vault beyond boundary-document updates.
 
 ## Canonical next slice after this one
-Once guidance drift is cleaned up and execution output capture/privacy control is in place, move on to richer analytics/quality surfaces that use the new execution data responsibly.
+Once guidance drift is cleaned up and the first privacy-safe analytics surface is stable, move on to richer quality reporting and any remaining extension rate-limiting follow-through without broadening raw output exposure.
 
 ## First concrete next action
-Open `docs/dev/status.md` and downstream client/docs boundary notes, confirm schema v9 execution capture semantics are represented consistently, then scope the smallest analytics surface that consumes captured outputs without weakening privacy defaults.
+Open `docs/dev/status.md` and downstream client/docs boundary notes, confirm schema v9 execution capture semantics are still represented consistently, then scope the next quality surface that builds on capture counts/modes before considering any broader dashboard work.

@@ -19,7 +19,7 @@ Every prompt improvement should be measured. The protocol:
 
 ```bash
 # 1. Baseline
-./pv exec template review Button.tsx
+./pv exec review Button.tsx
 ./pv rate <id> 3 "Baseline"
 
 # 2. Create variant
@@ -29,16 +29,15 @@ Every prompt improvement should be measured. The protocol:
 ./pv commit "Add security focus"
 
 # 3. Run variant
-./pv checkout experiment/add-security-check
-./pv exec template review Button.tsx
+dolt checkout experiment/add-security-check
+./pv exec review Button.tsx
 ./pv rate <id> 4 "Caught XSS issue"
 
 # 4. Compare
+dolt checkout main
 ./pv diff main experiment/add-security-check
-./pv stats --branch experiment/add-security-check
 
 # 5. Ship or abandon
-./pv checkout main
 ./pv merge experiment/add-security-check  # or delete branch
 ```
 
@@ -50,8 +49,8 @@ Every prompt improvement should be measured. The protocol:
 
 ```bash
 # On DoltHub, create: your-org/prompt-vault
-./pv remote add origin your-org/prompt-vault
-./pv push -u origin main
+dolt remote add origin your-org/prompt-vault
+./pv push origin
 ```
 
 ### Branch Discipline
@@ -151,6 +150,21 @@ SELECT 'Low-rated prompts', COUNT(DISTINCT e.entity_id)
   WHERE f.rating < 3 AND DATE(f.created_at) = CURDATE()
 " -r table
 ```
+
+### Safe Output-Capture Analytics
+
+```bash
+# Aggregate private+public capture coverage without leaking private text
+./pv analytics outputs
+
+# Per-template evidence summary plus public previews only
+./pv analytics template analysis-router
+```
+
+Rules:
+- private captures stay aggregated-only in analytics surfaces
+- public previews render only for rows explicitly captured as `public`
+- export/report surfaces should use `output_capture_mode` + `output_chars`, not raw private `output_text`
 
 ### Execution Wrapper
 
