@@ -886,7 +886,9 @@ Examples:
   pv templates cv.routing_context=review_followup
   pv search review                 # Search for "review"
   pv vars                          # Show all template variables
-  pv quality dashboard             # View quality scores
+  pv quality dashboard             # View quality scores + evidence gaps
+  pv quality coverage              # Show feedback/capture coverage by entity
+  pv quality rollup control_mode   # Aggregate quality/evidence by facet
   pv analytics outputs             # Safe output-capture analytics (public previews only)
   pv exec review src/foo.ts --output-file /tmp/llm-output.txt --public-output
   pv scaffold template my-review   # Generate template scaffold

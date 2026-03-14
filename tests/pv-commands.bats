@@ -52,3 +52,15 @@ setup() {
     [ "$status" -eq 0 ]
     [[ "$output" == *"Quality checks passed"* ]]
 }
+
+@test "pv quality coverage runs" {
+    run "$SCRIPTS_DIR/pv" quality coverage 5
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"Evidence Coverage by Active Entity"* ]]
+}
+
+@test "pv quality rollup runs" {
+    run "$SCRIPTS_DIR/pv" quality rollup control_mode
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"Quality Rollup by control_mode"* ]]
+}

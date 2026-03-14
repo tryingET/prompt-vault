@@ -19,6 +19,8 @@ Usage: pv-quality <command> [args]
 Commands:
   dashboard              Show quality dashboard
   check                  Run fail-closed quality health checks
+  coverage [limit]       Show evidence coverage by active entity (default: 25)
+  rollup [dimension]     Aggregate quality/evidence by template facet (default: control_mode)
   template <name>        Show template quality breakdown
   skill <name>           Show skill quality breakdown
   report [output]        Generate markdown quality report
@@ -27,6 +29,13 @@ Commands:
 Scoring:
   Templates: Description (0-20), Content (0-15), Usage (0-25), Ratings (0-40)
   Skills: Description (0-20), README (0-20), License (0-10), Usage (0-25), Ratings (0-25)
+
+Coverage:
+  Feedback/capture percentages use execution count as the denominator.
+  Private captures stay aggregated-only; no raw output text is rendered.
+
+Rollup dimensions:
+  artifact_kind | control_mode | formalization_level | owner_company
 
 Grades:
   A: 90+, B: 80-89, C: 70-79, D: 60-69, F: <60
@@ -65,6 +74,234 @@ require_active_skill() {
     printf '%s' "$escaped_name"
 }
 
+run_query() {
+    dolt sql -q "$1" -r tabular
+}
+
+coverage_union_sql() {
+    cat <<'EOF'
+SELECT * FROM (
+    SELECT
+        'template' as entity_type,
+        t.name as name,
+        COUNT(e.id) as executions,
+        COUNT(f.id) as feedback_rows,
+        ROUND(COUNT(f.id) * 100.0 / NULLIF(COUNT(e.id), 0), 1) as feedback_rate_pct,
+        SUM(CASE WHEN e.output_text IS NOT NULL THEN 1 ELSE 0 END) as captured_executions,
+        ROUND(
+            SUM(CASE WHEN e.output_text IS NOT NULL THEN 1 ELSE 0 END) * 100.0 / NULLIF(COUNT(e.id), 0),
+            1
+        ) as capture_rate_pct,
+        SUM(CASE WHEN e.output_capture_mode = 'private' AND e.output_text IS NOT NULL THEN 1 ELSE 0 END) as private_captures,
+        SUM(CASE WHEN e.output_capture_mode = 'public' AND e.output_text IS NOT NULL THEN 1 ELSE 0 END) as public_captures,
+        MAX(e.created_at) as last_execution_at,
+        MAX(CASE WHEN f.id IS NOT NULL THEN e.created_at ELSE NULL END) as last_feedback_at,
+        MAX(CASE WHEN e.output_text IS NOT NULL THEN e.created_at ELSE NULL END) as last_capture_at
+    FROM prompt_templates t
+    LEFT JOIN executions e ON e.entity_type = 'template' AND e.entity_id = t.id
+    LEFT JOIN feedback f ON f.execution_id = e.id
+    WHERE t.status = 'active'
+    GROUP BY t.id, t.name
+
+    UNION ALL
+
+    SELECT
+        'skill' as entity_type,
+        s.name as name,
+        COUNT(e.id) as executions,
+        COUNT(f.id) as feedback_rows,
+        ROUND(COUNT(f.id) * 100.0 / NULLIF(COUNT(e.id), 0), 1) as feedback_rate_pct,
+        SUM(CASE WHEN e.output_text IS NOT NULL THEN 1 ELSE 0 END) as captured_executions,
+        ROUND(
+            SUM(CASE WHEN e.output_text IS NOT NULL THEN 1 ELSE 0 END) * 100.0 / NULLIF(COUNT(e.id), 0),
+            1
+        ) as capture_rate_pct,
+        SUM(CASE WHEN e.output_capture_mode = 'private' AND e.output_text IS NOT NULL THEN 1 ELSE 0 END) as private_captures,
+        SUM(CASE WHEN e.output_capture_mode = 'public' AND e.output_text IS NOT NULL THEN 1 ELSE 0 END) as public_captures,
+        MAX(e.created_at) as last_execution_at,
+        MAX(CASE WHEN f.id IS NOT NULL THEN e.created_at ELSE NULL END) as last_feedback_at,
+        MAX(CASE WHEN e.output_text IS NOT NULL THEN e.created_at ELSE NULL END) as last_capture_at
+    FROM skills s
+    LEFT JOIN executions e ON e.entity_type = 'skill' AND e.entity_id = s.id
+    LEFT JOIN feedback f ON f.execution_id = e.id
+    WHERE s.status = 'active'
+    GROUP BY s.id, s.name
+) coverage
+EOF
+}
+
+coverage_table_sql() {
+    local limit="$1"
+    cat <<EOF
+$(coverage_union_sql)
+ORDER BY
+    CASE WHEN executions > 0 THEN 0 ELSE 1 END,
+    COALESCE(feedback_rate_pct, -1) ASC,
+    COALESCE(capture_rate_pct, -1) ASC,
+    executions DESC,
+    entity_type,
+    name
+LIMIT $limit
+EOF
+}
+
+coverage_gaps_sql() {
+    local limit="$1"
+    cat <<EOF
+$(coverage_union_sql)
+WHERE executions > 0
+  AND (
+        feedback_rows = 0
+     OR captured_executions = 0
+     OR COALESCE(feedback_rate_pct, 0) < 50
+     OR COALESCE(capture_rate_pct, 0) < 50
+  )
+ORDER BY
+    CASE
+        WHEN feedback_rows = 0 AND captured_executions = 0 THEN 0
+        WHEN captured_executions = 0 THEN 1
+        WHEN feedback_rows = 0 THEN 2
+        ELSE 3
+    END,
+    COALESCE(feedback_rate_pct, 0) ASC,
+    COALESCE(capture_rate_pct, 0) ASC,
+    executions DESC,
+    entity_type,
+    name
+LIMIT $limit
+EOF
+}
+
+entity_coverage_sql() {
+    local entity_type="$1"
+    local escaped_name="$2"
+    local table
+    local alias
+
+    case "$entity_type" in
+        template)
+            table="prompt_templates"
+            alias="t"
+            ;;
+        skill)
+            table="skills"
+            alias="s"
+            ;;
+        *)
+            error "Unknown entity type for coverage: $entity_type" >&2
+            exit 1
+            ;;
+    esac
+
+    cat <<EOF
+SELECT
+    COUNT(e.id) as executions,
+    COUNT(f.id) as feedback_rows,
+    ROUND(COUNT(f.id) * 100.0 / NULLIF(COUNT(e.id), 0), 1) as feedback_rate_pct,
+    SUM(CASE WHEN e.output_text IS NOT NULL THEN 1 ELSE 0 END) as captured_executions,
+    ROUND(
+        SUM(CASE WHEN e.output_text IS NOT NULL THEN 1 ELSE 0 END) * 100.0 / NULLIF(COUNT(e.id), 0),
+        1
+    ) as capture_rate_pct,
+    SUM(CASE WHEN e.output_capture_mode = 'private' AND e.output_text IS NOT NULL THEN 1 ELSE 0 END) as private_captures,
+    SUM(CASE WHEN e.output_capture_mode = 'public' AND e.output_text IS NOT NULL THEN 1 ELSE 0 END) as public_captures,
+    ROUND(AVG(CASE WHEN e.output_text IS NOT NULL THEN CHAR_LENGTH(e.output_text) END)) as avg_captured_chars,
+    MAX(e.created_at) as last_execution_at,
+    MAX(CASE WHEN f.id IS NOT NULL THEN e.created_at ELSE NULL END) as last_feedback_at,
+    MAX(CASE WHEN e.output_text IS NOT NULL THEN e.created_at ELSE NULL END) as last_capture_at
+FROM $table $alias
+LEFT JOIN executions e ON e.entity_type = '$entity_type' AND e.entity_id = $alias.id
+LEFT JOIN feedback f ON f.execution_id = e.id
+WHERE $alias.name = '$escaped_name' AND $alias.status = 'active'
+EOF
+}
+
+normalize_rollup_dimension() {
+    local dimension="${1:-control_mode}"
+
+    case "$dimension" in
+        artifact_kind|control_mode|formalization_level|owner_company)
+            printf '%s' "$dimension"
+            ;;
+        *)
+            error "Unsupported rollup dimension: $dimension" >&2
+            error "Allowed dimensions: artifact_kind, control_mode, formalization_level, owner_company" >&2
+            exit 1
+            ;;
+    esac
+}
+
+quality_rollup_sql() {
+    local dimension="$1"
+
+    cat <<EOF
+SELECT
+    t.$dimension as bucket,
+    COUNT(*) as entities,
+    SUM(CASE WHEN COALESCE(es.executions, 0) > 0 THEN 1 ELSE 0 END) as entities_with_executions,
+    SUM(COALESCE(es.executions, 0)) as executions,
+    SUM(COALESCE(es.feedback_rows, 0)) as feedback_rows,
+    ROUND(
+        SUM(COALESCE(es.feedback_rows, 0)) * 100.0 / NULLIF(SUM(COALESCE(es.executions, 0)), 0),
+        1
+    ) as feedback_rate_pct,
+    SUM(COALESCE(es.captured_executions, 0)) as captured_executions,
+    ROUND(
+        SUM(COALESCE(es.captured_executions, 0)) * 100.0 / NULLIF(SUM(COALESCE(es.executions, 0)), 0),
+        1
+    ) as capture_rate_pct,
+    SUM(COALESCE(es.private_captures, 0)) as private_captures,
+    SUM(COALESCE(es.public_captures, 0)) as public_captures,
+    ROUND(AVG(es.avg_rating), 2) as avg_rating,
+    ROUND(AVG(
+        (CASE
+            WHEN CHAR_LENGTH(COALESCE(t.description, '')) BETWEEN 50 AND 150 THEN 20
+            WHEN CHAR_LENGTH(COALESCE(t.description, '')) >= 20 THEN 10
+            ELSE 0
+         END)
+      + (CASE
+            WHEN CHAR_LENGTH(COALESCE(t.content, '')) >= 100 THEN 15
+            WHEN CHAR_LENGTH(COALESCE(t.content, '')) >= 50 THEN 10
+            WHEN CHAR_LENGTH(COALESCE(t.content, '')) >= 20 THEN 5
+            ELSE 0
+         END)
+      + (CASE
+            WHEN COALESCE(es.executions, 0) >= 10 THEN 25
+            WHEN COALESCE(es.executions, 0) >= 5 THEN 15
+            WHEN COALESCE(es.executions, 0) >= 1 THEN 5
+            ELSE 0
+         END)
+      + (CASE
+            WHEN COALESCE(es.avg_rating, 0) > 4 THEN 40
+            WHEN COALESCE(es.avg_rating, 0) > 3 THEN 30
+            WHEN COALESCE(es.avg_rating, 0) > 2 THEN 20
+            WHEN COALESCE(es.avg_rating, 0) > 0 THEN 10
+            ELSE 0
+         END)
+    ), 1) as avg_quality_score,
+    MAX(es.last_execution_at) as last_execution_at
+FROM prompt_templates t
+LEFT JOIN (
+    SELECT
+        e.entity_id,
+        COUNT(*) as executions,
+        COUNT(f.id) as feedback_rows,
+        SUM(CASE WHEN e.output_text IS NOT NULL THEN 1 ELSE 0 END) as captured_executions,
+        SUM(CASE WHEN e.output_capture_mode = 'private' AND e.output_text IS NOT NULL THEN 1 ELSE 0 END) as private_captures,
+        SUM(CASE WHEN e.output_capture_mode = 'public' AND e.output_text IS NOT NULL THEN 1 ELSE 0 END) as public_captures,
+        AVG(f.rating) as avg_rating,
+        MAX(e.created_at) as last_execution_at
+    FROM executions e
+    LEFT JOIN feedback f ON f.execution_id = e.id
+    WHERE e.entity_type = 'template'
+    GROUP BY e.entity_id
+) es ON es.entity_id = t.id
+WHERE t.status = 'active'
+GROUP BY t.$dimension
+ORDER BY executions DESC, entities DESC, bucket
+EOF
+}
+
 calculate_template_score() {
     local name="$1"
     local escaped_name
@@ -77,7 +314,7 @@ calculate_template_score() {
 
     escaped_name=$(sql_escape "$name")
     data=$(dolt sql -r json -q "
-        SELECT 
+        SELECT
             CHAR_LENGTH(content) as content_len,
             CHAR_LENGTH(description) as desc_len,
             (SELECT COUNT(*) FROM executions e WHERE e.entity_type = 'template' AND e.entity_id = t.id) as executions,
@@ -142,7 +379,7 @@ calculate_skill_score() {
 
     escaped_name=$(sql_escape "$name")
     data=$(dolt sql -r json -q "
-        SELECT 
+        SELECT
             CHAR_LENGTH(readme) as readme_len,
             CHAR_LENGTH(description) as desc_len,
             license,
@@ -224,6 +461,11 @@ case "$cmd" in
         printf "  Feedback rate:%4s%%\n" "${feedback_rate:-0.0}"
         echo ""
 
+        echo "Entities Needing More Evidence"
+        echo "─────────────────────────────────────"
+        run_query "$(coverage_gaps_sql 10)"
+        echo ""
+
         echo "Template Quality Scores"
         echo "─────────────────────────────────────"
         printf "%-25s %6s %6s\n" "NAME" "SCORE" "GRADE"
@@ -258,6 +500,7 @@ case "$cmd" in
         skill_count=$(dolt sql -r csv -q "SELECT COUNT(*) FROM skills WHERE status = 'active'" | tail -1)
         execution_count=$(dolt sql -r csv -q "SELECT COUNT(*) FROM executions" | tail -1)
         first_template=$(dolt sql -r csv -q "SELECT name FROM prompt_templates WHERE status = 'active' ORDER BY name LIMIT 1" | tail -1)
+        coverage_sample=$(dolt sql -r csv -q "$(coverage_table_sql 1)" | tail -n +2 | head -n 1 || true)
 
         if [ -n "$first_template" ]; then
             sample_score=$(calculate_template_score "$first_template")
@@ -267,11 +510,33 @@ case "$cmd" in
             }
         fi
 
+        if [ -z "$coverage_sample" ] && { [ "${template_count:-0}" -gt 0 ] || [ "${skill_count:-0}" -gt 0 ]; }; then
+            error "Evidence coverage query returned no rows"
+            exit 1
+        fi
+
         echo "Quality checks passed"
         echo "  Active templates: ${template_count:-0}"
         echo "  Active skills: ${skill_count:-0}"
         echo "  Executions: ${execution_count:-0}"
         [ -n "$first_template" ] && echo "  Sample score: $first_template -> $sample_score"
+        ;;
+
+    coverage)
+        limit="${1:-25}"
+        require_numeric "$limit" "limit"
+        echo "=== Evidence Coverage by Active Entity ==="
+        echo "Feedback/capture percentages use execution count as the denominator. No raw output text is rendered here."
+        echo ""
+        run_query "$(coverage_table_sql "$limit")"
+        ;;
+
+    rollup)
+        dimension=$(normalize_rollup_dimension "${1:-control_mode}")
+        echo "=== Quality Rollup by $dimension ==="
+        echo "Aggregate-only report across active templates. Private captures remain summarized only."
+        echo ""
+        run_query "$(quality_rollup_sql "$dimension")"
         ;;
 
     template)
@@ -288,35 +553,24 @@ case "$cmd" in
         echo "Grade: $grade"
         echo ""
 
-        dolt sql -q "
-            SELECT 
+        run_query "
+            SELECT
                 CHAR_LENGTH(content) as content_chars,
                 CHAR_LENGTH(description) as desc_chars,
                 (SELECT COUNT(*) FROM executions e WHERE e.entity_type = 'template' AND e.entity_id = t.id) as uses,
                 (SELECT ROUND(AVG(rating), 2) FROM executions e JOIN feedback f ON f.execution_id = e.id WHERE e.entity_type = 'template' AND e.entity_id = t.id) as avg_rating
             FROM prompt_templates t
             WHERE name = '$escaped_name' AND status = 'active'
-        " -r tabular
+        "
         echo ""
         echo "Evidence Coverage"
-        dolt sql -q "
-            SELECT
-                COUNT(e.id) as executions,
-                COUNT(f.id) as feedback_rows,
-                SUM(CASE WHEN e.output_text IS NOT NULL THEN 1 ELSE 0 END) as captured_executions,
-                SUM(CASE WHEN e.output_capture_mode = 'private' AND e.output_text IS NOT NULL THEN 1 ELSE 0 END) as private_captures,
-                SUM(CASE WHEN e.output_capture_mode = 'public' AND e.output_text IS NOT NULL THEN 1 ELSE 0 END) as public_captures
-            FROM prompt_templates t
-            LEFT JOIN executions e ON e.entity_type = 'template' AND e.entity_id = t.id
-            LEFT JOIN feedback f ON f.execution_id = e.id
-            WHERE t.name = '$escaped_name' AND t.status = 'active'
-        " -r tabular
+        run_query "$(entity_coverage_sql template "$escaped_name")"
         ;;
 
     skill)
         name="${1:-}"
         [ -z "$name" ] && { error "Usage: pv-quality skill <name>"; exit 1; }
-        require_active_skill "$name" >/dev/null
+        escaped_name=$(require_active_skill "$name")
 
         score=$(calculate_skill_score "$name")
         grade=$(get_grade "$score")
@@ -325,12 +579,51 @@ case "$cmd" in
         echo ""
         echo "Score: $score/100"
         echo "Grade: $grade"
+        echo ""
+
+        run_query "
+            SELECT
+                CHAR_LENGTH(readme) as readme_chars,
+                CHAR_LENGTH(description) as desc_chars,
+                license,
+                (SELECT COUNT(*) FROM executions e WHERE e.entity_type = 'skill' AND e.entity_id = s.id) as uses,
+                (SELECT ROUND(AVG(rating), 2) FROM executions e JOIN feedback f ON f.execution_id = e.id WHERE e.entity_type = 'skill' AND e.entity_id = s.id) as avg_rating
+            FROM skills s
+            WHERE name = '$escaped_name' AND status = 'active'
+        "
+        echo ""
+        echo "Evidence Coverage"
+        run_query "$(entity_coverage_sql skill "$escaped_name")"
         ;;
 
     report)
         output="${1:-quality-report.md}"
 
         echo "Generating quality report..."
+
+        capture_summary_json=$(dolt sql -r json -q "
+            SELECT
+                COUNT(*) as total_executions,
+                COUNT(f.id) as feedback_rows,
+                ROUND(COUNT(f.id) * 100.0 / NULLIF(COUNT(*), 0), 1) as feedback_rate_pct,
+                SUM(CASE WHEN e.output_text IS NOT NULL THEN 1 ELSE 0 END) as captured_executions,
+                ROUND(
+                    SUM(CASE WHEN e.output_text IS NOT NULL THEN 1 ELSE 0 END) * 100.0 / NULLIF(COUNT(*), 0),
+                    1
+                ) as capture_rate_pct,
+                SUM(CASE WHEN e.output_capture_mode = 'private' AND e.output_text IS NOT NULL THEN 1 ELSE 0 END) as private_captures,
+                SUM(CASE WHEN e.output_capture_mode = 'public' AND e.output_text IS NOT NULL THEN 1 ELSE 0 END) as public_captures
+            FROM executions e
+            LEFT JOIN feedback f ON f.execution_id = e.id
+        ")
+        coverage_gaps_json=$(dolt sql -r json -q "$(coverage_gaps_sql 15)")
+        report_templates=$(dolt sql -r csv -q "SELECT COUNT(*) FROM prompt_templates WHERE status = 'active'" | tail -1)
+        report_skills=$(dolt sql -r csv -q "SELECT COUNT(*) FROM skills WHERE status = 'active'" | tail -1)
+        report_executions=$(dolt sql -r csv -q "SELECT COUNT(*) FROM executions" | tail -1)
+        report_feedback_rate=$(echo "$capture_summary_json" | jq -r '.rows[0].feedback_rate_pct // 0')
+        report_capture_rate=$(echo "$capture_summary_json" | jq -r '.rows[0].capture_rate_pct // 0')
+        report_private_captures=$(echo "$capture_summary_json" | jq -r '.rows[0].private_captures // 0')
+        report_public_captures=$(echo "$capture_summary_json" | jq -r '.rows[0].public_captures // 0')
 
         {
             echo "# Prompt Vault Quality Report"
@@ -339,9 +632,22 @@ case "$cmd" in
             echo ""
             echo "## Summary"
             echo ""
-            echo "- Templates: $(dolt sql -r csv -q "SELECT COUNT(*) FROM prompt_templates WHERE status = 'active'" | tail -1)"
-            echo "- Skills: $(dolt sql -r csv -q "SELECT COUNT(*) FROM skills WHERE status = 'active'" | tail -1)"
-            echo "- Executions: $(dolt sql -r csv -q "SELECT COUNT(*) FROM executions" | tail -1)"
+            echo "- Templates: $report_templates"
+            echo "- Skills: $report_skills"
+            echo "- Executions: $report_executions"
+            echo ""
+            echo "## Evidence Coverage"
+            echo ""
+            echo "- Feedback coverage: ${report_feedback_rate}%"
+            echo "- Capture coverage: ${report_capture_rate}%"
+            echo "- Private captures: $report_private_captures"
+            echo "- Public captures: $report_public_captures"
+            echo ""
+            echo "## Evidence Gaps"
+            echo ""
+            echo "| Type | Name | Executions | Feedback % | Capture % | Private | Public |"
+            echo "|------|------|------------|------------|-----------|---------|--------|"
+            echo "$coverage_gaps_json" | jq -r '.rows[] | "| " + .entity_type + " | " + .name + " | " + (.executions|tostring) + " | " + ((.feedback_rate_pct // "n/a")|tostring) + " | " + ((.capture_rate_pct // "n/a")|tostring) + " | " + (.private_captures|tostring) + " | " + (.public_captures|tostring) + " |"'
             echo ""
             echo "## Template Scores"
             echo ""

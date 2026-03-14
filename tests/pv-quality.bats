@@ -34,6 +34,51 @@ teardown() {
     [[ "$output" == *"not found"* ]]
 }
 
+@test "pv-quality coverage summarizes evidence without leaking private output text" {
+    run env VAULT_DIR="$TEST_VAULT_DIR" "$SCRIPTS_DIR/pv-exec" analysis-router "sample context" --output-text "do not leak this private output"
+    [ "$status" -eq 0 ]
+
+    exec_id=$(dolt --data-dir "$TEST_VAULT_DIR" sql -r csv -q "SELECT MAX(id) FROM executions WHERE entity_type = 'template'" | tail -1)
+    [ -n "$exec_id" ]
+
+    run dolt --data-dir "$TEST_VAULT_DIR" sql -q "INSERT INTO feedback (execution_id, rating, notes, issues, would_use_again) VALUES ($exec_id, 4, 'solid', '[]', TRUE)"
+    [ "$status" -eq 0 ]
+
+    run env VAULT_DIR="$TEST_VAULT_DIR" "$SCRIPTS_DIR/pv-quality" coverage 200
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"Evidence Coverage by Active Entity"* ]]
+    [[ "$output" == *"feedback_rate_pct"* ]]
+    [[ "$output" == *"capture_rate_pct"* ]]
+    [[ "$output" == *"private_captures"* ]]
+    [[ "$output" == *"analysis-router"* ]]
+    [[ "$output" != *"do not leak this private output"* ]]
+}
+
+@test "pv-quality rollup aggregates by allowed dimensions without leaking private output text" {
+    run env VAULT_DIR="$TEST_VAULT_DIR" "$SCRIPTS_DIR/pv-exec" analysis-router "sample context" --output-text "never show this private rollup payload"
+    [ "$status" -eq 0 ]
+
+    exec_id=$(dolt --data-dir "$TEST_VAULT_DIR" sql -r csv -q "SELECT MAX(id) FROM executions WHERE entity_type = 'template'" | tail -1)
+    [ -n "$exec_id" ]
+
+    run dolt --data-dir "$TEST_VAULT_DIR" sql -q "INSERT INTO feedback (execution_id, rating, notes, issues, would_use_again) VALUES ($exec_id, 5, 'great', '[]', TRUE)"
+    [ "$status" -eq 0 ]
+
+    run env VAULT_DIR="$TEST_VAULT_DIR" "$SCRIPTS_DIR/pv-quality" rollup control_mode
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"Quality Rollup by control_mode"* ]]
+    [[ "$output" == *"bucket"* ]]
+    [[ "$output" == *"avg_quality_score"* ]]
+    [[ "$output" == *"router"* ]]
+    [[ "$output" != *"never show this private rollup payload"* ]]
+}
+
+@test "pv-quality rollup rejects unsupported dimensions" {
+    run env VAULT_DIR="$TEST_VAULT_DIR" "$SCRIPTS_DIR/pv-quality" rollup "owner_company; DROP TABLE prompt_templates;"
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"Unsupported rollup dimension"* ]]
+}
+
 @test "pv-quality uses rating contribution without external bc dependency" {
     run dolt --data-dir "$TEST_VAULT_DIR" sql -q "
         INSERT INTO prompt_templates (
@@ -78,4 +123,6 @@ teardown() {
     [ "$status" -eq 0 ]
     [[ "$output" == *"Score: 100/100"* ]]
     [[ "$output" == *"Grade: A"* ]]
+    [[ "$output" == *"feedback_rate_pct"* ]]
+    [[ "$output" == *"capture_rate_pct"* ]]
 }
