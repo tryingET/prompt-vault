@@ -16,8 +16,10 @@ A deferral is valid only if it includes:
 - trigger to resume
 - deadline/review date
 - blast radius if missed
+- authority binding (where the deferred item now lives canonically)
 
 If this contract cannot be written, do not defer.
+If the contract can be written but cannot be bound into the canonical authority surface, treat it as incomplete rather than safely deferred.
 
 ## Open Contracts
 

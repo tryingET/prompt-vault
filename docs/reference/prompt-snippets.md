@@ -483,6 +483,7 @@ EXHAUST ALL SURFACED FINDINGS
 - Every bug discovered during analysis must be resolved before declaring done
 - Every debt identified must either be paid or explicitly deferred with rationale
 - Every gap revealed must either be closed or documented as known limitation
+- Every task-shaped deferred item must be bound into the authoritative work queue before completion is declared
 
 DEFER ONLY UNDER HARD CONSTRAINT
 Acceptable deferral reasons:
@@ -502,8 +503,16 @@ Every deferred item must have:
 - Trigger (what event unblocks it)
 - Deadline (when it must be resolved)
 - Blast radius if never resolved (what fails if we forget)
+- Authority binding (where the deferred item now lives canonically)
+
+AUTHORITY BINDING RULE
+- For AI Society repo work, bind deferred items into Agent Kernel when tooling/runtime access is available
+- That means: create the task in the owning repo and apply a first-class AK deferral in the same pass
+- Do not leave the only durable record in prompt output, handoff prose, or ad-hoc JSON sidecars
+- If authority binding is impossible in the current environment, state exactly why and treat it as hard-blocked unless the operator explicitly accepts prose-only capture
 
 The rule: If you can't write the deferral contract, you don't have a deferral—you have an abandoned fix.
+If you can write the contract but cannot bind it into authority, you still do not have a complete deferral—you have a floating note.
 
 OUTPUT FORMAT
 ```
@@ -511,16 +520,16 @@ OUTPUT FORMAT
 - [Finding] → [Fix applied]
 
 ## Deferred With Contract
-- [Finding] → [Rationale] → [Owner] → [Trigger] → [Deadline] → [Blast radius if forgotten]
+- [Finding] → [Rationale] → [Owner] → [Trigger] → [Deadline] → [Blast radius if forgotten] → [Authority binding]
 
 ## Hard-Blocked (cannot proceed)
 - [Finding] → [Blocker] → [Unblock path]
 ```
 
-The standard: A pass is complete when everything surfaced is either fixed or contracted. No loose ends. No "I'll come back to this."
+The standard: A pass is complete when everything surfaced is either fixed or contracted *and* every deferred item is bound into an authority surface. No loose ends. No "I'll come back to this."
 ```
 
-**Why it works:** Partial fixes are debt multipliers. Each unresolved finding creates cognitive overhead, context-switching cost, and risk of being forgotten. This forces atomic completion: either fix it now, or create a contract that guarantees it won't be lost. The deferral contract turns vague intentions into explicit commitments with teeth.
+**Why it works:** Partial fixes are debt multipliers. Each unresolved finding creates cognitive overhead, context-switching cost, and risk of being forgotten. This forces atomic completion: either fix it now, or create a contract that guarantees it won't be lost. The deferral contract turns vague intentions into explicit commitments with teeth, and authority binding keeps deferred work from evaporating into prose.
 
 ---
 
@@ -939,7 +948,7 @@ Invoke by name or essence:
 - "Map the DEPENDENCY graph"
 - "Apply TRANSCENDENT REFACTOR to this document"
 - "/deep-review uncommitted|staged files — apply an in-depth adversarial review of the current diff using ~/steve/prompts/prompt-snippets.md as mandatory cognitive stack (INVERSION, TELESCOPIC, NEXUS, AUDIT, BLAST RADIUS, ESCAPE HATCH, KNOWLEDGE CRYSTALLIZATION). Output: ranked bugs (with file:line and repro path), debt/smells/gaps, blast radius (direct/secondary/tertiary), rollback commands, and crystallized learnings. Be ruthless: assume hidden failure modes, partial rollout, and drift."
-- "Apply ATOMIC COMPLETION — resolve all surfaced findings now; defer only with explicit contract (rationale, owner, trigger, deadline, blast radius)."
+- "Apply ATOMIC COMPLETION — resolve all surfaced findings now; defer only with explicit contract (rationale, owner, trigger, deadline, blast radius, authority binding)."
 - "DIAGNOSE → 100x (delete > add) → 100x (compound check) → DISSOLVE → REBUILD → NAME DEBT. Stop when boring. Kill if explaining > showing."
 - "Apply THE MIRROR — write a test generator for this module; surface hidden assumptions about input domains and expected behaviors"
 - "Apply THE ADVERSARY — mutate this code systematically; find survivors in the test suite; each survivor is a test bug"
