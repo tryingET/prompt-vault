@@ -89,7 +89,7 @@ Templates are governed by:
 ## Knowledge Crystallization Flow
 
 ```
-Session → diary/ (raw) → docs/learnings/ (crystallized) → TIPs (propagated)
+Session → evidence-promotion-ledger (explicit state) → diary/ (curated extraction) → docs/learnings/ (crystallized) → TIPs (propagated)
 ```
 
 See `docs/CRYSTALLIZED.md` for extracted patterns and anti-patterns.

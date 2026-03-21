@@ -36,6 +36,7 @@ Coverage:
 
 Rollup dimensions:
   artifact_kind | control_mode | formalization_level | owner_company
+  routing_context | activity_phase | input_artifact | transition_target_type | output_commitment
 
 Grades:
   A: 90+, B: 80-89, C: 70-79, D: 60-69, F: <60
@@ -220,12 +221,46 @@ normalize_rollup_dimension() {
     local dimension="${1:-control_mode}"
 
     case "$dimension" in
-        artifact_kind|control_mode|formalization_level|owner_company)
+        artifact_kind|control_mode|formalization_level|owner_company|routing_context|activity_phase|input_artifact|transition_target_type|output_commitment)
             printf '%s' "$dimension"
             ;;
         *)
             error "Unsupported rollup dimension: $dimension" >&2
-            error "Allowed dimensions: artifact_kind, control_mode, formalization_level, owner_company" >&2
+            error "Allowed dimensions: artifact_kind, control_mode, formalization_level, owner_company, routing_context, activity_phase, input_artifact, transition_target_type, output_commitment" >&2
+            exit 1
+            ;;
+    esac
+}
+
+rollup_bucket_expr() {
+    local dimension="$1"
+
+    case "$dimension" in
+        artifact_kind|control_mode|formalization_level|owner_company)
+            printf 't.%s' "$dimension"
+            ;;
+        routing_context|activity_phase|input_artifact|transition_target_type|output_commitment)
+            printf "JSON_UNQUOTE(JSON_EXTRACT(t.controlled_vocabulary, '$.%s'))" "$dimension"
+            ;;
+        *)
+            error "Unsupported rollup dimension: $dimension" >&2
+            exit 1
+            ;;
+    esac
+}
+
+rollup_dimension_where_clause() {
+    local dimension="$1"
+
+    case "$dimension" in
+        artifact_kind|control_mode|formalization_level|owner_company)
+            printf "%s" "t.status = 'active'"
+            ;;
+        routing_context|activity_phase|input_artifact|transition_target_type|output_commitment)
+            printf "t.status = 'active' AND t.controlled_vocabulary IS NOT NULL AND JSON_EXTRACT(t.controlled_vocabulary, '$.%s') IS NOT NULL" "$dimension"
+            ;;
+        *)
+            error "Unsupported rollup dimension: $dimension" >&2
             exit 1
             ;;
     esac
@@ -233,10 +268,15 @@ normalize_rollup_dimension() {
 
 quality_rollup_sql() {
     local dimension="$1"
+    local bucket_expr
+    local where_clause
+
+    bucket_expr=$(rollup_bucket_expr "$dimension")
+    where_clause=$(rollup_dimension_where_clause "$dimension")
 
     cat <<EOF
 SELECT
-    t.$dimension as bucket,
+    $bucket_expr as bucket,
     COUNT(*) as entities,
     SUM(CASE WHEN COALESCE(es.executions, 0) > 0 THEN 1 ELSE 0 END) as entities_with_executions,
     SUM(COALESCE(es.executions, 0)) as executions,
@@ -296,8 +336,8 @@ LEFT JOIN (
     WHERE e.entity_type = 'template'
     GROUP BY e.entity_id
 ) es ON es.entity_id = t.id
-WHERE t.status = 'active'
-GROUP BY t.$dimension
+WHERE $where_clause
+GROUP BY $bucket_expr
 ORDER BY executions DESC, entities DESC, bucket
 EOF
 }

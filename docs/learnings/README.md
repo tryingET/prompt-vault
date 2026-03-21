@@ -7,7 +7,15 @@ read_when:
 
 # Learnings
 
-Capture what works, what doesn't, and what to try next.
+Capture crystallized reusable knowledge derived from repo work, not raw session logs and not canonical operational state.
+
+## Authority boundary
+
+- `docs/learnings/` stores **crystallized reusable knowledge**.
+- It is derived from evidence such as session output, diary entries, validation results, and implementation artifacts.
+- Promotion status itself should be tracked in `docs/dev/evidence-promotion-ledger.md` rather than inferred from whether a learning file exists.
+- It is **not** a substitute for canonical operational state or external systems of record.
+- When a learning needs to become normative or authoritative, promote it into the appropriate authority surface explicitly.
 
 ## Structure
 

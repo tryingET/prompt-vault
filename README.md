@@ -143,6 +143,7 @@ skills ──► skill_assets
 ./pv quality dashboard      # Health scores + evidence gaps
 ./pv quality coverage       # Feedback/capture coverage by active entity
 ./pv quality rollup control_mode  # Aggregate quality/evidence by facet
+./pv quality rollup routing_context  # Aggregate quality/evidence by router vocabulary
 ./pv exec x "arg"           # Run with tracking
 ./pv rate <id> 4 "notes"    # Record feedback
 ```

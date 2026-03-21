@@ -311,6 +311,16 @@ For the 3 seeded routers, vault-client can currently assume:
 
 Therefore all company contexts currently see these routers.
 
+## Selector/rate-limiting note
+Live `/vault:` debounce/rate-limiting behavior is intentionally outside this Prompt Vault schema contract.
+Client implementations may optimize trigger frequency, but they must not change these boundary guarantees:
+- schema compatibility is still exact-version (`9`) and fail-fast
+- visibility filtering still binds to governed company context
+- feedback still binds one-to-one to exact execution rows
+- private execution captures still remain non-previewable by default
+
+Historical trigger-validation docs in this repo are provenance only; treat the relocated monorepo client package as the implementation home.
+
 ## Recommended future extension point
 If later needed, add richer governance policy via a separate layer, e.g.:
 - selected-company sharing policies

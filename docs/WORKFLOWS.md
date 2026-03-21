@@ -297,6 +297,24 @@ For stage-gated DB mutation policy, see: `docs/reference/db-stage-backup-policy.
 ./scripts/db-change-preflight.sh --stage db-prod --exception-file governance/db-backup-exceptions.md
 ```
 
+## Evidence promotion state for KES artifacts
+
+When a work session produces useful review output, treat the flow as:
+
+```text
+Pi session JSONL (raw evidence)
+  -> docs/dev/evidence-promotion-ledger.md (explicit promotion state)
+  -> diary/ (curated extraction)
+  -> docs/learnings/ (crystallized reusable knowledge)
+  -> stronger authority surfaces when warranted
+```
+
+Rules:
+- session JSONL is never canonical KES state by convenience
+- diary/learnings presence alone does not define workflow status
+- the ledger is the repo-visible authority surface for whether a session was reviewed, promoted, skipped, or superseded
+- promotion beyond evidence remains manual unless a tool explicitly states otherwise
+
 ```bash
 # Undo last commit
 dolt reset --hard HEAD~1

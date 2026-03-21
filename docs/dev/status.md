@@ -6,7 +6,7 @@ read_when:
 
 # Status
 
-**Last Updated:** 2026-03-14
+**Last Updated:** 2026-03-21
 
 ## Health
 
@@ -22,6 +22,7 @@ read_when:
 
 ## Recent Changes
 
+- **Controlled-vocabulary quality rollups landed** — `pv quality rollup <dimension>` now also supports exact-one router vocabulary dimensions (`routing_context`, `activity_phase`, `input_artifact`, `transition_target_type`, `output_commitment`) while staying aggregate-only and keeping private captures summarized.
 - **Quality rollups landed** — `pv quality rollup <dimension>` now provides aggregate-only quality/evidence reporting by governed template facet (`artifact_kind`, `control_mode`, `formalization_level`, `owner_company`) without widening raw-output exposure.
 - **Quality evidence coverage landed** — `pv quality coverage` now shows per-entity feedback/capture rates, `pv quality dashboard` surfaces the biggest evidence gaps, and template/skill quality views expose richer capture-aware coverage without rendering raw output text.
 - **QUICKSTART schema-v9 alignment landed** — quickstart guidance now reflects governed vocabulary, current `/vault` command semantics, privacy-safe output capture, and no longer describes legacy tags or `/vaults`.

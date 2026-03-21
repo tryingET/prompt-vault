@@ -73,6 +73,24 @@ teardown() {
     [[ "$output" != *"never show this private rollup payload"* ]]
 }
 
+@test "pv-quality rollup supports controlled-vocabulary dimensions without leaking private output text" {
+    run env VAULT_DIR="$TEST_VAULT_DIR" "$SCRIPTS_DIR/pv-exec" analysis-router "sample context" --output-text "never show this private routing payload"
+    [ "$status" -eq 0 ]
+
+    exec_id=$(dolt --data-dir "$TEST_VAULT_DIR" sql -r csv -q "SELECT MAX(id) FROM executions WHERE entity_type = 'template'" | tail -1)
+    [ -n "$exec_id" ]
+
+    run dolt --data-dir "$TEST_VAULT_DIR" sql -q "INSERT INTO feedback (execution_id, rating, notes, issues, would_use_again) VALUES ($exec_id, 5, 'great', '[]', TRUE)"
+    [ "$status" -eq 0 ]
+
+    run env VAULT_DIR="$TEST_VAULT_DIR" "$SCRIPTS_DIR/pv-quality" rollup routing_context
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"Quality Rollup by routing_context"* ]]
+    [[ "$output" == *"analysis_followup"* ]]
+    [[ "$output" == *"avg_quality_score"* ]]
+    [[ "$output" != *"never show this private routing payload"* ]]
+}
+
 @test "pv-quality rollup rejects unsupported dimensions" {
     run env VAULT_DIR="$TEST_VAULT_DIR" "$SCRIPTS_DIR/pv-quality" rollup "owner_company; DROP TABLE prompt_templates;"
     [ "$status" -ne 0 ]

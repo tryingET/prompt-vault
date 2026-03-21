@@ -1,5 +1,5 @@
 ---
-summary: "Prompt Vault is now on schema v9 with governed facets, controlled vocabulary, company visibility, feedback uniqueness, execution output capture, and a first privacy-safe analytics surface; next session should focus on richer quality surfaces, remaining downstream doc alignment, and any still-stale boundary guidance rather than replaying old cutover work."
+summary: "Prompt Vault is now on schema v9 with governed facets, controlled vocabulary, company visibility, feedback uniqueness, execution output capture, privacy-safe analytics, and aggregate-first quality rollups across facets plus exact-one router vocabulary; next session should focus on remaining extension rate-limiting/validation follow-through and any further aggregate-only reporting rather than replaying old cutover work."
 read_when:
   - "Starting the next session in prompt-vault"
   - "Before choosing the next post-cutover implementation slice"
@@ -48,8 +48,9 @@ Prompt Vault has moved well beyond the old v2 cutover note:
   - template/skill quality views now show feedback/capture coverage rates and last evidence timestamps
 - aggregate quality rollups are now live without normalizing raw output exposure:
   - `./scripts/pv quality rollup control_mode`
-  - supported dimensions currently include `artifact_kind`, `control_mode`, `formalization_level`, `owner_company`
-  - rollups stay metadata-only and facet/governance aligned
+  - supported facet/governance dimensions currently include `artifact_kind`, `control_mode`, `formalization_level`, `owner_company`
+  - supported exact-one router vocabulary dimensions currently include `routing_context`, `activity_phase`, `input_artifact`, `transition_target_type`, `output_commitment`
+  - rollups stay metadata-only and governance/privacy aligned
 - the 3 seeded router prompts exist and are active in the DB:
   - `analysis-router`
   - `post-review-router`
@@ -68,11 +69,11 @@ Prompt Vault has moved well beyond the old v2 cutover note:
 - do **not** resume vault-client product work from stale standalone or live-copy locations
 
 ## Current goal
-Focus the next session on the next truthful product slice after the first privacy-safe analytics + quality coverage surfaces landed:
+Focus the next session on the next truthful product slice after privacy-safe analytics, coverage-aware quality surfaces, and controlled-vocabulary rollups landed:
 1. verify downstream docs/clients still reflect schema v9 execution capture semantics consistently
-2. extend quality reporting only where it stays aggregate-first for private captures
-3. keep ontology/contracts distinct from prompt seed content
-4. finish remaining extension rate limiting work and validation updates
+2. finish remaining extension rate-limiting work and validation updates
+3. extend reporting only where it stays aggregate-first for private captures (especially if considering multi-valued router dimensions)
+4. keep ontology/contracts distinct from prompt seed content
 
 This aligns with the current tactical goals more than replaying already-landed router metadata work.
 
@@ -137,7 +138,7 @@ If the next slice changes execution capture, add focused tests for privacy/contr
 - No moving vault-client implementation work back into Prompt Vault beyond boundary-document updates.
 
 ## Canonical next slice after this one
-With docs drift cleaned up and coverage-aware + rollup quality surfaces now in place, move on to any remaining extension rate-limiting follow-through plus deeper aggregate reporting that still avoids normalizing raw private output exposure.
+With docs drift cleaned up and coverage-aware + controlled-vocabulary-aware rollup quality surfaces now in place, move on to the remaining extension rate-limiting/validation follow-through plus any deeper aggregate reporting that still avoids normalizing raw private output exposure.
 
 ## First concrete next action
-Open the remaining extension/client boundary notes, confirm no downstream rate-limiting or validation guidance still assumes pre-v9 behavior, then scope the next aggregate-only reporting improvement after rollups before considering any broader dashboard work.
+Open the remaining extension/client boundary notes, confirm no downstream rate-limiting or validation guidance still assumes pre-v9 behavior, then decide whether any next aggregate-only reporting work should target multi-valued router semantics (for example `selection_principles`) before considering any broader dashboard work.

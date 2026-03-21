@@ -20,6 +20,7 @@ All notable changes to prompt-vault are documented here.
 - `pv analytics outputs` for privacy-safe output-capture analytics: aggregate private/public coverage, per-entity capture counts, and public-only preview rows.
 - `pv quality coverage` for capture-aware evidence coverage by active entity without rendering raw output text.
 - `pv quality rollup <dimension>` for aggregate-only quality/evidence reporting by governed template facet.
+- Controlled-vocabulary quality rollups for exact-one router semantics (`routing_context`, `activity_phase`, `input_artifact`, `transition_target_type`, `output_commitment`).
 - `tests/pv-analytics.bats` covering output-capture analytics behavior and private-output non-leakage.
 - `tests/pv-quality.bats` coverage assertions for private-output-safe evidence reporting.
 
@@ -29,7 +30,7 @@ All notable changes to prompt-vault are documented here.
 - Public output previews are now terminal-safe as well as privacy-safe: ANSI/control escape sequences are stripped before rendering.
 - `pv analytics overview`, `pv analytics recent`, `pv analytics template`, and analytics export surfaces now account for execution capture metadata without exposing private `output_text`.
 - `pv quality dashboard`, `pv quality template`, `pv quality skill`, and `pv quality report` now surface feedback/capture coverage and evidence gaps using aggregate metadata only.
-- `pv quality rollup <dimension>` keeps deeper quality reporting aggregate-first and aligned to governed facets rather than raw-output dashboarding.
+- `pv quality rollup <dimension>` keeps deeper quality reporting aggregate-first and aligned to governed facets plus exact-one router vocabulary semantics rather than raw-output dashboarding.
 - Prompt-vault-side client boundary docs were normalized to the current schema-v9 contract (commands, diagnostics, execution-bound rating, and trigger-surface wording).
 - Historical validation and relocation notes were marked more explicitly as historical where they still reference pre-monorepo or pre-v9 integration phases.
 - Canonical `prompt-vault-db` recovered from `~/programming/archive/prompt-vault-db` after reinit drift (50 active templates restored).

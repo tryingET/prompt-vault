@@ -113,6 +113,16 @@ For the concrete schema-v9 boundary including company-aware query filtering, exe
 
 - `docs/dev/vault-client-company-visibility-boundary.md`
 
+## Selector/rate-limiting boundary
+Prompt Vault is the schema/governance source of truth, but live `/vault:` trigger debouncing and rate-limiting behavior remain client/runtime concerns in the relocated pi package.
+
+Use this repo only to describe the boundary clearly:
+- schema/data compatibility must stay pinned to Prompt Vault schema `9`
+- query/mutation/feedback semantics must stay facet-native and execution-bound
+- historical `~/.pi/.../vault-client` live-trigger validation notes are provenance only, not the canonical implementation target
+
+Do not add repo-local Prompt Vault behavior that depends on a particular live-trigger debounce implementation.
+
 ## Cross-repo handoff
 For the vault-client-specific relocation plan and warnings, read:
 
