@@ -7,6 +7,10 @@ SCRIPTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 if [ -z "${VAULT_DIR:-}" ]; then
     VAULT_DIR="$SCRIPTS_DIR/../prompt-vault-db"
 fi
+if [ -z "${TMPDIR:-}" ]; then
+    export TMPDIR="$SCRIPTS_DIR/../.tmp"
+fi
+mkdir -p "$TMPDIR"
 
 # Colors
 RED='\033[0;31m'

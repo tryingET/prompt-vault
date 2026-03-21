@@ -6,9 +6,9 @@ load 'setup'
 setup() {
     skip_if_no_dolt
     skip_if_no_vault
-    TMP_DIR="$(mktemp -d)"
+    TMP_DIR="$(make_test_tmpdir)"
     TEST_VAULT_DIR="$TMP_DIR/prompt-vault-db"
-    cp -R "$VAULT_DIR" "$TEST_VAULT_DIR"
+    copy_test_vault "$TEST_VAULT_DIR"
 }
 
 teardown() {

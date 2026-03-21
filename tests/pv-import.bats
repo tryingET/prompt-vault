@@ -18,7 +18,7 @@ setup() {
 
 @test "pv import handles missing vault gracefully" {
     # Create temp dir without vault
-    export VAULT_DIR=$(mktemp -d)
+    export VAULT_DIR=$(make_test_tmpdir)
     run "$SCRIPTS_DIR/import-from-pi.sh"
     [ "$status" -eq 1 ]
     [[ "$output" == *"Vault not initialized"* ]]

@@ -3,6 +3,8 @@
 set -euo pipefail
 
 cd "$(dirname "$0")"
+export TMPDIR="${TMPDIR:-$PWD/.tmp}"
+mkdir -p "$TMPDIR"
 SCRIPTS_DIR="./scripts"
 VAULT_DIR="./prompt-vault-db"
 

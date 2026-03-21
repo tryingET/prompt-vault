@@ -124,12 +124,12 @@ From `~/ai-society/core/prompt-vault`:
 ```bash
 ./scripts/db-change-preflight.sh --stage db-dev
 ./scripts/pv-verify-ontology-contract
-bats tests/pv-ontology-contract.bats
-bats tests/pv-v2-facets.bats
-bats tests/pv-feedback.bats
-bats tests/pv-exec-output-capture.bats
-bats tests/pv-controlled-vocabulary.bats
-bats tests/pv-company-visibility.bats
+./scripts/pv-bats tests/pv-ontology-contract.bats
+./scripts/pv-bats tests/pv-v2-facets.bats
+./scripts/pv-bats tests/pv-feedback.bats
+./scripts/pv-bats tests/pv-exec-output-capture.bats
+./scripts/pv-bats tests/pv-controlled-vocabulary.bats
+./scripts/pv-bats tests/pv-company-visibility.bats
 ./verify.sh
 node ~/ai-society/core/agent-scripts/scripts/docs-list.mjs --docs . --strict
 ```

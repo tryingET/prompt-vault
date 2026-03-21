@@ -8,6 +8,8 @@ CONTRACT="$REPO_DIR/ontology/v2-contract.json"
 CONTROLLED_CONTRACT="$REPO_DIR/ontology/controlled-vocabulary-contract.json"
 COMPANY_CONTRACT="$REPO_DIR/ontology/company-visibility-contract.json"
 VAULT_DIR="$REPO_DIR/prompt-vault-db"
+export TMPDIR="${TMPDIR:-$REPO_DIR/.tmp}"
+mkdir -p "$TMPDIR"
 
 require_file() {
     local path="$1"

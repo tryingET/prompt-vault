@@ -26,3 +26,7 @@ Thumbs.db
 
 # Generated codemap artifacts
 .generated/codemap/
+
+# Repo-local temp dirs
+.tmp/
+.tmp-tests/

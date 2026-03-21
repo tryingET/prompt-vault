@@ -2,7 +2,9 @@
 # Tests for Prompt Vault DB change preflight policy
 
 setup() {
-    TMP_DIR="$(mktemp -d)"
+    TEST_TMP_ROOT="$BATS_TEST_DIRNAME/../.tmp-tests"
+    mkdir -p "$TEST_TMP_ROOT"
+    TMP_DIR="$(mktemp -d "$TEST_TMP_ROOT/pv-tests.XXXXXX")"
     SCRIPT_PATH="$BATS_TEST_DIRNAME/../scripts/db-change-preflight.sh"
 }
 

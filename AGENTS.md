@@ -78,7 +78,7 @@ Templates are governed by:
 | `scripts/pv` | Main CLI |
 | `scripts/pv-tag-templates` | Bulk tag templates |
 | `schema/schema.sql` | Database schema |
-| `verify.sh` | 34 verification checks |
+| `verify.sh` | Quick verification suite |
 | `docs/CRYSTALLIZED.md` | Patterns and learnings |
 
 ## Deterministic tooling policy (ROCS-first)

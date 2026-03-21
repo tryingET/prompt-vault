@@ -4,7 +4,7 @@
 load 'setup'
 
 setup() {
-    TMP_DIR="$(mktemp -d)"
+    TMP_DIR="$(make_test_tmpdir)"
     TEST_LEDGER_JSON="$TMP_DIR/evidence-promotion-ledger.json"
     cp "$BATS_TEST_DIRNAME/../docs/dev/evidence-promotion-ledger.json" "$TEST_LEDGER_JSON"
     export LEDGER_DOC_PATH="$BATS_TEST_DIRNAME/../docs/dev/evidence-promotion-ledger.md"

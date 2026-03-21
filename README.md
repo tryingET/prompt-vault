@@ -168,7 +168,7 @@ skills ──► skill_assets
 ```bash
 ./verify.sh                              # quick verification suite
 ./scripts/pv-verify-evidence-promotion-ledger
-bats tests/                              # full suite
+./scripts/pv-bats tests/                 # full suite with repo-local TMPDIR
 ```
 
 ## Documentation

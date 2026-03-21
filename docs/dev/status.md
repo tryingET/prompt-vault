@@ -12,7 +12,7 @@ read_when:
 
 | Metric | Status |
 |--------|--------|
-| Verification | ✅ 40/40 checks pass |
+| Verification | ✅ current quick suite + targeted bats pass |
 | Templates | 82 total (81 active; 32 cognitive, 49 procedure) |
 | Controlled vocabulary | 4 active controlled-vocabulary templates |
 | Company visibility boundary | 7 governed companies |

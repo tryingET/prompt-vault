@@ -74,8 +74,8 @@ From `~/ai-society/core/prompt-vault`:
 ```bash
 ./verify.sh
 ./scripts/pv migrate status
-bats tests/pv-ontology-contract.bats
-bats tests/pv-v2-facets.bats
+./scripts/pv-bats tests/pv-ontology-contract.bats
+./scripts/pv-bats tests/pv-v2-facets.bats
 ```
 
 ## Important boundary decision

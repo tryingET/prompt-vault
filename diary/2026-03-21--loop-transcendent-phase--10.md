@@ -19,7 +19,7 @@ Debt assessment for the redesigned flow:
 ## What changed in repo reality
 The repo already reflects the new model in multiple places:
 
-- `docs/dev/evidence-promotion-ledger.md` establishes an explicit authority surface for promotion state.
+- `docs/dev/evidence-promotion-ledger.json` now serves as the explicit machine-readable authority surface for promotion state, with the Markdown companion explaining the contract.
 - `diary/README.md` now says:
   - session JSONL = forensic evidence
   - diary = curated extraction
