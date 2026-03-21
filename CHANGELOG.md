@@ -31,6 +31,8 @@ All notable changes to prompt-vault are documented here.
 - `pv analytics overview`, `pv analytics recent`, `pv analytics template`, and analytics export surfaces now account for execution capture metadata without exposing private `output_text`.
 - `pv quality dashboard`, `pv quality template`, `pv quality skill`, and `pv quality report` now surface feedback/capture coverage and evidence gaps using aggregate metadata only.
 - `pv quality rollup <dimension>` keeps deeper quality reporting aggregate-first and aligned to governed facets plus exact-one router vocabulary semantics rather than raw-output dashboarding.
+- Router-vocabulary rollups now enforce `procedure + router` identity, and bucket `avg_rating` is weighted by feedback rows rather than using an average-of-averages shortcut.
+- Evidence-promotion authority now lives in JSON instead of duplicated Markdown fences, with exact evidence paths validated by script.
 - Prompt-vault-side client boundary docs were normalized to the current schema-v9 contract (commands, diagnostics, execution-bound rating, and trigger-surface wording).
 - Historical validation and relocation notes were marked more explicitly as historical where they still reference pre-monorepo or pre-v9 integration phases.
 - Canonical `prompt-vault-db` recovered from `~/programming/archive/prompt-vault-db` after reinit drift (50 active templates restored).
@@ -234,3 +236,4 @@ rm -rf prompt-vault-db && ./scripts/pv init && ./scripts/import-cognitive-tools.
 - `pv stats` — Usage statistics
 - `pv export` — Export to pi format
 - `pv backup` — Backup/restore
+Backup/restore

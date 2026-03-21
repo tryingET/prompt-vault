@@ -22,6 +22,8 @@ read_when:
 
 ## Recent Changes
 
+- **Authority ledger is now truly machine-readable** — `docs/dev/evidence-promotion-ledger.json` is now the canonical promotion-state surface, `./scripts/pv-verify-evidence-promotion-ledger` validates exact evidence paths and referenced repo artifacts, and Markdown no longer duplicates live ledger rows.
+- **Controlled-vocabulary quality rollups hardened** — router-vocabulary rollups now enforce router identity explicitly and bucket `avg_rating` is weighted by feedback rows instead of averaging per-template averages.
 - **Controlled-vocabulary quality rollups landed** — `pv quality rollup <dimension>` now also supports exact-one router vocabulary dimensions (`routing_context`, `activity_phase`, `input_artifact`, `transition_target_type`, `output_commitment`) while staying aggregate-only and keeping private captures summarized.
 - **Quality rollups landed** — `pv quality rollup <dimension>` now provides aggregate-only quality/evidence reporting by governed template facet (`artifact_kind`, `control_mode`, `formalization_level`, `owner_company`) without widening raw-output exposure.
 - **Quality evidence coverage landed** — `pv quality coverage` now shows per-entity feedback/capture rates, `pv quality dashboard` surfaces the biggest evidence gaps, and template/skill quality views expose richer capture-aware coverage without rendering raw output text.

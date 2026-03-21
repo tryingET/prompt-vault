@@ -1,0 +1,56 @@
+#!/usr/bin/env bash
+# Verify the evidence-promotion ledger authority surface
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_DIR="$SCRIPT_DIR/.."
+LEDGER_JSON_PATH="${LEDGER_JSON_PATH:-$REPO_DIR/docs/dev/evidence-promotion-ledger.json}"
+LEDGER_DOC_PATH="${LEDGER_DOC_PATH:-$REPO_DIR/docs/dev/evidence-promotion-ledger.md}"
+
+command -v jq >/dev/null 2>&1 || { echo "jq is required" >&2; exit 1; }
+command -v base64 >/dev/null 2>&1 || { echo "base64 is required" >&2; exit 1; }
+[ -f "$LEDGER_JSON_PATH" ] || { echo "Missing ledger JSON: $LEDGER_JSON_PATH" >&2; exit 1; }
+[ -f "$LEDGER_DOC_PATH" ] || { echo "Missing ledger doc: $LEDGER_DOC_PATH" >&2; exit 1; }
+
+jq -e '
+  type == "array"
+  and ([.[].id] as $ids | ($ids | length) == ($ids | unique | length))
+  and all(.[];
+    (.id | type == "string" and length > 0)
+    and (.repo | type == "string" and length > 0)
+    and (.status | IN("evidence_only", "diary_promoted", "learning_crystallized", "authority_promoted", "intentionally_skipped", "superseded"))
+    and (.updated_at | type == "string" and test("^[0-9]{4}-[0-9]{2}-[0-9]{2}$"))
+    and (.notes | type == "string")
+    and (.diary | type == "array")
+    and (.learnings | type == "array")
+    and (.authority_surfaces | type == "array")
+    and (.evidence | type == "object")
+    and (.evidence.type == "pi-session-jsonl")
+    and (.evidence.session_id | type == "string" and length > 0)
+    and (.evidence.path | type == "string" and length > 0)
+    and ((.evidence.path | test("\\*|\\?|\\[")) | not)
+  )
+' "$LEDGER_JSON_PATH" >/dev/null || {
+    echo "Invalid evidence ledger structure: $LEDGER_JSON_PATH" >&2
+    exit 1
+}
+
+while IFS= read -r entry_b64; do
+    entry_json=$(printf '%s' "$entry_b64" | base64 -d)
+    evidence_path=$(printf '%s' "$entry_json" | jq -r '.evidence.path')
+    [ -f "$evidence_path" ] || { echo "Missing evidence file: $evidence_path" >&2; exit 1; }
+
+    while IFS= read -r rel_path; do
+        [ -z "$rel_path" ] && continue
+        [ -e "$REPO_DIR/$rel_path" ] || { echo "Missing referenced repo path: $rel_path" >&2; exit 1; }
+    done < <(printf '%s' "$entry_json" | jq -r '(.diary + .learnings + .authority_surfaces)[]?')
+done < <(jq -r '.[] | @base64' "$LEDGER_JSON_PATH")
+
+jq -e '.[] | select(.status == "learning_crystallized")' "$LEDGER_JSON_PATH" >/dev/null
+
+grep -q 'docs/dev/evidence-promotion-ledger.json' "$LEDGER_DOC_PATH" || {
+    echo "Ledger doc must reference docs/dev/evidence-promotion-ledger.json" >&2
+    exit 1
+}
+
+echo "Evidence promotion ledger verified"

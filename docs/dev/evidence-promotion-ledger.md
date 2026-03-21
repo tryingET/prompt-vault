@@ -1,5 +1,5 @@
 ---
-summary: "Machine-readable authority surface for promotion state across session evidence, diary extraction, and learnings crystallization."
+summary: "Authority contract and operator guide for the evidence-promotion ledger JSON surface."
 read_when:
   - "Clarifying whether a session has only evidence, diary extraction, learnings crystallization, or an intentional stop"
   - "Auditing what is automatic versus manual in the KES promotion flow"
@@ -7,16 +7,24 @@ read_when:
 
 # Evidence Promotion Ledger
 
-This file is the repo-visible authority surface for **promotion status**.
-It exists to prevent Pi session JSONL recovery from being mistaken for canonical KES state.
+This document explains the evidence-promotion authority contract.
+The **canonical machine-readable ledger** lives at:
+
+- `docs/dev/evidence-promotion-ledger.json`
+
+Validate it with:
+
+```bash
+./scripts/pv-verify-evidence-promotion-ledger
+```
 
 ## Authority contract
 
 - Pi session JSONL remains **raw historical evidence**.
 - `diary/` remains the **repo-local curated extraction layer**.
 - `docs/learnings/` remains **crystallized reusable knowledge**.
-- This ledger is the **canonical repo-local record of promotion state** for this flow.
-- Promotion state is explicit here, not inferred from folder presence or reconstructed from logs.
+- `docs/dev/evidence-promotion-ledger.json` is the **canonical repo-local record of promotion state** for this flow.
+- Promotion state is explicit there, not inferred from folder presence or reconstructed from logs.
 
 ## What is automatic vs manual
 
@@ -33,7 +41,7 @@ It exists to prevent Pi session JSONL recovery from being mistaken for canonical
 
 ## Minimal sufficient model
 
-Each row records one session- or evidence-centered item and its current promotion state.
+Each ledger row records one session- or evidence-centered item and its current promotion state.
 The goal is not to mirror all session content.
 The goal is to make authority and workflow status explicit.
 
@@ -46,96 +54,43 @@ The goal is to make authority and workflow status explicit.
 - `intentionally_skipped` — reviewed and deliberately not promoted further
 - `superseded` — replaced by a later ledger item or stronger artifact
 
-## Ledger format
-
-Keep the ledger as JSON for machine-readability and low ceremony.
+## JSON shape
 
 ```json
 [
   {
-    "id": "transcendent-1774084798685",
+    "id": "example-session-1",
     "repo": "core/prompt-vault",
     "evidence": {
       "type": "pi-session-jsonl",
-      "session_id": "transcendent-1774084798685",
-      "path_hint": "~/.pi/agent/sessions/.../2026-03-21...jsonl"
+      "session_id": "example-session-1",
+      "path": "/absolute/path/to/session.jsonl"
     },
     "status": "learning_crystallized",
-    "diary": [
-      "diary/2026-03-21--loop-transcendent-start--2.md",
-      "diary/2026-03-21--loop-transcendent-phase.md",
-      "diary/2026-03-21--loop-transcendent-phase--2.md",
-      "diary/2026-03-21--loop-transcendent-phase--3.md",
-      "diary/2026-03-21--loop-transcendent-phase--4.md",
-      "diary/2026-03-21--loop-transcendent-phase--5.md",
-      "diary/2026-03-21--loop-transcendent-phase--6.md",
-      "diary/2026-03-21--loop-transcendent-phase--7.md",
-      "diary/2026-03-21--loop-transcendent-phase--8.md"
-    ],
-    "learnings": [
-      "docs/learnings/2026-03-21-session-jsonl-is-forensic-evidence-not-kes-state.md"
-    ],
+    "diary": ["diary/2026-03-21--example.md"],
+    "learnings": ["docs/learnings/2026-03-21-example.md"],
     "authority_surfaces": [],
-    "notes": "Transcendent loop established the authority boundary and identified the need for an explicit promotion ledger.",
+    "notes": "Short explanation of why this row has its current state.",
     "updated_at": "2026-03-21"
   }
 ]
 ```
 
-## Current ledger
+## Rules
 
-```json
-[
-  {
-    "id": "transcendent-1774077372012",
-    "repo": "core/prompt-vault",
-    "evidence": {
-      "type": "pi-session-jsonl",
-      "session_id": "transcendent-1774077372012",
-      "path_hint": "~/.pi/agent/sessions/--home-tryinget-ai-society-core-prompt-vault--/*.jsonl"
-    },
-    "status": "superseded",
-    "diary": [
-      "diary/2026-03-21--loop-transcendent-start.md",
-      "diary/2026-03-21--loop-transcendent-phase.md",
-      "diary/2026-03-21--loop-transcendent-phase--2.md",
-      "diary/2026-03-21--loop-transcendent-phase--3.md",
-      "diary/2026-03-21--loop-transcendent-phase--4.md",
-      "diary/2026-03-21--loop-transcendent-phase--5.md",
-      "diary/2026-03-21--loop-transcendent-complete.md"
-    ],
-    "learnings": [],
-    "authority_surfaces": [],
-    "notes": "First transcendent pass identified the authority problem but ended in a failed completion state and was superseded by the refined second pass.",
-    "updated_at": "2026-03-21"
-  },
-  {
-    "id": "transcendent-1774084798685",
-    "repo": "core/prompt-vault",
-    "evidence": {
-      "type": "pi-session-jsonl",
-      "session_id": "transcendent-1774084798685",
-      "path_hint": "~/.pi/agent/sessions/--home-tryinget-ai-society-core-prompt-vault--/*.jsonl"
-    },
-    "status": "learning_crystallized",
-    "diary": [
-      "diary/2026-03-21--loop-transcendent-start--2.md",
-      "diary/2026-03-21--loop-transcendent-phase--6.md",
-      "diary/2026-03-21--loop-transcendent-phase--7.md",
-      "diary/2026-03-21--loop-transcendent-phase--8.md",
-      "diary/2026-03-21--loop-transcendent-phase--9.md",
-      "diary/2026-03-21--loop-transcendent-phase--10.md",
-      "diary/2026-03-21--loop-transcendent-complete--2.md"
-    ],
-    "learnings": [
-      "docs/learnings/2026-03-21-session-jsonl-is-forensic-evidence-not-kes-state.md"
-    ],
-    "authority_surfaces": [],
-    "notes": "Second transcendent pass clarified that JSONL is evidence only and that promotion state must be explicit rather than reconstructed.",
-    "updated_at": "2026-03-21"
-  }
-]
-```
+- Keep the authoritative state in the JSON file, not duplicated in Markdown.
+- Use exact evidence file paths, not wildcard hints.
+- Keep ids unique.
+- Referenced repo paths in `diary`, `learnings`, and `authority_surfaces` must exist.
+- If a stronger authority surface takes over, update the ledger row instead of relying on prose drift.
+
+## Current authority surface
+
+For the live rows, read:
+
+- `docs/dev/evidence-promotion-ledger.json`
+
+Do not duplicate the live ledger contents into this Markdown file; that recreates drift.
 
 ## Next high-leverage changes
 

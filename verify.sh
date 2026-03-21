@@ -71,6 +71,7 @@ check_output "pv quality check" "Quality checks passed" "$SCRIPTS_DIR/pv" qualit
 check_output "pv analytics outputs" "Output Capture Analytics" "$SCRIPTS_DIR/pv" analytics outputs
 check_output "pv-lint runs" "Linting" "$SCRIPTS_DIR/pv-lint"
 check_output "pv-verify-ontology-contract" "Ontology contract verified" "$SCRIPTS_DIR/pv-verify-ontology-contract"
+check_output "pv-verify-evidence-promotion-ledger" "Evidence promotion ledger verified" "$SCRIPTS_DIR/pv-verify-evidence-promotion-ledger"
 check "pv templates controlled-vocabulary filter" bash -c "$SCRIPTS_DIR/pv templates cv.routing_context=analysis_followup >/dev/null"
 check "pv templates company visibility filter" bash -c "$SCRIPTS_DIR/pv templates visibility_company=software >/dev/null"
 echo ""

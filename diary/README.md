@@ -23,14 +23,14 @@ Use `./diary/` as the repo-local extraction layer for this repository.
 ```text
 deep-review / working session
   -> Pi session JSONL (forensic evidence)
-  -> docs/dev/evidence-promotion-ledger.md (explicit promotion state)
+  -> docs/dev/evidence-promotion-ledger.json (explicit promotion state)
   -> diary entry (repo-local curated extraction)
   -> docs/learnings/ (crystallized reusable knowledge)
   -> TIPs or other authority surfaces when promotion is warranted
 ```
 
 Promotion is never automatic: logs do not become canonical by convenience.
-Promotion state should be recorded explicitly in `docs/dev/evidence-promotion-ledger.md`, not inferred from folder presence.
+Promotion state should be recorded explicitly in `docs/dev/evidence-promotion-ledger.json`, not inferred from folder presence.
 
 ## Rules
 

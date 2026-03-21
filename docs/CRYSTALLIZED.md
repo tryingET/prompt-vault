@@ -51,6 +51,12 @@ Knowledge extracted from development and review sessions.
 - **Apply when:** CLI surfaces feed operator trust, dashboards, or release decisions
 - **Implementation:** shared `pv-lib.sh` helpers for SQL escaping, numeric validation, typed identity, and terminal-safe preview rendering
 
+### Machine-Readable Authority Must Be a Machine File
+- **Pattern:** If a surface is called canonical machine-readable state, keep it in a parseable machine file and validate it directly
+- **Why:** Markdown fences are explanation, not authority; duplicated live payloads drift fast
+- **Apply when:** Promotion ledgers, policy registries, or any repo-local operational state needs both human and machine consumers
+- **Implementation:** keep the authoritative JSON/TOML file separate from the explanatory Markdown wrapper and validate paths/ids structurally in CI
+
 ### Schema Versioning from Day One
 - **Pattern:** `schema_version` table tracking applied migrations
 - **Why:** Without it, schema changes become uncoordinated disasters
@@ -82,6 +88,12 @@ Knowledge extracted from development and review sessions.
 - **Why it was wrong:** a nonexistent or wrong subcommand can pass CI while doing no real validation
 - **The fix:** assert contract-bearing output, fail non-zero on unknown commands, and test negative paths explicitly
 - **General lesson:** if a health check can pass against the wrong behavior, it is not a health check
+
+### Markdown Fences as Operational Authority
+- **What looked right:** a Markdown doc with fenced JSON looked structured enough to act as canonical state
+- **Why it was wrong:** machines cannot reliably consume prose wrappers, duplicated examples drift, and wildcard evidence hints are not bindings
+- **The fix:** move the live state into a parseable authority file and make Markdown explain the contract instead of duplicating the payload
+- **General lesson:** if you need automation, make the authority artifact directly parseable
 
 ### Hardcoded Paths
 - **What looked right:** `VAULT_DIR = "/home/user/..."` - works on my machine

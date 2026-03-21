@@ -20,7 +20,7 @@ The current implemented flow is:
 ```text
 deep-review / working session
   -> Pi session JSONL (forensic evidence)
-  -> docs/dev/evidence-promotion-ledger.md (explicit promotion state)
+  -> docs/dev/evidence-promotion-ledger.json (explicit promotion state)
   -> diary entry (repo-local curated extraction)
   -> docs/learnings/ (crystallized reusable knowledge)
   -> TIPs or other authority surfaces when promotion is warranted

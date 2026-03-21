@@ -20,7 +20,7 @@ Commands:
   dashboard              Show quality dashboard
   check                  Run fail-closed quality health checks
   coverage [limit]       Show evidence coverage by active entity (default: 25)
-  rollup [dimension]     Aggregate quality/evidence by template facet (default: control_mode)
+  rollup [dimension]     Aggregate quality/evidence by governed template dimension (default: control_mode)
   template <name>        Show template quality breakdown
   skill <name>           Show skill quality breakdown
   report [output]        Generate markdown quality report
@@ -257,7 +257,7 @@ rollup_dimension_where_clause() {
             printf "%s" "t.status = 'active'"
             ;;
         routing_context|activity_phase|input_artifact|transition_target_type|output_commitment)
-            printf "t.status = 'active' AND t.controlled_vocabulary IS NOT NULL AND JSON_EXTRACT(t.controlled_vocabulary, '$.%s') IS NOT NULL" "$dimension"
+            printf "t.status = 'active' AND t.artifact_kind = 'procedure' AND t.control_mode = 'router' AND t.controlled_vocabulary IS NOT NULL AND JSON_EXTRACT(t.controlled_vocabulary, '$.%s') IS NOT NULL" "$dimension"
             ;;
         *)
             error "Unsupported rollup dimension: $dimension" >&2
@@ -292,7 +292,10 @@ SELECT
     ) as capture_rate_pct,
     SUM(COALESCE(es.private_captures, 0)) as private_captures,
     SUM(COALESCE(es.public_captures, 0)) as public_captures,
-    ROUND(AVG(es.avg_rating), 2) as avg_rating,
+    ROUND(
+        SUM(COALESCE(es.rating_sum, 0)) / NULLIF(SUM(COALESCE(es.rating_rows, 0)), 0),
+        2
+    ) as avg_rating,
     ROUND(AVG(
         (CASE
             WHEN CHAR_LENGTH(COALESCE(t.description, '')) BETWEEN 50 AND 150 THEN 20
@@ -329,6 +332,8 @@ LEFT JOIN (
         SUM(CASE WHEN e.output_text IS NOT NULL THEN 1 ELSE 0 END) as captured_executions,
         SUM(CASE WHEN e.output_capture_mode = 'private' AND e.output_text IS NOT NULL THEN 1 ELSE 0 END) as private_captures,
         SUM(CASE WHEN e.output_capture_mode = 'public' AND e.output_text IS NOT NULL THEN 1 ELSE 0 END) as public_captures,
+        SUM(CASE WHEN f.rating IS NOT NULL THEN f.rating ELSE 0 END) as rating_sum,
+        COUNT(f.rating) as rating_rows,
         AVG(f.rating) as avg_rating,
         MAX(e.created_at) as last_execution_at
     FROM executions e

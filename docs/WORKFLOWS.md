@@ -303,7 +303,7 @@ When a work session produces useful review output, treat the flow as:
 
 ```text
 Pi session JSONL (raw evidence)
-  -> docs/dev/evidence-promotion-ledger.md (explicit promotion state)
+  -> docs/dev/evidence-promotion-ledger.json (explicit promotion state)
   -> diary/ (curated extraction)
   -> docs/learnings/ (crystallized reusable knowledge)
   -> stronger authority surfaces when warranted

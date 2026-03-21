@@ -1,0 +1,50 @@
+[
+  {
+    "id": "transcendent-1774077372012",
+    "repo": "core/prompt-vault",
+    "evidence": {
+      "type": "pi-session-jsonl",
+      "session_id": "transcendent-1774077372012",
+      "path": "/home/tryinget/.pi/agent/sessions/--home-tryinget-ai-society-core-prompt-vault--/2026-03-21T06-43-20-643Z_95bf8db3-1d66-4e18-8c14-bd7fc68fac4b.jsonl"
+    },
+    "status": "superseded",
+    "diary": [
+      "diary/2026-03-21--loop-transcendent-start.md",
+      "diary/2026-03-21--loop-transcendent-phase.md",
+      "diary/2026-03-21--loop-transcendent-phase--2.md",
+      "diary/2026-03-21--loop-transcendent-phase--3.md",
+      "diary/2026-03-21--loop-transcendent-phase--4.md",
+      "diary/2026-03-21--loop-transcendent-phase--5.md",
+      "diary/2026-03-21--loop-transcendent-complete.md"
+    ],
+    "learnings": [],
+    "authority_surfaces": [],
+    "notes": "First transcendent pass identified the authority problem but ended in a failed completion state and was superseded by the refined second pass.",
+    "updated_at": "2026-03-21"
+  },
+  {
+    "id": "transcendent-1774084798685",
+    "repo": "core/prompt-vault",
+    "evidence": {
+      "type": "pi-session-jsonl",
+      "session_id": "transcendent-1774084798685",
+      "path": "/home/tryinget/.pi/agent/sessions/--home-tryinget-ai-society-core-prompt-vault--/2026-03-21T20-02-10-961Z_89a8ec5b-2a31-45f5-a843-c70690e8aa80.jsonl"
+    },
+    "status": "learning_crystallized",
+    "diary": [
+      "diary/2026-03-21--loop-transcendent-start--2.md",
+      "diary/2026-03-21--loop-transcendent-phase--6.md",
+      "diary/2026-03-21--loop-transcendent-phase--7.md",
+      "diary/2026-03-21--loop-transcendent-phase--8.md",
+      "diary/2026-03-21--loop-transcendent-phase--9.md",
+      "diary/2026-03-21--loop-transcendent-phase--10.md",
+      "diary/2026-03-21--loop-transcendent-complete--2.md"
+    ],
+    "learnings": [
+      "docs/learnings/2026-03-21-session-jsonl-is-forensic-evidence-not-kes-state.md"
+    ],
+    "authority_surfaces": [],
+    "notes": "Second transcendent pass clarified that JSONL is evidence only and that promotion state must be explicit rather than reconstructed.",
+    "updated_at": "2026-03-21"
+  }
+]

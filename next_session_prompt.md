@@ -1,5 +1,5 @@
 ---
-summary: "Prompt Vault is now on schema v9 with governed facets, controlled vocabulary, company visibility, feedback uniqueness, execution output capture, privacy-safe analytics, and aggregate-first quality rollups across facets plus exact-one router vocabulary; next session should focus on remaining extension rate-limiting/validation follow-through and any further aggregate-only reporting rather than replaying old cutover work."
+summary: "Prompt Vault is now on schema v9 with governed facets, controlled vocabulary, company visibility, feedback uniqueness, execution output capture, privacy-safe analytics, router-scoped weighted quality rollups, and a real machine-readable evidence-promotion ledger; next session should focus on remaining extension rate-limiting/validation follow-through and any further aggregate-only reporting rather than replaying old cutover work."
 read_when:
   - "Starting the next session in prompt-vault"
   - "Before choosing the next post-cutover implementation slice"
@@ -50,7 +50,12 @@ Prompt Vault has moved well beyond the old v2 cutover note:
   - `./scripts/pv quality rollup control_mode`
   - supported facet/governance dimensions currently include `artifact_kind`, `control_mode`, `formalization_level`, `owner_company`
   - supported exact-one router vocabulary dimensions currently include `routing_context`, `activity_phase`, `input_artifact`, `transition_target_type`, `output_commitment`
+  - router-vocabulary rollups now explicitly enforce router identity and bucket `avg_rating` is weighted by feedback rows
   - rollups stay metadata-only and governance/privacy aligned
+- the evidence-promotion authority surface is now truly machine-readable:
+  - canonical state lives in `docs/dev/evidence-promotion-ledger.json`
+  - `./scripts/pv-verify-evidence-promotion-ledger` validates structure, exact evidence paths, and referenced repo artifacts
+  - Markdown explains the contract without duplicating live ledger rows
 - the 3 seeded router prompts exist and are active in the DB:
   - `analysis-router`
   - `post-review-router`

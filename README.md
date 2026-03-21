@@ -166,8 +166,9 @@ skills ──► skill_assets
 ## Verification
 
 ```bash
-./verify.sh      # 40 checks
-bats tests/      # Full suite
+./verify.sh                              # quick verification suite
+./scripts/pv-verify-evidence-promotion-ledger
+bats tests/                              # full suite
 ```
 
 ## Documentation

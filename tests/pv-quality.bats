@@ -91,6 +91,114 @@ teardown() {
     [[ "$output" != *"never show this private routing payload"* ]]
 }
 
+@test "pv-quality router-vocabulary rollups ignore non-router templates with matching JSON keys" {
+    run env VAULT_DIR="$TEST_VAULT_DIR" "$SCRIPTS_DIR/pv-quality" rollup routing_context
+    [ "$status" -eq 0 ]
+    baseline_count=$(printf '%s\n' "$output" | awk -F'|' '/analysis_followup/ {gsub(/ /, "", $3); print $3; exit}')
+    [ -n "$baseline_count" ]
+
+    run dolt --data-dir "$TEST_VAULT_DIR" sql -q "
+        INSERT INTO prompt_templates (
+            name,
+            description,
+            content,
+            artifact_kind,
+            control_mode,
+            formalization_level,
+            owner_company,
+            visibility_companies,
+            controlled_vocabulary,
+            status
+        ) VALUES (
+            'not-a-router-but-has-routing-context',
+            'This active template should never contaminate router-only rollups.',
+            'content',
+            'procedure',
+            'one_shot',
+            'structured',
+            'core',
+            '[\"core\"]',
+            '{\"routing_context\":\"analysis_followup\"}',
+            'active'
+        )
+    "
+    [ "$status" -eq 0 ]
+
+    run env VAULT_DIR="$TEST_VAULT_DIR" "$SCRIPTS_DIR/pv-quality" rollup routing_context
+    [ "$status" -eq 0 ]
+    after_count=$(printf '%s\n' "$output" | awk -F'|' '/analysis_followup/ {gsub(/ /, "", $3); print $3; exit}')
+    [ "$after_count" = "$baseline_count" ]
+}
+
+@test "pv-quality rollup avg_rating is weighted by feedback rows" {
+    run dolt --data-dir "$TEST_VAULT_DIR" sql -q "UPDATE prompt_templates SET status = 'archived' WHERE name = 'review-closeout-router'"
+    [ "$status" -eq 0 ]
+
+    run dolt --data-dir "$TEST_VAULT_DIR" sql -q "
+        INSERT INTO prompt_templates (
+            name,
+            description,
+            content,
+            artifact_kind,
+            control_mode,
+            formalization_level,
+            owner_company,
+            visibility_companies,
+            controlled_vocabulary,
+            status
+        ) VALUES
+        (
+            'weighted-rollup-a',
+            'This router exists to prove weighted rating rollup behavior for review closeout.',
+            REPEAT('a', 150),
+            'procedure',
+            'router',
+            'structured',
+            'core',
+            '[\"core\"]',
+            '{\"routing_context\":\"review_closeout\",\"activity_phase\":\"closeout\",\"input_artifact\":\"review_summary\",\"transition_target_type\":\"framework_mode\",\"selection_principles\":[\"minimal_change\"],\"output_commitment\":\"exact_next_prompt\"}',
+            'active'
+        ),
+        (
+            'weighted-rollup-b',
+            'This router also exists to prove weighted rating rollup behavior for review closeout.',
+            REPEAT('b', 150),
+            'procedure',
+            'router',
+            'structured',
+            'core',
+            '[\"core\"]',
+            '{\"routing_context\":\"review_closeout\",\"activity_phase\":\"closeout\",\"input_artifact\":\"review_summary\",\"transition_target_type\":\"framework_mode\",\"selection_principles\":[\"minimal_change\"],\"output_commitment\":\"exact_next_prompt\"}',
+            'active'
+        )
+    "
+    [ "$status" -eq 0 ]
+
+    template_a=$(dolt --data-dir "$TEST_VAULT_DIR" sql -r csv -q "SELECT id FROM prompt_templates WHERE name = 'weighted-rollup-a'" | tail -1)
+    template_b=$(dolt --data-dir "$TEST_VAULT_DIR" sql -r csv -q "SELECT id FROM prompt_templates WHERE name = 'weighted-rollup-b'" | tail -1)
+    [ -n "$template_a" ]
+    [ -n "$template_b" ]
+
+    run dolt --data-dir "$TEST_VAULT_DIR" sql -q "INSERT INTO executions (entity_type, entity_id, entity_version, model, success) VALUES ('template', $template_a, 1, 'test-model', TRUE)"
+    [ "$status" -eq 0 ]
+    exec_id=$(dolt --data-dir "$TEST_VAULT_DIR" sql -r csv -q "SELECT MAX(id) FROM executions WHERE entity_type = 'template' AND entity_id = $template_a" | tail -1)
+    run dolt --data-dir "$TEST_VAULT_DIR" sql -q "INSERT INTO feedback (execution_id, rating, notes, issues, would_use_again) VALUES ($exec_id, 5, 'excellent', '[]', TRUE)"
+    [ "$status" -eq 0 ]
+
+    for _ in $(seq 1 10); do
+        run dolt --data-dir "$TEST_VAULT_DIR" sql -q "INSERT INTO executions (entity_type, entity_id, entity_version, model, success) VALUES ('template', $template_b, 1, 'test-model', TRUE)"
+        [ "$status" -eq 0 ]
+        exec_id=$(dolt --data-dir "$TEST_VAULT_DIR" sql -r csv -q "SELECT MAX(id) FROM executions WHERE entity_type = 'template' AND entity_id = $template_b" | tail -1)
+        run dolt --data-dir "$TEST_VAULT_DIR" sql -q "INSERT INTO feedback (execution_id, rating, notes, issues, would_use_again) VALUES ($exec_id, 1, 'poor', '[]', FALSE)"
+        [ "$status" -eq 0 ]
+    done
+
+    run env VAULT_DIR="$TEST_VAULT_DIR" "$SCRIPTS_DIR/pv-quality" rollup routing_context
+    [ "$status" -eq 0 ]
+    weighted_avg=$(printf '%s\n' "$output" | awk -F'|' '/review_closeout/ {gsub(/ /, "", $12); print $12; exit}')
+    [ "$weighted_avg" = "1.36" ]
+}
+
 @test "pv-quality rollup rejects unsupported dimensions" {
     run env VAULT_DIR="$TEST_VAULT_DIR" "$SCRIPTS_DIR/pv-quality" rollup "owner_company; DROP TABLE prompt_templates;"
     [ "$status" -ne 0 ]

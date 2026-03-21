@@ -85,11 +85,13 @@ Templates are governed by:
 - Prefer `./scripts/rocs.sh <args...>` before ad-hoc inline scripting.
 - Use `./scripts/pv` for all vault operations.
 - Use `./verify.sh` for validation.
+- Any surface described as machine-readable authority must live in a parseable machine file, not only in Markdown fences.
+- Rollups over governed dimensions must encode the governing entity-class predicate explicitly (for example router vocabulary implies `control_mode=router`).
 
 ## Knowledge Crystallization Flow
 
 ```
-Session → evidence-promotion-ledger (explicit state) → diary/ (curated extraction) → docs/learnings/ (crystallized) → TIPs (propagated)
+Session → evidence-promotion-ledger.json (explicit state) → diary/ (curated extraction) → docs/learnings/ (crystallized) → TIPs (propagated)
 ```
 
 See `docs/CRYSTALLIZED.md` for extracted patterns and anti-patterns.
