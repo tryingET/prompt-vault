@@ -123,6 +123,10 @@ Use this repo only to describe the boundary clearly:
 
 Do not add repo-local Prompt Vault behavior that depends on a particular live-trigger debounce implementation.
 
+For the Prompt Vault-side split between canonical stored execution observability and process-local shared-runtime receipt/telemetry discovery, also read:
+
+- `docs/dev/shared-runtime-registry-and-execution-observability-boundary.md`
+
 ## Cross-repo handoff
 For the vault-client-specific relocation plan and warnings, read:
 

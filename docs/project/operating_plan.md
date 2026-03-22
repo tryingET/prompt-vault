@@ -50,14 +50,15 @@ This wave stays bounded:
 ## Next decision after this wave
 
 Use AK + current docs to decide whether TG4 is now complete enough to promote a different tactical slice, or whether a still-local follow-through is warranted.
-Do not treat blocked task `#245` as the automatic next step unless dependency `#241` has actually cleared.
+The formerly blocked boundary-doc follow-through `#245` is now complete, so do not treat this operating plan as implying another automatic next step.
 
-## Out-of-wave / blocked items
+## Out-of-wave follow-through now completed
 
-### Pending but blocked cross-repo boundary follow-through
+### Shared runtime registry / execution-observability boundary clarification
 - **AK task:** `#245`
-- **Status:** blocked in practice by foreign-repo dependency `#241` under `softwareco/owned/pi-extensions`
-- **Rule:** do not let this blocked cross-repo work displace the active repo-local operating wave.
+- **Status:** completed after foreign dependency `#241` cleared
+- **Deliverable:** Prompt Vault now has a repo-native boundary note clarifying that shared runtime registry discovery remains process-local, `pi-vault-client` owns local receipt/telemetry bridges, and Prompt Vault exports only schema-governed execution/feedback facts plus privacy-safe aggregate observability.
+- **Rule kept intact:** do not treat registry presence or package-local receipt/telemetry accessors as Prompt Vault authority, and do not widen private-output preview exposure.
 
 ## Validation expectation for this wave
 

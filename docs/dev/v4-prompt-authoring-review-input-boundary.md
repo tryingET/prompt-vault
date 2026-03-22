@@ -31,6 +31,7 @@ This note complements, rather than replaces:
 
 - [Prompt Vault → vault-client relocation interface handoff](./vault-client-relocation-interface.md)
 - [Vault-client boundary for Prompt Vault v9](./vault-client-company-visibility-boundary.md)
+- [Shared runtime registry and execution-observability boundary](./shared-runtime-registry-and-execution-observability-boundary.md)
 
 Those notes already define the schema-v9 and consumer boundary truthfully.
 This note adds the v4-specific answer to a different question:
@@ -82,6 +83,7 @@ The current Prompt Vault source-of-truth documents already make that split expli
 
 - [Prompt Vault → vault-client relocation interface handoff](./vault-client-relocation-interface.md) states that Prompt Vault is the schema-v9 and prompt-authoring source of truth and that downstream packages must consume that contract rather than re-owning it.
 - [Vault-client boundary for Prompt Vault v9](./vault-client-company-visibility-boundary.md) defines the canonical prompt model, ontology layer, controlled-vocabulary layer, governance layer, and exact schema-v9 compatibility expectations.
+- [Shared runtime registry and execution-observability boundary](./shared-runtime-registry-and-execution-observability-boundary.md) clarifies that shared runtime registry discovery and package-local receipt/telemetry surfaces do not replace Prompt Vault's stored execution/feedback authority.
 
 Because those authoring, classification, governance, and execution-bound prompt facts are still maintained here, AK is not the canonical owner for `prompt_authoring` today.
 

@@ -1,5 +1,5 @@
 ---
-summary: "Repo-local Prompt Vault handoff: schema v9 and current boundary docs remain settled, aggregate-only selection_principles rollups plus focused privacy tests are now live, and the completed #247/#248/#246 wave means the next session should reassess the next repo-local slice from AK instead of replaying this work."
+summary: "Repo-local Prompt Vault handoff: schema v9 and current boundary docs remain settled, aggregate-only selection_principles rollups plus focused privacy tests are live, boundary-doc follow-through #245 is now complete, and the next session should reassess the next repo-local slice from AK instead of replaying finished work."
 read_when:
   - "Starting the next session in prompt-vault"
   - "Before choosing the next post-cutover implementation slice"
@@ -30,6 +30,8 @@ Current baseline to assume unless validation disproves it:
 - router prompt bodies are canonical DB content, not repo markdown fixtures or ontology content
 - the repo-native v4 prompt-authoring boundary note exists:
   - `docs/dev/v4-prompt-authoring-review-input-boundary.md`
+- the Prompt Vault-side shared runtime registry / execution-observability boundary note now exists:
+  - `docs/dev/shared-runtime-registry-and-execution-observability-boundary.md`
 - the repo-local concern-first governance-behavior review/fan-out procedure template now exists in the vault:
   - `concern-first-review-fanout`
 - the project direction cascade has been refreshed:
@@ -69,11 +71,11 @@ The most recent Prompt Vault operating wave is now complete:
 
 That means the next session should **reassess the next repo-local slice from AK** instead of replaying this just-finished wave.
 
-Blocked but still not active unless dependency reality changes:
-- `#245` — local Prompt Vault boundary docs follow-through that is blocked in practice by foreign dependency `#241`
+The previously blocked local boundary-doc follow-through is now also complete:
+- `#245` — Prompt Vault boundary versus shared runtime registry and exported prompt execution observability
 
 Do **not** restate foreign-repo implementation backlog here.
-Cross-repo extension/client follow-through is tracked in AK as `#229` under `softwareco/owned/pi-extensions`.
+Cross-repo extension/client follow-through remains tracked in AK history under `#229` in `softwareco/owned/pi-extensions`, but it is not the next Prompt Vault repo-local step.
 
 ## If work shifts to the broader semantic-organism / AK bridge direction
 Do not invent that architecture separately in this repo.
@@ -100,16 +102,18 @@ Prompt Vault should remain the prompt-body / authoring substrate in that design,
 12. `scripts/pv-verify-ontology-contract`
 13. `docs/dev/vault-client-relocation-interface.md`
 14. `docs/dev/v4-prompt-authoring-review-input-boundary.md`
-15. `diary/2026-03-22--procedure-governance-behavior-fanout-template.md`
-16. `diary/2026-03-22--docs-direction-cascade-refresh.md`
-17. `diary/2026-03-22--operating-plan-router-semantic-rollups.md`
-18. `diary/2026-03-22--selection-principles-rollup-support.md`
+15. `docs/dev/shared-runtime-registry-and-execution-observability-boundary.md`
+16. `diary/2026-03-22--procedure-governance-behavior-fanout-template.md`
+17. `diary/2026-03-22--docs-direction-cascade-refresh.md`
+18. `diary/2026-03-22--operating-plan-router-semantic-rollups.md`
+19. `diary/2026-03-22--selection-principles-rollup-support.md`
+20. `diary/2026-03-22--shared-runtime-registry-and-observability-boundary.md`
 
 ## Recommended work order
 1. Check AK before choosing work:
    - confirm the completed repo-local wave `#247` -> `#248` -> `#246`
+   - confirm the completed boundary-doc follow-through `#245`
    - inspect whether any new Prompt Vault-ready task exists
-   - keep `#245` blocked unless foreign dependency `#241` is actually resolved
    - keep foreign-repo follow-through `#229` out of scope for this repo session unless the operator explicitly asks for cross-repo work
 2. Re-run the current deterministic checks if you need to confirm the shipped surface quickly.
 3. Choose the next repo-local slice from AK + current docs rather than from stale session memory.
@@ -140,13 +144,14 @@ Add any focused tests needed for multi-valued rollup semantics in the same slice
 - No rollback to legacy `type` or tag semantics.
 - No broad raw-output dashboard push that normalizes exposing captured text beyond the explicit public-preview boundary.
 - No moving vault-client implementation work back into Prompt Vault beyond boundary-document updates.
-- No allowing blocked task `#245` to collapse the active repo-local priority order while foreign dependency `#241` remains unresolved.
+- No reopening the completed `#245` boundary-doc slice unless the underlying ownership/export/privacy boundary changes again.
 
 ## Canonical next slice after this one
 Decide from AK + current repo docs, not from handoff prose memory:
 - the `#247` -> `#248` -> `#246` wave is complete
-- reassess whether TG4 is now materially complete or whether a new repo-local follow-through should be promoted
-- treat blocked boundary task `#245` as out of scope until dependency `#241` actually clears
+- boundary-doc follow-through `#245` is also complete
+- reassess whether TG4 is now materially complete or whether a different repo-local tactical slice should be promoted
+- do not infer a synthetic next task from this handoff alone if AK does not currently show one
 
 ## First concrete next action
 From `~/ai-society/core/prompt-vault`:

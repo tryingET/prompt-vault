@@ -24,6 +24,7 @@ Prompt Vault treats prompts as structured data in a SQL database with Git-style 
 - Prompt Vault is now facet-native on schema v9 (`artifact_kind`, `control_mode`, `formalization_level`) with governed router vocabulary and company visibility.
 - Aggregate-only router-semantic quality rollups now include multi-valued `selection_principles` support without previewing private captured output.
 - The canonical Pi integration lives in `~/ai-society/softwareco/owned/pi-extensions/packages/pi-vault-client`.
+- Shared runtime registry bridges and Pi-side local receipts/telemetry are downstream runtime concerns, not Prompt Vault authority surfaces; Prompt Vault exports schema-governed execution facts and privacy-safe aggregate observability.
 - Current health should be derived from deterministic checks and analytics commands, not from a separate `status.md` mirror.
 - Keep repo-level orientation DRY in this `README.md`; keep live execution/task authority in AK or other canonical machine surfaces.
 
@@ -189,6 +190,7 @@ skills ──► skill_assets
 | [WORKFLOWS.md](docs/WORKFLOWS.md) | Team collaboration, CI/CD, advanced patterns |
 | [COMPARISON.md](docs/COMPARISON.md) | Deciding vault vs flat files |
 | [CRYSTALLIZED.md](docs/CRYSTALLIZED.md) | Patterns, anti-patterns, lessons learned |
+| [Runtime-registry + observability boundary](docs/dev/shared-runtime-registry-and-execution-observability-boundary.md) | What Prompt Vault exports canonically versus runtime-local receipt/telemetry discovery |
 | [Fuzzy selector troubleshooting](docs/reference/fuzzy-selector-troubleshooting.md) | PTX or vault selectors report "selection unavailable" / fzf issues |
 
 ## Pi Integration
