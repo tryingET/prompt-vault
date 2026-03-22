@@ -46,7 +46,13 @@ copy_test_vault() {
     for attempt in 1 2 3; do
         rm -rf "$dest"
         mkdir -p "$dest"
-        if rsync -a "$VAULT_DIR/" "$dest/" >/dev/null 2>&1; then
+        if rsync -a \
+            --exclude '.dolt/tmp/***' \
+            --exclude '.dolt/temptf/***' \
+            --exclude '.dolt/noms/LOCK' \
+            --exclude '.dolt/stats/***' \
+            "$VAULT_DIR/" "$dest/" >/dev/null 2>&1; then
+            mkdir -p "$dest/.dolt/tmp" "$dest/.dolt/temptf"
             return 0
         fi
         sleep 1

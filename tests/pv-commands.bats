@@ -124,6 +124,65 @@ EOF
     [ "$after_version" -eq $((before_version + 1)) ]
 }
 
+@test "pv edit-template requires jq explicitly" {
+    tempbin="$TMP_DIR/no-jq-edit-bin"
+    mkdir -p "$tempbin"
+    ln -s "$(command -v dirname)" "$tempbin/dirname"
+    ln -s "$(command -v mkdir)" "$tempbin/mkdir"
+
+    run env PATH="$tempbin" VAULT_DIR="$VAULT_DIR" /bin/bash "$SCRIPTS_DIR/pv" edit-template inversion
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"Missing required dependencies: jq"* ]]
+}
+
+@test "pv edit-template supports existing empty template content" {
+    TEST_VAULT_DIR="$TMP_DIR/prompt-vault-db"
+    copy_test_vault "$TEST_VAULT_DIR"
+
+    dolt --data-dir "$TEST_VAULT_DIR" sql -q "
+        INSERT INTO prompt_templates (name, description, content, artifact_kind, control_mode, formalization_level, owner_company, visibility_companies, status)
+        VALUES ('empty-template', 'desc', '', 'procedure', 'one_shot', 'structured', 'core', '[\"core\"]', 'active')
+    "
+
+    editor_script="$TMP_DIR/fill-empty-template.sh"
+    cat > "$editor_script" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+printf 'Now filled in' > "$1"
+EOF
+    chmod +x "$editor_script"
+
+    run env VAULT_DIR="$TEST_VAULT_DIR" EDITOR="$editor_script" "$SCRIPTS_DIR/pv" edit-template empty-template
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"Updated template 'empty-template'"* ]]
+
+    after_content=$(dolt --data-dir "$TEST_VAULT_DIR" sql -r json -q "SELECT content FROM prompt_templates WHERE name = 'empty-template' LIMIT 1" | jq -r '.rows[0].content')
+    [ "$after_content" = "Now filled in" ]
+}
+
+@test "pv edit-template cleans temp file when editor fails" {
+    TEST_VAULT_DIR="$TMP_DIR/prompt-vault-db"
+    copy_test_vault "$TEST_VAULT_DIR"
+
+    editor_script="$TMP_DIR/failing-editor.sh"
+    cat > "$editor_script" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+exit 42
+EOF
+    chmod +x "$editor_script"
+
+    temp_workspace="$TMP_DIR/editor-tmp"
+    mkdir -p "$temp_workspace"
+
+    run env VAULT_DIR="$TEST_VAULT_DIR" TMPDIR="$temp_workspace" EDITOR="$editor_script" "$SCRIPTS_DIR/pv" edit-template inversion
+    [ "$status" -eq 42 ]
+
+    run find "$temp_workspace" -maxdepth 1 -name '*.md' -type f
+    [ "$status" -eq 0 ]
+    [ -z "$output" ]
+}
+
 @test "pv-export-formats markdown preserves multiline prompt content" {
     output_dir="$TMP_DIR/export-markdown"
     run env VAULT_DIR="$VAULT_DIR" "$SCRIPTS_DIR/pv-export-formats" markdown "$output_dir"
@@ -223,6 +282,36 @@ PY
     run env VAULT_DIR="$TEST_VAULT_DIR" "$SCRIPTS_DIR/pv-template-vars" validate bad-var-test
     [ "$status" -eq 0 ]
     [[ "$output" == *"UNSUPPORTED_VAR:\$S"* ]]
+}
+
+@test "pv-template-vars validate ignores escaped named variables" {
+    TEST_VAULT_DIR="$TMP_DIR/prompt-vault-db"
+    copy_test_vault "$TEST_VAULT_DIR"
+
+    dolt --data-dir "$TEST_VAULT_DIR" sql -q "
+        INSERT INTO prompt_templates (name, description, content, artifact_kind, control_mode, formalization_level, owner_company, visibility_companies, status)
+        VALUES ('escaped-var-test', 'desc', CONCAT('literal ', CHAR(92), CHAR(36), 'HOME and ', CHAR(92), CHAR(36), '1'), 'procedure', 'one_shot', 'structured', 'core', '[\"core\"]', 'active')
+    "
+
+    run env VAULT_DIR="$TEST_VAULT_DIR" "$SCRIPTS_DIR/pv-template-vars" validate escaped-var-test
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"✓ escaped-var-test"* ]]
+    [[ "$output" != *"UNSUPPORTED_VAR"* ]]
+}
+
+@test "pv-template-vars validate flags unsupported brace variables" {
+    TEST_VAULT_DIR="$TMP_DIR/prompt-vault-db"
+    copy_test_vault "$TEST_VAULT_DIR"
+
+    dolt --data-dir "$TEST_VAULT_DIR" sql -q "
+        INSERT INTO prompt_templates (name, description, content, artifact_kind, control_mode, formalization_level, owner_company, visibility_companies, status)
+        VALUES ('brace-var-test', 'desc', 'literal \${HOME} and \${PATH}', 'procedure', 'one_shot', 'structured', 'core', '[\"core\"]', 'active')
+    "
+
+    run env VAULT_DIR="$TEST_VAULT_DIR" "$SCRIPTS_DIR/pv-template-vars" validate brace-var-test
+    [ "$status" -eq 0 ]
+    [[ "$output" == *'UNSUPPORTED_VAR:${HOME}'* ]]
+    [[ "$output" == *'UNSUPPORTED_VAR:${PATH}'* ]]
 }
 
 @test "pv-export-formats python escapes triple quotes in generated module" {
