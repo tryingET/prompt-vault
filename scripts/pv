@@ -240,20 +240,22 @@ PY
 
 cmd_edit_template() {
     ensure_vault
+    check_deps jq
     local name="${1:-}"
     [ -z "$name" ] && { error "Usage: pv edit-template <name>"; exit 1; }
 
-    local tmp_file escaped_name current_content content escaped_content version_before version_after
+    local tmp_file escaped_name current_record current_found current_content content escaped_content version_before version_after
     escaped_name=$(sql_escape "$name")
-    current_content=$(json_first_field "SELECT content FROM prompt_templates WHERE name = '$escaped_name' AND status IN ('active', 'draft') ORDER BY version DESC LIMIT 1" content)
+    current_record=$(json_first_field_record "SELECT content FROM prompt_templates WHERE name = '$escaped_name' AND status IN ('active', 'draft') ORDER BY version DESC LIMIT 1" content)
+    current_found=$(printf '%s' "$current_record" | jq -r '.found')
+    current_content=$(printf '%s' "$current_record" | jq -r '.value')
 
-    if [ -z "$current_content" ]; then
+    if [ "$current_found" != "true" ]; then
         error "Template '$name' not found"
         exit 1
     fi
 
-    tmp_file=$(mktemp --suffix=.md)
-    trap 'rm -f "$tmp_file"' RETURN
+    make_temp_file tmp_file .md
     printf '%s\n' "$current_content" > "$tmp_file"
 
     ${EDITOR:-nano} "$tmp_file"
@@ -265,9 +267,9 @@ cmd_edit_template() {
     fi
 
     escaped_content=$(sql_escape "$content")
-    version_before=$(json_first_field "SELECT version FROM prompt_templates WHERE name = '$escaped_name' LIMIT 1" version)
+    version_before=$(json_first_field "SELECT version FROM prompt_templates WHERE name = '$escaped_name' ORDER BY version DESC LIMIT 1" version)
     dolt sql -q "UPDATE prompt_templates SET content = '$escaped_content', version = COALESCE(version, 0) + 1 WHERE name = '$escaped_name' AND status IN ('active', 'draft')"
-    version_after=$(json_first_field "SELECT version FROM prompt_templates WHERE name = '$escaped_name' LIMIT 1" version)
+    version_after=$(json_first_field "SELECT version FROM prompt_templates WHERE name = '$escaped_name' ORDER BY version DESC LIMIT 1" version)
 
     success "Updated template '$name'"
     info "Version: ${version_before:-0} -> ${version_after:-0}"

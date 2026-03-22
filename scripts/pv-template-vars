@@ -15,23 +15,28 @@ ALL_ARGS_PATTERN="\$@"
 ARGS_ALIAS_PATTERN="\$ARGUMENTS"
 ARG_SLICE_PREFIX="\${@:"
 
+template_field_record() {
+    local name="$1"
+    local field="$2"
+    local escaped_name
+
+    escaped_name=$(sql_escape "$name")
+    json_first_field_record "SELECT $field FROM prompt_templates WHERE name = '$escaped_name' AND status = 'active' ORDER BY version DESC LIMIT 1" "$field"
+}
+
 extract_vars() {
     local content="$1"
-    printf '%s\n' "$content" | grep -oE "\\\$[0-9]+|\\\$@|\\\$ARGUMENTS|\\\${@:[0-9]+(:[0-9]+)?}" | sort -u || true
+    parse_template_var_tokens <<< "$content" | jq -r 'select(.kind == "valid") | .token' | sort -u || true
 }
 
 template_content() {
     local name="$1"
-    local escaped_name
-    escaped_name=$(sql_escape "$name")
-    json_first_field "SELECT content FROM prompt_templates WHERE name = '$escaped_name' AND status = 'active' ORDER BY version DESC LIMIT 1" content
+    template_field_record "$name" content
 }
 
 template_description() {
     local name="$1"
-    local escaped_name
-    escaped_name=$(sql_escape "$name")
-    json_first_field "SELECT description FROM prompt_templates WHERE name = '$escaped_name' ORDER BY version DESC LIMIT 1" description
+    template_field_record "$name" description
 }
 
 collect_validation_issues() {
@@ -40,11 +45,10 @@ collect_validation_issues() {
 
     while IFS= read -r token; do
         [ -z "$token" ] && continue
-        [ "$token" = "$ARGS_ALIAS_PATTERN" ] && continue
         echo "UNSUPPORTED_VAR:$token"
-    done < <(printf '%s\n' "$content" | grep -oE '\$[A-Za-z_][A-Za-z0-9_]*' | sort -u || true)
+    done < <(parse_template_var_tokens <<< "$content" | jq -r 'select(.kind == "unsupported") | .token' | sort -u || true)
 
-    positions=$(printf '%s\n' "$content" | grep -oE '\$[0-9]+' | grep -oE '[0-9]+' | sort -n | uniq || true)
+    positions=$(parse_template_var_tokens <<< "$content" | jq -r 'select(.kind == "valid" and (.token | test("^\\$[0-9]+$"))) | (.token | ltrimstr("$"))' | sort -n | uniq || true)
     max=$(printf '%s\n' "$positions" | tail -1)
     if [ -n "$max" ]; then
         for i in $(seq 1 "$max"); do
@@ -73,20 +77,27 @@ print_validation_result() {
 case "$cmd" in
     list)
         ensure_vault
+        check_deps jq python3
 
         name="${1:-}"
         if [ -z "$name" ]; then
             echo "=== All Template Variables ==="
             while IFS= read -r tname; do
                 [ -z "$tname" ] && continue
-                content=$(template_content "$tname")
+                content_record=$(template_content "$tname")
+                content=$(printf '%s' "$content_record" | jq -r '.value')
                 vars=$(extract_vars "$content" | tr '\n' ' ' | sed 's/[[:space:]]\+$//')
                 if [ -n "$vars" ]; then
                     echo "$tname: $vars"
                 fi
             done < <(json_all_field "SELECT name FROM prompt_templates WHERE status = 'active' ORDER BY name" name)
         else
-            content=$(template_content "$name")
+            content_record=$(template_content "$name")
+            if [ "$(printf '%s' "$content_record" | jq -r '.found')" != "true" ]; then
+                error "Template '$name' not found"
+                exit 1
+            fi
+            content=$(printf '%s' "$content_record" | jq -r '.value')
             echo "Variables in '$name':"
             extract_vars "$content"
         fi
@@ -94,34 +105,41 @@ case "$cmd" in
 
     validate)
         ensure_vault
+        check_deps jq python3
 
         name="${1:-}"
         if [ -z "$name" ]; then
             echo "Validating all templates..."
             while IFS= read -r tname; do
                 [ -z "$tname" ] && continue
-                content=$(template_content "$tname")
+                content_record=$(template_content "$tname")
+                content=$(printf '%s' "$content_record" | jq -r '.value')
                 print_validation_result "$tname" "$content"
             done < <(json_all_field "SELECT name FROM prompt_templates WHERE status = 'active' ORDER BY name" name)
         else
             echo "Validating '$name'..."
-            content=$(template_content "$name")
-            if [ -z "$content" ]; then
+            content_record=$(template_content "$name")
+            if [ "$(printf '%s' "$content_record" | jq -r '.found')" != "true" ]; then
                 error "Template '$name' not found"
                 exit 1
             fi
+            content=$(printf '%s' "$content_record" | jq -r '.value')
             print_validation_result "$name" "$content"
         fi
         ;;
 
     document)
         ensure_vault
+        check_deps jq python3
 
         name="${1:-}"
         [ -z "$name" ] && { echo "Usage: pv-template-vars document <name>" >&2; exit 1; }
 
-        content=$(template_content "$name")
-        desc=$(template_description "$name")
+        content_record=$(template_content "$name")
+        [ "$(printf '%s' "$content_record" | jq -r '.found')" != "true" ] && { error "Template '$name' not found"; exit 1; }
+        desc_record=$(template_description "$name")
+        content=$(printf '%s' "$content_record" | jq -r '.value')
+        desc=$(printf '%s' "$desc_record" | jq -r '.value')
         mapfile -t vars < <(extract_vars "$content")
 
         echo "## $name"
@@ -157,11 +175,14 @@ case "$cmd" in
 
     usage)
         ensure_vault
+        check_deps jq python3
 
         name="${1:-}"
         [ -z "$name" ] && { echo "Usage: pv-template-vars usage <name>" >&2; exit 1; }
 
-        content=$(template_content "$name")
+        content_record=$(template_content "$name")
+        [ "$(printf '%s' "$content_record" | jq -r '.found')" != "true" ] && { error "Template '$name' not found"; exit 1; }
+        content=$(printf '%s' "$content_record" | jq -r '.value')
         mapfile -t vars < <(extract_vars "$content")
 
         echo "/$name"

@@ -222,8 +222,7 @@ EOF
 
         echo "Starting REST API server on port $port for visibility company '$visibility_company'..."
 
-        api_script=$(mktemp "${TMPDIR:-/tmp}/pv-api.XXXXXX.py")
-        trap 'rm -f "$api_script"' EXIT
+        make_temp_file api_script .py
 
         cat > "$api_script" << 'PYEOF'
 #!/usr/bin/env python3
