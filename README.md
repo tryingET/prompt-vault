@@ -19,6 +19,14 @@ Prompts are programs. They deserve the same rigor as code: version control, test
 
 Prompt Vault treats prompts as structured data in a SQL database with Git-style version control. Every prompt has a history. Every change is tracked. Every execution measured.
 
+## Current reality
+
+- Prompt Vault is now facet-native on schema v9 (`artifact_kind`, `control_mode`, `formalization_level`) with governed router vocabulary and company visibility.
+- Aggregate-only router-semantic quality rollups now include multi-valued `selection_principles` support without previewing private captured output.
+- The canonical Pi integration lives in `~/ai-society/softwareco/owned/pi-extensions/packages/pi-vault-client`.
+- Current health should be derived from deterministic checks and analytics commands, not from a separate `status.md` mirror.
+- Keep repo-level orientation DRY in this `README.md`; keep live execution/task authority in AK or other canonical machine surfaces.
+
 ## The Problem
 
 You have dozens of prompts scattered across files, chat history, and notes. You iterate on them constantly but can't answer:
@@ -143,7 +151,8 @@ skills ──► skill_assets
 ./pv quality dashboard      # Health scores + evidence gaps
 ./pv quality coverage       # Feedback/capture coverage by active entity
 ./pv quality rollup control_mode  # Aggregate quality/evidence by facet
-./pv quality rollup routing_context  # Aggregate quality/evidence by router vocabulary
+./pv quality rollup routing_context  # Aggregate quality/evidence by exact-one router vocabulary
+./pv quality rollup selection_principles  # Aggregate quality/evidence by multi-valued router semantics
 ./pv exec x "arg"           # Run with tracking
 ./pv rate <id> 4 "notes"    # Record feedback
 ```

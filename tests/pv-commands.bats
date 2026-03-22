@@ -64,3 +64,9 @@ setup() {
     [ "$status" -eq 0 ]
     [[ "$output" == *"Quality Rollup by control_mode"* ]]
 }
+
+@test "pv quality rollup selection_principles runs" {
+    run "$SCRIPTS_DIR/pv" quality rollup selection_principles
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"Quality Rollup by selection_principles"* ]]
+}

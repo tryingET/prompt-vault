@@ -171,7 +171,7 @@ Knowledge extracted from development and review sessions.
 
 ### Pending
 
-See [docs/dev/status.md](dev/status.md) and [next_session_prompt.md](../next_session_prompt.md) for current work items and handoff state.
+See [README.md](../README.md) and [next_session_prompt.md](../next_session_prompt.md) for current reality and handoff state.
 
 ## For Contributors
 

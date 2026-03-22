@@ -11,8 +11,7 @@ read_when:
 Version-controlled prompt templates using Dolt SQL database with Git semantics, analytics, and A/B testing.
 
 ## Current State
-- **Templates:** 73 total (70 active, 3 seeded routers)
-- **Verification:** see `docs/dev/status.md` for the current snapshot
+- **Verification:** derive current health from `README.md`, `./verify.sh`, and the quality/analytics commands rather than a `status.md` mirror
 - **Schema:** v9 with ontology facets (`artifact_kind` / `control_mode` / `formalization_level`), governed `controlled_vocabulary`, company visibility, and execution output capture
 
 ## Guardrails
@@ -106,12 +105,11 @@ Forbidden:
 - any cycle
 
 ## Read order
-1) `README.md` — Project overview
+1) `README.md` — Project overview + current reality
 2) `QUICKSTART.md` — Get started in 5 minutes
 3) `docs/CRYSTALLIZED.md` — Design decisions and patterns
 4) `docs/WORKFLOWS.md` — Team collaboration patterns
-5) `docs/dev/status.md` — Health metrics
-6) `next_session_prompt.md` — Current handoff and next slice
+5) `next_session_prompt.md` — Current handoff and next slice
 
 ## Quick reference for agents
 

@@ -1,22 +1,105 @@
 {
   "schema_version": 1,
-  "updated_at": "",
-  "owner": "prompt-vault",
-  "naming_contract": {
-    "system_name": "PROMPT_VAULT",
-    "issue_prefix": "PROMPTVAULT-",
-    "tool_namespace": "prompt-vault"
-  },
+  "updated_at": "2026-03-22",
+  "owner": "@project-owners",
+  "project_name": "prompt-vault",
   "milestones": [
     {
       "id": "M1",
-      "title": "Initial Setup",
-      "issues": []
+      "title": "DB Task Projection",
+      "issues": [
+        {
+          "id": "AK-TASK-0087",
+          "title": "Author a concern-first review/fan-out procedure template for cross-repo governance-behavior work",
+          "state": "done",
+          "tasks": [
+            {
+              "text": "Author a concern-first review/fan-out procedure template for cross-repo governance-behavior work (task #87)",
+              "done": true
+            }
+          ],
+          "dod": "Task reaches done in society.db with evidence recorded.",
+          "completed_at": "2026-03-22"
+        },
+        {
+          "id": "AK-TASK-0222",
+          "title": "V4: author prompt-authoring review-input boundary note",
+          "state": "done",
+          "tasks": [
+            {
+              "text": "V4: author prompt-authoring review-input boundary note (task #222)",
+              "done": true
+            }
+          ],
+          "dod": "Task reaches done in society.db with evidence recorded.",
+          "completed_at": "2026-03-22"
+        },
+        {
+          "id": "AK-TASK-0234",
+          "title": "Refresh project direction docs for schema-v9 reality and add tactical goals",
+          "state": "done",
+          "tasks": [
+            {
+              "text": "Refresh project direction docs for schema-v9 reality and add tactical goals (task #234)",
+              "done": true
+            }
+          ],
+          "dod": "Direction docs reflect current schema-v9 reality and tactical goals exist.",
+          "completed_at": "2026-03-22"
+        },
+        {
+          "id": "AK-TASK-0245",
+          "title": "Document Prompt Vault boundary versus shared runtime registry and exported prompt execution observability",
+          "state": "queued",
+          "tasks": [
+            {
+              "text": "Document Prompt Vault boundary versus shared runtime registry and exported prompt execution observability (task #245)",
+              "done": false
+            }
+          ],
+          "dod": "Task reaches done in society.db with evidence recorded.",
+          "note": "Blocked in practice by foreign dependency #241."
+        },
+        {
+          "id": "AK-TASK-0246",
+          "title": "Refresh docs and handoff for multi-valued router-semantic rollup support",
+          "state": "done",
+          "tasks": [
+            {
+              "text": "Refresh docs and handoff for multi-valued router-semantic rollup support (task #246)",
+              "done": true
+            }
+          ],
+          "dod": "Docs and handoff match the shipped selection_principles rollup surface.",
+          "completed_at": "2026-03-22"
+        },
+        {
+          "id": "AK-TASK-0247",
+          "title": "Add aggregate-only selection_principles rollup support to pv-quality",
+          "state": "done",
+          "tasks": [
+            {
+              "text": "Add aggregate-only selection_principles rollup support to pv-quality (task #247)",
+              "done": true
+            }
+          ],
+          "dod": "Operators can inspect selection_principles through aggregate-only quality rollups.",
+          "completed_at": "2026-03-22"
+        },
+        {
+          "id": "AK-TASK-0248",
+          "title": "Add focused tests for multi-valued router-semantic rollups and privacy boundaries",
+          "state": "done",
+          "tasks": [
+            {
+              "text": "Add focused tests for multi-valued router-semantic rollups and privacy boundaries (task #248)",
+              "done": true
+            }
+          ],
+          "dod": "Targeted validation protects multi-valued router-semantic rollups and the privacy boundary.",
+          "completed_at": "2026-03-22"
+        }
+      ]
     }
-  ],
-  "program_dod": [
-    "All tests pass",
-    "Documentation updated",
-    "Code reviewed"
   ]
 }

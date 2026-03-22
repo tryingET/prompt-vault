@@ -36,7 +36,7 @@ Coverage:
 
 Rollup dimensions:
   artifact_kind | control_mode | formalization_level | owner_company
-  routing_context | activity_phase | input_artifact | transition_target_type | output_commitment
+  routing_context | activity_phase | input_artifact | transition_target_type | selection_principles | output_commitment
 
 Grades:
   A: 90+, B: 80-89, C: 70-79, D: 60-69, F: <60
@@ -217,16 +217,63 @@ WHERE $alias.name = '$escaped_name' AND $alias.status = 'active'
 EOF
 }
 
+template_rollup_entity_stats_sql() {
+    cat <<'EOF'
+SELECT
+    e.entity_id,
+    COUNT(*) as executions,
+    COUNT(f.id) as feedback_rows,
+    SUM(CASE WHEN e.output_text IS NOT NULL THEN 1 ELSE 0 END) as captured_executions,
+    SUM(CASE WHEN e.output_capture_mode = 'private' AND e.output_text IS NOT NULL THEN 1 ELSE 0 END) as private_captures,
+    SUM(CASE WHEN e.output_capture_mode = 'public' AND e.output_text IS NOT NULL THEN 1 ELSE 0 END) as public_captures,
+    SUM(CASE WHEN f.rating IS NOT NULL THEN f.rating ELSE 0 END) as rating_sum,
+    COUNT(f.rating) as rating_rows,
+    AVG(f.rating) as avg_rating,
+    MAX(e.created_at) as last_execution_at
+FROM executions e
+LEFT JOIN feedback f ON f.execution_id = e.id
+WHERE e.entity_type = 'template'
+GROUP BY e.entity_id
+EOF
+}
+
+selection_principles_bucket_table_sql() {
+    local contract="$SCRIPT_DIR/../ontology/controlled-vocabulary-contract.json"
+    local values=()
+    local i
+
+    [ -f "$contract" ] || {
+        error "Missing controlled-vocabulary contract: $contract" >&2
+        exit 1
+    }
+
+    mapfile -t values < <(jq -r '.dimensions.selection_principles[]' "$contract")
+
+    [ "${#values[@]}" -gt 0 ] || {
+        error "No governed selection_principles values found in $contract" >&2
+        exit 1
+    }
+
+    for i in "${!values[@]}"; do
+        local escaped_value
+        escaped_value=$(sql_escape "${values[$i]}")
+        if [ "$i" -gt 0 ]; then
+            printf '\nUNION ALL\n'
+        fi
+        printf "SELECT '%s' as bucket" "$escaped_value"
+    done
+}
+
 normalize_rollup_dimension() {
     local dimension="${1:-control_mode}"
 
     case "$dimension" in
-        artifact_kind|control_mode|formalization_level|owner_company|routing_context|activity_phase|input_artifact|transition_target_type|output_commitment)
+        artifact_kind|control_mode|formalization_level|owner_company|routing_context|activity_phase|input_artifact|transition_target_type|selection_principles|output_commitment)
             printf '%s' "$dimension"
             ;;
         *)
             error "Unsupported rollup dimension: $dimension" >&2
-            error "Allowed dimensions: artifact_kind, control_mode, formalization_level, owner_company, routing_context, activity_phase, input_artifact, transition_target_type, output_commitment" >&2
+            error "Allowed dimensions: artifact_kind, control_mode, formalization_level, owner_company, routing_context, activity_phase, input_artifact, transition_target_type, selection_principles, output_commitment" >&2
             exit 1
             ;;
     esac
@@ -243,7 +290,7 @@ rollup_bucket_expr() {
             printf "JSON_UNQUOTE(JSON_EXTRACT(t.controlled_vocabulary, '$.%s'))" "$dimension"
             ;;
         *)
-            error "Unsupported rollup dimension: $dimension" >&2
+            error "Unsupported exact-one rollup dimension: $dimension" >&2
             exit 1
             ;;
     esac
@@ -260,7 +307,7 @@ rollup_dimension_where_clause() {
             printf "t.status = 'active' AND t.artifact_kind = 'procedure' AND t.control_mode = 'router' AND t.controlled_vocabulary IS NOT NULL AND JSON_EXTRACT(t.controlled_vocabulary, '$.%s') IS NOT NULL" "$dimension"
             ;;
         *)
-            error "Unsupported rollup dimension: $dimension" >&2
+            error "Unsupported exact-one rollup dimension: $dimension" >&2
             exit 1
             ;;
     esac
@@ -270,6 +317,80 @@ quality_rollup_sql() {
     local dimension="$1"
     local bucket_expr
     local where_clause
+    local stats_sql
+
+    stats_sql=$(template_rollup_entity_stats_sql)
+
+    if [ "$dimension" = "selection_principles" ]; then
+        local bucket_table_sql
+        bucket_table_sql=$(selection_principles_bucket_table_sql)
+
+        cat <<EOF
+SELECT
+    buckets.bucket as bucket,
+    COUNT(*) as entities,
+    SUM(CASE WHEN COALESCE(es.executions, 0) > 0 THEN 1 ELSE 0 END) as entities_with_executions,
+    SUM(COALESCE(es.executions, 0)) as executions,
+    SUM(COALESCE(es.feedback_rows, 0)) as feedback_rows,
+    ROUND(
+        SUM(COALESCE(es.feedback_rows, 0)) * 100.0 / NULLIF(SUM(COALESCE(es.executions, 0)), 0),
+        1
+    ) as feedback_rate_pct,
+    SUM(COALESCE(es.captured_executions, 0)) as captured_executions,
+    ROUND(
+        SUM(COALESCE(es.captured_executions, 0)) * 100.0 / NULLIF(SUM(COALESCE(es.executions, 0)), 0),
+        1
+    ) as capture_rate_pct,
+    SUM(COALESCE(es.private_captures, 0)) as private_captures,
+    SUM(COALESCE(es.public_captures, 0)) as public_captures,
+    ROUND(
+        SUM(COALESCE(es.rating_sum, 0)) / NULLIF(SUM(COALESCE(es.rating_rows, 0)), 0),
+        2
+    ) as avg_rating,
+    ROUND(AVG(
+        (CASE
+            WHEN CHAR_LENGTH(COALESCE(t.description, '')) BETWEEN 50 AND 150 THEN 20
+            WHEN CHAR_LENGTH(COALESCE(t.description, '')) >= 20 THEN 10
+            ELSE 0
+         END)
+      + (CASE
+            WHEN CHAR_LENGTH(COALESCE(t.content, '')) >= 100 THEN 15
+            WHEN CHAR_LENGTH(COALESCE(t.content, '')) >= 50 THEN 10
+            WHEN CHAR_LENGTH(COALESCE(t.content, '')) >= 20 THEN 5
+            ELSE 0
+         END)
+      + (CASE
+            WHEN COALESCE(es.executions, 0) >= 10 THEN 25
+            WHEN COALESCE(es.executions, 0) >= 5 THEN 15
+            WHEN COALESCE(es.executions, 0) >= 1 THEN 5
+            ELSE 0
+         END)
+      + (CASE
+            WHEN COALESCE(es.avg_rating, 0) > 4 THEN 40
+            WHEN COALESCE(es.avg_rating, 0) > 3 THEN 30
+            WHEN COALESCE(es.avg_rating, 0) > 2 THEN 20
+            WHEN COALESCE(es.avg_rating, 0) > 0 THEN 10
+            ELSE 0
+         END)
+    ), 1) as avg_quality_score,
+    MAX(es.last_execution_at) as last_execution_at
+FROM (
+$bucket_table_sql
+) buckets
+JOIN prompt_templates t
+  ON t.status = 'active'
+ AND t.artifact_kind = 'procedure'
+ AND t.control_mode = 'router'
+ AND t.controlled_vocabulary IS NOT NULL
+ AND JSON_SEARCH(t.controlled_vocabulary, 'one', buckets.bucket, NULL, '$.selection_principles[*]') IS NOT NULL
+LEFT JOIN (
+$stats_sql
+) es ON es.entity_id = t.id
+GROUP BY buckets.bucket
+ORDER BY executions DESC, entities DESC, bucket
+EOF
+        return
+    fi
 
     bucket_expr=$(rollup_bucket_expr "$dimension")
     where_clause=$(rollup_dimension_where_clause "$dimension")
@@ -325,21 +446,7 @@ SELECT
     MAX(es.last_execution_at) as last_execution_at
 FROM prompt_templates t
 LEFT JOIN (
-    SELECT
-        e.entity_id,
-        COUNT(*) as executions,
-        COUNT(f.id) as feedback_rows,
-        SUM(CASE WHEN e.output_text IS NOT NULL THEN 1 ELSE 0 END) as captured_executions,
-        SUM(CASE WHEN e.output_capture_mode = 'private' AND e.output_text IS NOT NULL THEN 1 ELSE 0 END) as private_captures,
-        SUM(CASE WHEN e.output_capture_mode = 'public' AND e.output_text IS NOT NULL THEN 1 ELSE 0 END) as public_captures,
-        SUM(CASE WHEN f.rating IS NOT NULL THEN f.rating ELSE 0 END) as rating_sum,
-        COUNT(f.rating) as rating_rows,
-        AVG(f.rating) as avg_rating,
-        MAX(e.created_at) as last_execution_at
-    FROM executions e
-    LEFT JOIN feedback f ON f.execution_id = e.id
-    WHERE e.entity_type = 'template'
-    GROUP BY e.entity_id
+$stats_sql
 ) es ON es.entity_id = t.id
 WHERE $where_clause
 GROUP BY $bucket_expr

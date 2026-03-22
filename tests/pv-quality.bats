@@ -91,6 +91,67 @@ teardown() {
     [[ "$output" != *"never show this private routing payload"* ]]
 }
 
+@test "pv-quality selection_principles rollup supports multi-valued router semantics without leaking private output text" {
+    run env VAULT_DIR="$TEST_VAULT_DIR" "$SCRIPTS_DIR/pv-exec" analysis-router "sample context" --output-text "never show this private selection principle payload"
+    [ "$status" -eq 0 ]
+
+    exec_id=$(dolt --data-dir "$TEST_VAULT_DIR" sql -r csv -q "SELECT MAX(id) FROM executions WHERE entity_type = 'template'" | tail -1)
+    [ -n "$exec_id" ]
+
+    run dolt --data-dir "$TEST_VAULT_DIR" sql -q "INSERT INTO feedback (execution_id, rating, notes, issues, would_use_again) VALUES ($exec_id, 5, 'great', '[]', TRUE)"
+    [ "$status" -eq 0 ]
+
+    run env VAULT_DIR="$TEST_VAULT_DIR" "$SCRIPTS_DIR/pv-quality" rollup selection_principles
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"Quality Rollup by selection_principles"* ]]
+    [[ "$output" == *"evidence_based"* ]]
+    [[ "$output" == *"avg_quality_score"* ]]
+    [[ "$output" != *"never show this private selection principle payload"* ]]
+}
+
+@test "pv-quality selection_principles rollup counts a router in every governed principle bucket it declares" {
+    run env VAULT_DIR="$TEST_VAULT_DIR" "$SCRIPTS_DIR/pv-quality" rollup selection_principles
+    [ "$status" -eq 0 ]
+    baseline_evidence=$(printf '%s\n' "$output" | awk -F'|' '/evidence_based/ {gsub(/ /, "", $3); print $3; exit}')
+    baseline_minimal=$(printf '%s\n' "$output" | awk -F'|' '/minimal_change/ {gsub(/ /, "", $3); print $3; exit}')
+    [ -n "$baseline_evidence" ]
+    [ -n "$baseline_minimal" ]
+
+    run dolt --data-dir "$TEST_VAULT_DIR" sql -q "
+        INSERT INTO prompt_templates (
+            name,
+            description,
+            content,
+            artifact_kind,
+            control_mode,
+            formalization_level,
+            owner_company,
+            visibility_companies,
+            controlled_vocabulary,
+            status
+        ) VALUES (
+            'multi-principle-router',
+            'This router proves that one active router can contribute to multiple selection-principle buckets.',
+            REPEAT('m', 150),
+            'procedure',
+            'router',
+            'structured',
+            'core',
+            '[\"core\"]',
+            '{\"routing_context\":\"analysis_followup\",\"activity_phase\":\"post_analysis\",\"input_artifact\":\"analysis_output\",\"transition_target_type\":\"framework_mode\",\"selection_principles\":[\"evidence_based\",\"minimal_change\"],\"output_commitment\":\"exact_next_prompt\"}',
+            'active'
+        )
+    "
+    [ "$status" -eq 0 ]
+
+    run env VAULT_DIR="$TEST_VAULT_DIR" "$SCRIPTS_DIR/pv-quality" rollup selection_principles
+    [ "$status" -eq 0 ]
+    after_evidence=$(printf '%s\n' "$output" | awk -F'|' '/evidence_based/ {gsub(/ /, "", $3); print $3; exit}')
+    after_minimal=$(printf '%s\n' "$output" | awk -F'|' '/minimal_change/ {gsub(/ /, "", $3); print $3; exit}')
+    [ "$after_evidence" = "$((baseline_evidence + 1))" ]
+    [ "$after_minimal" = "$((baseline_minimal + 1))" ]
+}
+
 @test "pv-quality router-vocabulary rollups ignore non-router templates with matching JSON keys" {
     run env VAULT_DIR="$TEST_VAULT_DIR" "$SCRIPTS_DIR/pv-quality" rollup routing_context
     [ "$status" -eq 0 ]
@@ -127,6 +188,45 @@ teardown() {
     run env VAULT_DIR="$TEST_VAULT_DIR" "$SCRIPTS_DIR/pv-quality" rollup routing_context
     [ "$status" -eq 0 ]
     after_count=$(printf '%s\n' "$output" | awk -F'|' '/analysis_followup/ {gsub(/ /, "", $3); print $3; exit}')
+    [ "$after_count" = "$baseline_count" ]
+}
+
+@test "pv-quality selection_principles rollup ignores non-router templates with matching JSON keys" {
+    run env VAULT_DIR="$TEST_VAULT_DIR" "$SCRIPTS_DIR/pv-quality" rollup selection_principles
+    [ "$status" -eq 0 ]
+    baseline_count=$(printf '%s\n' "$output" | awk -F'|' '/evidence_based/ {gsub(/ /, "", $3); print $3; exit}')
+    [ -n "$baseline_count" ]
+
+    run dolt --data-dir "$TEST_VAULT_DIR" sql -q "
+        INSERT INTO prompt_templates (
+            name,
+            description,
+            content,
+            artifact_kind,
+            control_mode,
+            formalization_level,
+            owner_company,
+            visibility_companies,
+            controlled_vocabulary,
+            status
+        ) VALUES (
+            'not-a-router-but-has-selection-principles',
+            'This active template should never contaminate selection_principles rollups.',
+            'content',
+            'procedure',
+            'one_shot',
+            'structured',
+            'core',
+            '[\"core\"]',
+            '{\"selection_principles\":[\"evidence_based\",\"minimal_change\"]}',
+            'active'
+        )
+    "
+    [ "$status" -eq 0 ]
+
+    run env VAULT_DIR="$TEST_VAULT_DIR" "$SCRIPTS_DIR/pv-quality" rollup selection_principles
+    [ "$status" -eq 0 ]
+    after_count=$(printf '%s\n' "$output" | awk -F'|' '/evidence_based/ {gsub(/ /, "", $3); print $3; exit}')
     [ "$after_count" = "$baseline_count" ]
 }
 
