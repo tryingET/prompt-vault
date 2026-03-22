@@ -5,44 +5,45 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 VAULT_DIR="${VAULT_DIR:-$SCRIPT_DIR/../prompt-vault-db}"
+# shellcheck disable=SC1091
+source "$SCRIPT_DIR/pv-lib.sh"
 
-cd "$VAULT_DIR"
+ensure_vault
 
 from="${1:-HEAD~1}"
 to="${2:-HEAD}"
 type="${3:-all}"
 
 # Colors
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
 CYAN='\033[0;36m'
 NC='\033[0m'
 
 show_table_diff() {
     local table="$1"
     echo -e "${CYAN}=== $table ===${NC}"
-    
-    # Get diff stats
     dolt diff "$from" "$to" "$table" 2>/dev/null | head -50
     echo ""
 }
 
 show_template_diff() {
     local name="$1"
-    local from_version="$2"
-    local to_version="$3"
-    
+    local escaped_name escaped_from escaped_to
+    local from_content to_content
+
+    escaped_name=$(sql_escape "$name")
+    escaped_from=$(sql_escape "$from")
+    escaped_to=$(sql_escape "$to")
+
     echo -e "${CYAN}Template: $name${NC}"
     echo ""
-    
-    # Get content at each version
-    from_content=$(dolt sql -r csv -q "SELECT content FROM prompt_templates WHERE name = '$name' AND version = $from_version" 2>/dev/null | tail -1 || echo "")
-    to_content=$(dolt sql -r csv -q "SELECT content FROM prompt_templates WHERE name = '$name' AND version = $to_version" 2>/dev/null | tail -1 || echo "")
-    
+
+    from_content=$(json_first_field "SELECT content FROM prompt_templates AS OF '$escaped_from' WHERE name = '$escaped_name' LIMIT 1" content)
+    to_content=$(json_first_field "SELECT content FROM prompt_templates AS OF '$escaped_to' WHERE name = '$escaped_name' LIMIT 1" content)
+
     if [ -n "$from_content" ] && [ -n "$to_content" ]; then
-        # Use diff to show changes
-        diff -u <(echo "$from_content") <(echo "$to_content") 2>/dev/null | head -100 || echo "(no changes)"
+        diff -u <(printf '%s\n' "$from_content") <(printf '%s\n' "$to_content") 2>/dev/null | head -100 || echo "(no changes)"
+    else
+        echo "Template not found in one of the requested refs"
     fi
     echo ""
 }
@@ -51,77 +52,68 @@ case "$type" in
     all)
         echo -e "${CYAN}Prompt Vault Diff: $from..$to${NC}"
         echo ""
-        
-        # Show commit info
+
         echo "From commit:"
         dolt log -n 1 "$from" 2>/dev/null | head -6
         echo ""
         echo "To commit:"
         dolt log -n 1 "$to" 2>/dev/null | head -6
         echo ""
-        
-        # Show table diffs
+
         for table in prompt_templates skills collections executions feedback; do
             if dolt diff "$from" "$to" "$table" 2>/dev/null | grep -q .; then
                 show_table_diff "$table"
             fi
         done
         ;;
-    
+
     templates)
         show_table_diff "prompt_templates"
         ;;
-    
+
     skills)
         show_table_diff "skills"
         ;;
-    
+
     template)
         name="${4:-}"
         [ -z "$name" ] && { echo "Usage: pv-diff <from> <to> template <name>" >&2; exit 1; }
-        
-        # Find versions at each commit
-        from_ver=$(dolt sql -r csv -q "SELECT MAX(version) FROM prompt_templates AS OF '$from' WHERE name = '$name'" 2>/dev/null | tail -1)
-        to_ver=$(dolt sql -r csv -q "SELECT MAX(version) FROM prompt_templates AS OF '$to' WHERE name = '$name'" 2>/dev/null | tail -1)
-        
-        show_template_diff "$name" "$from_ver" "$to_ver"
+        show_template_diff "$name"
         ;;
-    
+
     stats)
         echo -e "${CYAN}Diff Statistics: $from..$to${NC}"
         echo ""
-        
         dolt diff --stat "$from" "$to" 2>/dev/null
         ;;
-    
+
     summary)
         echo -e "${CYAN}Summary: $from..$to${NC}"
         echo ""
-        
-        # Count changes
-        local template_changes=$(dolt diff "$from" "$to" prompt_templates 2>/dev/null | grep -c "^---\|^+++" || echo 0)
-        local skill_changes=$(dolt diff "$from" "$to" skills 2>/dev/null | grep -c "^---\|^+++" || echo 0)
-        
+
+        template_changes=$( (dolt diff "$from" "$to" prompt_templates 2>/dev/null | grep -c '^---\|^+++') || true )
+        skill_changes=$( (dolt diff "$from" "$to" skills 2>/dev/null | grep -c '^---\|^+++') || true )
+        template_changes=${template_changes:-0}
+        skill_changes=${skill_changes:-0}
+
         echo "Changes:"
         echo "  Templates: $template_changes modifications"
         echo "  Skills: $skill_changes modifications"
         echo ""
-        
-        # List changed items
+
         echo "Modified templates:"
-        dolt diff "$from" "$to" prompt_templates 2>/dev/null | grep -E "name.*\|" | head -10 || echo "  (none)"
+        dolt diff "$from" "$to" prompt_templates 2>/dev/null | grep -E 'name.*\|' | head -10 || echo "  (none)"
         echo ""
         echo "Modified skills:"
-        dolt diff "$from" "$to" skills 2>/dev/null | grep -E "name.*\|" | head -10 || echo "  (none)"
+        dolt diff "$from" "$to" skills 2>/dev/null | grep -E 'name.*\|' | head -10 || echo "  (none)"
         ;;
-    
+
     json)
-        # Output as JSON for programmatic use
         echo "{"
-        echo "  \"from\": \"$from\","
-        echo "  \"to\": \"$to\","
+        echo "  \"from\": \"$from\"," 
+        echo "  \"to\": \"$to\"," 
         echo "  \"tables\": {"
-        
+
         first=true
         for table in prompt_templates skills collections; do
             if dolt diff "$from" "$to" "$table" 2>/dev/null | grep -q .; then
@@ -130,12 +122,12 @@ case "$type" in
                 echo -n "    \"$table\": \"changed\""
             fi
         done
-        
+
         echo ""
         echo "  }"
         echo "}"
         ;;
-    
+
     help|*)
         cat << 'EOF'
 Usage: pv-diff <from> <to> [type]

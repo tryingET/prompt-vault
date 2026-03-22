@@ -36,9 +36,10 @@ ensure_vault() {
 # Check for required dependencies
 check_deps() {
     local missing=()
-    for cmd in "$@"; do
-        if ! command -v "$cmd" &>/dev/null; then
-            missing+=("$cmd")
+    local dep
+    for dep in "$@"; do
+        if ! command -v "$dep" &>/dev/null; then
+            missing+=("$dep")
         fi
     done
     if [ ${#missing[@]} -gt 0 ]; then
@@ -116,6 +117,16 @@ json_all_field() {
     dolt_json_query "$sql" | jq -r --arg field "$field" '(.rows // [])[][$field] // empty'
 }
 
+json_rows_base64() {
+    local sql="$1"
+    dolt_json_query "$sql" | jq -r '(.rows // [])[] | @base64'
+}
+
+json_decode_base64() {
+    local encoded="$1"
+    printf '%s' "$encoded" | base64 -d
+}
+
 # Export functions and variables for sourcing scripts
-export -f info success warn error ensure_vault check_deps sql_escape require_numeric float_gt sanitize_terminal_text terminal_safe_preview sql_escape_base64 sql_decode_base64 dolt_json_query json_first_field json_all_field
+export -f info success warn error ensure_vault check_deps sql_escape require_numeric float_gt sanitize_terminal_text terminal_safe_preview sql_escape_base64 sql_decode_base64 dolt_json_query json_first_field json_all_field json_rows_base64 json_decode_base64
 export SCRIPTS_DIR VAULT_DIR RED GREEN YELLOW BLUE NC

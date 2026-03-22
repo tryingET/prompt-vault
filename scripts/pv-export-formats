@@ -5,26 +5,32 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 VAULT_DIR="${VAULT_DIR:-$SCRIPT_DIR/../prompt-vault-db}"
+# shellcheck disable=SC1091
+source "$SCRIPT_DIR/pv-lib.sh"
 
-cd "$VAULT_DIR"
+ensure_vault
+check_deps jq
 
 format="${1:-help}"
 output="${2:-}"
+
+template_rows_sql="SELECT name, description, content FROM prompt_templates WHERE status = 'active' ORDER BY name"
+skill_rows_sql="SELECT name, description, readme FROM skills WHERE status = 'active' ORDER BY name"
 
 case "$format" in
     markdown)
         output="${output:-./prompt-vault-export}"
         mkdir -p "$output/templates" "$output/skills"
-        
+
         echo "Exporting to Markdown..."
-        
-        # Export templates
-        dolt sql -r csv -q "SELECT name FROM prompt_templates WHERE status = 'active'" | tail -n +2 | while read name; do
-            [ -z "$name" ] && continue
-            
-            content=$(dolt sql -r csv -q "SELECT content FROM prompt_templates WHERE name = '$name' ORDER BY version DESC LIMIT 1" | tail -1 | sed "s/''/'/g")
-            desc=$(dolt sql -r csv -q "SELECT description FROM prompt_templates WHERE name = '$name' LIMIT 1" | tail -1 | sed "s/''/'/g")
-            
+
+        while IFS= read -r row_b64; do
+            [ -z "$row_b64" ] && continue
+            row_json=$(json_decode_base64 "$row_b64")
+            name=$(printf '%s' "$row_json" | jq -r '.name')
+            desc=$(printf '%s' "$row_json" | jq -r '.description // ""')
+            content=$(printf '%s' "$row_json" | jq -r '.content // ""')
+
             cat > "$output/templates/${name}.md" << EOF
 # $name
 
@@ -34,99 +40,97 @@ case "$format" in
 
 $content
 EOF
-        done
-        
-        # Export skills
-        dolt sql -r csv -q "SELECT name FROM skills WHERE status = 'active'" | tail -n +2 | while read name; do
-            [ -z "$name" ] && continue
-            
-            readme=$(dolt sql -r csv -q "SELECT readme FROM skills WHERE name = '$name' ORDER BY version DESC LIMIT 1" | tail -1 | sed "s/''/'/g")
-            echo "$readme" > "$output/skills/${name}.md"
-        done
-        
-        # Create index
-        cat > "$output/README.md" << EOF
-# Prompt Vault Export
+        done < <(json_rows_base64 "$template_rows_sql")
 
-Generated: $(date)
+        while IFS= read -r row_b64; do
+            [ -z "$row_b64" ] && continue
+            row_json=$(json_decode_base64 "$row_b64")
+            name=$(printf '%s' "$row_json" | jq -r '.name')
+            readme=$(printf '%s' "$row_json" | jq -r '.readme // ""')
+            printf '%s\n' "$readme" > "$output/skills/${name}.md"
+        done < <(json_rows_base64 "$skill_rows_sql")
 
-## Templates
+        {
+            echo "# Prompt Vault Export"
+            echo ""
+            echo "Generated: $(date)"
+            echo ""
+            echo "## Templates"
+            echo ""
+            while IFS= read -r row_b64; do
+                [ -z "$row_b64" ] && continue
+                row_json=$(json_decode_base64 "$row_b64")
+                name=$(printf '%s' "$row_json" | jq -r '.name')
+                desc=$(printf '%s' "$row_json" | jq -r '.description // ""')
+                echo "- [$name](templates/${name}.md) - $desc"
+            done < <(json_rows_base64 "$template_rows_sql")
+            echo ""
+            echo "## Skills"
+            echo ""
+            while IFS= read -r row_b64; do
+                [ -z "$row_b64" ] && continue
+                row_json=$(json_decode_base64 "$row_b64")
+                name=$(printf '%s' "$row_json" | jq -r '.name')
+                desc=$(printf '%s' "$row_json" | jq -r '.description // ""')
+                echo "- [$name](skills/${name}.md) - $desc"
+            done < <(json_rows_base64 "$skill_rows_sql")
+        } > "$output/README.md"
 
-$(dolt sql -r csv -q "SELECT name, description FROM prompt_templates WHERE status = 'active'" | tail -n +2 | while IFS=',' read name desc; do
-    echo "- [$name](templates/${name}.md) - $desc"
-done)
-
-## Skills
-
-$(dolt sql -r csv -q "SELECT name, description FROM skills WHERE status = 'active'" | tail -n +2 | while IFS=',' read name desc; do
-    echo "- [$name](skills/${name}.md) - $desc"
-done)
-EOF
-        
         echo "✓ Exported to $output/"
         ;;
-    
+
     jsonl)
         output="${output:-./prompts.jsonl}"
-        
+
         echo "Exporting to JSONL..."
-        
-        > "$output"
-        
-        dolt sql -r csv -q "SELECT name, description, content FROM prompt_templates WHERE status = 'active'" | tail -n +2 | while IFS=',' read name desc content; do
-            [ -z "$name" ] && continue
-            jq -n \
-                --arg name "$name" \
-                --arg desc "$desc" \
-                --arg content "$content" \
-                '{type: "template", name: $name, description: $desc, content: $content}' >> "$output"
-        done
-        
-        dolt sql -r csv -q "SELECT name, description, readme FROM skills WHERE status = 'active'" | tail -n +2 | while IFS=',' read name desc readme; do
-            [ -z "$name" ] && continue
-            jq -n \
-                --arg name "$name" \
-                --arg desc "$desc" \
-                --arg readme "$readme" \
-                '{type: "skill", name: $name, description: $desc, readme: $readme}' >> "$output"
-        done
-        
+
+        {
+            dolt_json_query "$template_rows_sql" | jq -c '.rows[] | {type: "template", name, description, content}'
+            dolt_json_query "$skill_rows_sql" | jq -c '.rows[] | {type: "skill", name, description, readme}'
+        } > "$output"
+
         echo "✓ Exported to $output ($(wc -l < "$output") records)"
         ;;
-    
+
     yaml)
         output="${output:-./prompts.yaml}"
-        
+
         echo "Exporting to YAML..."
-        
+
         {
             echo "templates:"
-            dolt sql -r csv -q "SELECT name, description, content FROM prompt_templates WHERE status = 'active' ORDER BY name" | tail -n +2 | while IFS=',' read name desc content; do
-                [ -z "$name" ] && continue
+            while IFS= read -r row_b64; do
+                [ -z "$row_b64" ] && continue
+                row_json=$(json_decode_base64 "$row_b64")
+                name=$(printf '%s' "$row_json" | jq -r '.name')
+                desc_json=$(printf '%s' "$row_json" | jq -r '.description // "" | @json')
+                content=$(printf '%s' "$row_json" | jq -r '.content // ""')
                 echo "  - name: $name"
-                echo "    description: \"$desc\""
+                echo "    description: $desc_json"
                 echo "    content: |"
-                echo "$content" | sed 's/^/      /'
-            done
-            
+                printf '%s\n' "$content" | sed 's/^/      /'
+            done < <(json_rows_base64 "$template_rows_sql")
+
             echo ""
             echo "skills:"
-            dolt sql -r csv -q "SELECT name, description FROM skills WHERE status = 'active' ORDER BY name" | tail -n +2 | while IFS=',' read name desc; do
-                [ -z "$name" ] && continue
+            while IFS= read -r row_b64; do
+                [ -z "$row_b64" ] && continue
+                row_json=$(json_decode_base64 "$row_b64")
+                name=$(printf '%s' "$row_json" | jq -r '.name')
+                desc_json=$(printf '%s' "$row_json" | jq -r '.description // "" | @json')
                 echo "  - name: $name"
-                echo "    description: \"$desc\""
-            done
+                echo "    description: $desc_json"
+            done < <(json_rows_base64 "$skill_rows_sql")
         } > "$output"
-        
+
         echo "✓ Exported to $output"
         ;;
-    
+
     typescript)
         output="${output:-./prompts.ts}"
-        
+
         echo "Exporting to TypeScript..."
-        
-        # Build header
+
         {
             echo "// Auto-generated from Prompt Vault"
             echo "// Generated: $(date)"
@@ -145,70 +149,54 @@ EOF
             echo "}"
             echo ""
             echo "export const templates: PromptTemplate[] = "
-            
-            # Use jq to transform JSON and create proper array
-            dolt sql -r json -q "SELECT name, description, content FROM prompt_templates WHERE status = 'active' ORDER BY name" 2>/dev/null | \
-                jq '[.rows[] | {name, description, content, variables: []}]'
-            
+            dolt_json_query "$template_rows_sql" | jq '[.rows[] | {name, description, content, variables: []}]'
             echo ";"
             echo ""
             echo "export const skills: Skill[] = "
-            
-            dolt sql -r json -q "SELECT name, description, readme FROM skills WHERE status = 'active' ORDER BY name" 2>/dev/null | \
-                jq '[.rows[] | {name, description, readme}]'
-            
+            dolt_json_query "$skill_rows_sql" | jq '[.rows[] | {name, description, readme}]'
             echo ";"
         } > "$output"
-        
+
         echo "✓ Exported to $output"
         ;;
-    
+
     python)
         output="${output:-./prompts.py}"
-        
+
         echo "Exporting to Python..."
-        
+
         {
             echo '"""Auto-generated from Prompt Vault"""'
             echo "# Generated: $(date)"
             echo "import json"
             echo ""
             echo "# Raw data exported as JSON - parse with json.loads()"
-            echo "TEMPLATES_JSON = '''
-"
-            
-            dolt sql -r json -q "SELECT name, description, content FROM prompt_templates WHERE status = 'active' ORDER BY name" 2>/dev/null | \
-                jq '.rows'
-            
+            echo "TEMPLATES_JSON = '''"
+            dolt_json_query "$template_rows_sql" | jq '.rows'
             echo "'''"
             echo ""
-            echo "SKILLS_JSON = '''
-"
-            
-            dolt sql -r json -q "SELECT name, description, readme FROM skills WHERE status = 'active' ORDER BY name" 2>/dev/null | \
-                jq '.rows'
-            
+            echo "SKILLS_JSON = '''"
+            dolt_json_query "$skill_rows_sql" | jq '.rows'
             echo "'''"
             echo ""
             echo "# Usage: templates = json.loads(TEMPLATES_JSON)"
         } > "$output"
-        
+
         echo "✓ Exported to $output"
         ;;
-    
+
     csv)
         output="${output:-./prompts.csv}"
-        
+
         echo "Exporting to CSV..."
-        
+
         echo "type,name,description,content" > "$output"
-        
         dolt sql -r csv -q "SELECT 'template', name, description, content FROM prompt_templates WHERE status = 'active'" | tail -n +2 >> "$output"
         dolt sql -r csv -q "SELECT 'skill', name, description, readme FROM skills WHERE status = 'active'" | tail -n +2 >> "$output"
-        
+
         echo "✓ Exported to $output"
         ;;
-    
+
     help|*)
         cat << 'EOF'
 Usage: pv-export-formats <format> [output]

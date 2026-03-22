@@ -5,8 +5,11 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 VAULT_DIR="${VAULT_DIR:-$SCRIPT_DIR/../prompt-vault-db}"
+# shellcheck disable=SC1091
+source "$SCRIPT_DIR/pv-lib.sh"
 
-cd "$VAULT_DIR"
+ensure_vault
+check_deps jq
 
 cmd="${1:-list}"
 shift || true
@@ -29,10 +32,12 @@ case "$cmd" in
         name="${1:-}"
         [ -z "$name" ] && { echo "Usage: pv-collection create <name> [description]" >&2; exit 1; }
         desc="${2:-}"
-        
+        escaped_name=$(sql_escape "$name")
+        escaped_desc=$(sql_escape "$desc")
+
         dolt sql -q "
             INSERT INTO collections (name, description, template_ids, skill_ids)
-            VALUES ('$name', '$desc', '[]', '[]')
+            VALUES ('$escaped_name', '$escaped_desc', '[]', '[]')
         "
         echo "✓ Created collection: $name"
         echo "Add items: pv-collection add-template $name <template>"
@@ -41,36 +46,37 @@ case "$cmd" in
     delete)
         name="${1:-}"
         [ -z "$name" ] && { echo "Usage: pv-collection delete <name>" >&2; exit 1; }
-        
-        dolt sql -q "DELETE FROM collections WHERE name = '$name'"
+        escaped_name=$(sql_escape "$name")
+
+        dolt sql -q "DELETE FROM collections WHERE name = '$escaped_name'"
         echo "✓ Deleted collection: $name"
         ;;
 
     add-template)
         name="${1:-}"
         template="${2:-}"
-        [ -z "$name" ] || [ -z "$template" ] && { 
+        [ -z "$name" ] || [ -z "$template" ] && {
             echo "Usage: pv-collection add-template <collection> <template>" >&2
             exit 1
         }
-        
-        # Get template ID
+
+        escaped_name=$(sql_escape "$name")
+        escaped_template=$(sql_escape "$template")
         TID=$(dolt sql -r csv -q "
             SELECT id FROM prompt_templates 
-            WHERE name = '$template' AND status = 'active' 
+            WHERE name = '$escaped_template' AND status = 'active' 
             ORDER BY version DESC LIMIT 1
         " | tail -1)
-        
+
         if [ -z "$TID" ]; then
             echo "Error: Template '$template' not found" >&2
             exit 1
         fi
-        
-        # Add to collection
+
         dolt sql -q "
             UPDATE collections 
             SET template_ids = JSON_ARRAY_APPEND(template_ids, '\$', $TID)
-            WHERE name = '$name'
+            WHERE name = '$escaped_name'
         "
         echo "✓ Added template '$template' to collection '$name'"
         ;;
@@ -78,26 +84,28 @@ case "$cmd" in
     add-skill)
         name="${1:-}"
         skill="${2:-}"
-        [ -z "$name" ] || [ -z "$skill" ] && { 
+        [ -z "$name" ] || [ -z "$skill" ] && {
             echo "Usage: pv-collection add-skill <collection> <skill>" >&2
             exit 1
         }
-        
+
+        escaped_name=$(sql_escape "$name")
+        escaped_skill=$(sql_escape "$skill")
         SID=$(dolt sql -r csv -q "
             SELECT id FROM skills 
-            WHERE name = '$skill' AND status = 'active' 
+            WHERE name = '$escaped_skill' AND status = 'active' 
             ORDER BY version DESC LIMIT 1
         " | tail -1)
-        
+
         if [ -z "$SID" ]; then
             echo "Error: Skill '$skill' not found" >&2
             exit 1
         fi
-        
+
         dolt sql -q "
             UPDATE collections 
             SET skill_ids = JSON_ARRAY_APPEND(skill_ids, '\$', $SID)
-            WHERE name = '$name'
+            WHERE name = '$escaped_name'
         "
         echo "✓ Added skill '$skill' to collection '$name'"
         ;;
@@ -105,95 +113,86 @@ case "$cmd" in
     remove-template)
         name="${1:-}"
         template="${2:-}"
-        [ -z "$name" ] || [ -z "$template" ] && { 
+        [ -z "$name" ] || [ -z "$template" ] && {
             echo "Usage: pv-collection remove-template <collection> <template>" >&2
             exit 1
         }
-        
-        TID=$(dolt sql -r csv -q "
-            SELECT id FROM prompt_templates WHERE name = '$template' LIMIT 1
-        " | tail -1)
-        
-        # Get current array and filter out the ID
-        CURRENT=$(dolt sql -r csv -q "
-            SELECT template_ids FROM collections WHERE name = '$name'
-        " | tail -1)
-        
-        # Use jq to remove the ID
-        NEW=$(echo "$CURRENT" | jq --argjson id "$TID" 'map(select(. != $id))')
-        
-        dolt sql -q "
-            UPDATE collections SET template_ids = '$NEW' WHERE name = '$name'
-        "
+
+        escaped_name=$(sql_escape "$name")
+        escaped_template=$(sql_escape "$template")
+        TID=$(dolt sql -r csv -q "SELECT id FROM prompt_templates WHERE name = '$escaped_template' LIMIT 1" | tail -1)
+        CURRENT=$(json_first_field "SELECT template_ids FROM collections WHERE name = '$escaped_name'" template_ids)
+        NEW=$(printf '%s' "$CURRENT" | jq --argjson id "$TID" 'map(select(. != $id))')
+        escaped_new=$(sql_escape "$NEW")
+
+        dolt sql -q "UPDATE collections SET template_ids = '$escaped_new' WHERE name = '$escaped_name'"
         echo "✓ Removed template '$template' from collection '$name'"
         ;;
 
     show)
         name="${1:-}"
         [ -z "$name" ] && { echo "Usage: pv-collection show <name>" >&2; exit 1; }
-        
+        escaped_name=$(sql_escape "$name")
+
         echo "=== Collection: $name ==="
-        dolt sql -q "
-            SELECT name, description FROM collections WHERE name = '$name'
-        " -r tabular
-        
+        dolt sql -q "SELECT name, description FROM collections WHERE name = '$escaped_name'" -r tabular
+
         echo ""
         echo "Templates:"
         dolt sql -q "
             SELECT t.name, t.description, t.status
             FROM prompt_templates t
             JOIN collections c ON JSON_CONTAINS(c.template_ids, CAST(t.id AS CHAR))
-            WHERE c.name = '$name'
+            WHERE c.name = '$escaped_name'
         " -r tabular
-        
+
         echo ""
         echo "Skills:"
         dolt sql -q "
             SELECT s.name, s.description, s.status
             FROM skills s
             JOIN collections c ON JSON_CONTAINS(c.skill_ids, CAST(s.id AS CHAR))
-            WHERE c.name = '$name'
+            WHERE c.name = '$escaped_name'
         " -r tabular
         ;;
 
     export)
         name="${1:-}"
         [ -z "$name" ] && { echo "Usage: pv-collection export <name>" >&2; exit 1; }
-        
+        escaped_name=$(sql_escape "$name")
+
         output_dir="${2:-./${name}-export}"
         mkdir -p "$output_dir/prompts" "$output_dir/skills"
-        
-        # Export templates
-        dolt sql -r csv -q "
-            SELECT t.name FROM prompt_templates t
+
+        while IFS= read -r row_b64; do
+            [ -z "$row_b64" ] && continue
+            row_json=$(json_decode_base64 "$row_b64")
+            tname=$(printf '%s' "$row_json" | jq -r '.name')
+            content=$(printf '%s' "$row_json" | jq -r '.content // ""')
+            printf '%s\n' "$content" > "$output_dir/prompts/${tname}.md"
+        done < <(json_rows_base64 "
+            SELECT t.name, t.content
+            FROM prompt_templates t
             JOIN collections c ON JSON_CONTAINS(c.template_ids, CAST(t.id AS CHAR))
-            WHERE c.name = '$name' AND t.status = 'active'
-        " | tail -n +2 | while read -r tname; do
-            [ -z "$tname" ] && continue
-            content=$(dolt sql -r csv -q "
-                SELECT content FROM prompt_templates 
-                WHERE name = '$tname' AND status = 'active' 
-                ORDER BY version DESC LIMIT 1
-            " | tail -1 | sed "s/''/'/g")
-            echo "$content" > "$output_dir/prompts/${tname}.md"
-        done
-        
-        # Export skills
-        dolt sql -r csv -q "
-            SELECT s.name FROM skills s
-            JOIN collections c ON JSON_CONTAINS(c.skill_ids, CAST(s.id AS CHAR))
-            WHERE c.name = '$name' AND s.status = 'active'
-        " | tail -n +2 | while read -r sname; do
-            [ -z "$sname" ] && continue
+            WHERE c.name = '$escaped_name' AND t.status = 'active'
+            ORDER BY t.name
+        ")
+
+        while IFS= read -r row_b64; do
+            [ -z "$row_b64" ] && continue
+            row_json=$(json_decode_base64 "$row_b64")
+            sname=$(printf '%s' "$row_json" | jq -r '.name')
+            readme=$(printf '%s' "$row_json" | jq -r '.readme // ""')
             mkdir -p "$output_dir/skills/$sname"
-            readme=$(dolt sql -r csv -q "
-                SELECT readme FROM skills 
-                WHERE name = '$sname' AND status = 'active' 
-                ORDER BY version DESC LIMIT 1
-            " | tail -1 | sed "s/''/'/g")
-            echo "$readme" > "$output_dir/skills/$sname/SKILL.md"
-        done
-        
+            printf '%s\n' "$readme" > "$output_dir/skills/$sname/SKILL.md"
+        done < <(json_rows_base64 "
+            SELECT s.name, s.readme
+            FROM skills s
+            JOIN collections c ON JSON_CONTAINS(c.skill_ids, CAST(s.id AS CHAR))
+            WHERE c.name = '$escaped_name' AND s.status = 'active'
+            ORDER BY s.name
+        ")
+
         echo "✓ Exported collection '$name' to $output_dir"
         ;;
 

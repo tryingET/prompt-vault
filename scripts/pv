@@ -7,6 +7,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 VERSION="1.0.0"
 
 # Source shared library
+# shellcheck disable=SC1091
 source "$SCRIPT_DIR/pv-lib.sh"
 
 cmd_init() {
@@ -120,7 +121,7 @@ items = [item.strip() for item in """$visibility_companies_csv""".split(",") if 
 print(json.dumps(items))
 PY
 )
-    visibility_companies_sql="'$(echo "$visibility_companies_json" | sed "s/'/''/g")'"
+    visibility_companies_sql="'$(sql_escape "$visibility_companies_json")'"
 
     local controlled_vocabulary_sql="NULL"
     if [ "$control_mode" = "router" ]; then
@@ -163,16 +164,19 @@ print(json.dumps({
 }))
 PY
 )
-        escaped_controlled_vocabulary=$(echo "$controlled_vocabulary_json" | sed "s/'/''/g")
+        escaped_controlled_vocabulary=$(sql_escape "$controlled_vocabulary_json")
         controlled_vocabulary_sql="'$escaped_controlled_vocabulary'"
     fi
 
     echo "Content (Ctrl+D to finish):"
     content=$(cat)
 
-    local escaped_name=$(echo "$name" | sed "s/'/''/g")
-    local escaped_content=$(echo "$content" | sed "s/'/''/g")
-    local escaped_desc=$(echo "$description" | sed "s/'/''/g")
+    local escaped_name
+    local escaped_content
+    local escaped_desc
+    escaped_name=$(sql_escape "$name")
+    escaped_content=$(sql_escape "$content")
+    escaped_desc=$(sql_escape "$description")
 
     dolt sql -q "
         INSERT INTO prompt_templates (name, description, content, artifact_kind, control_mode, formalization_level, owner_company, visibility_companies, controlled_vocabulary, status)
@@ -211,17 +215,19 @@ cmd_new_skill() {
     
     echo "README content (Ctrl+D to finish):"
     readme=$(cat)
-    
-    local escaped_readme=$(echo "$readme" | sed "s/'/''/g")
-    local escaped_desc=$(echo "$description" | sed "s/'/''/g")
+
+    local escaped_readme
+    local escaped_desc
     local visibility_companies_json visibility_companies_sql
+    escaped_readme=$(sql_escape "$readme")
+    escaped_desc=$(sql_escape "$description")
     visibility_companies_json=$(python3 - <<PY
 import json
 items = [item.strip() for item in """$visibility_companies_csv""".split(",") if item.strip()]
 print(json.dumps(items))
 PY
 )
-    visibility_companies_sql="'$(echo "$visibility_companies_json" | sed "s/'/''/g")'"
+    visibility_companies_sql="'$(sql_escape "$visibility_companies_json")'"
     
     dolt sql -q "
         INSERT INTO skills (name, description, readme, license, compatibility, owner_company, visibility_companies, status)
@@ -238,8 +244,10 @@ cmd_edit_template() {
     [ -z "$name" ] && { error "Usage: pv edit-template <name>"; exit 1; }
     
     # Export to temp file
-    local tmp_file=$(mktemp --suffix=.md)
-    local escaped_name=$(sql_escape "$name")
+    local tmp_file
+    local escaped_name
+    tmp_file=$(mktemp --suffix=.md)
+    escaped_name=$(sql_escape "$name")
     json_first_field "SELECT content FROM prompt_templates WHERE name = '$escaped_name' AND status = 'active' ORDER BY version DESC LIMIT 1" content > "$tmp_file"
     
     # Open editor
@@ -424,7 +432,8 @@ cmd_history() {
     echo ""
     
     # Get current state
-    local current=$(dolt sql -r json -q "
+    local current
+    current=$(dolt sql -r json -q "
         SELECT id, version, status, updated_at 
         FROM $table 
         WHERE name = '$name' 
@@ -436,8 +445,10 @@ cmd_history() {
         exit 1
     fi
     
-    local entity_id=$(echo "$current" | jq -r '.rows[0].id')
-    local current_version=$(echo "$current" | jq -r '.rows[0].version')
+    local entity_id
+    local current_version
+    entity_id=$(echo "$current" | jq -r '.rows[0].id')
+    current_version=$(echo "$current" | jq -r '.rows[0].version')
     
     # Get changelog entries
     echo "Changelog:"
@@ -463,38 +474,44 @@ cmd_rollback() {
     local type="${1:-}"
     local name="${2:-}"
     local commit_ref="${3:-}"
-    
-    [ -z "$type" ] || [ -z "$name" ] || [ -z "$commit_ref" ] && { 
+
+    [ -z "$type" ] || [ -z "$name" ] || [ -z "$commit_ref" ] && {
         error "Usage: pv rollback <template|skill> <name> <commit-ref>"
         error "  commit-ref: HEAD~1, HEAD~3, or commit hash"
         exit 1
     }
-    
+
     local table="prompt_templates"
-    [ "$type" = "skill" ] && table="skills"
-    
-    # Get content from the specified commit
-    local content=$(dolt sql -r csv -q "SELECT content FROM $table AS OF '$commit_ref' WHERE name = '$name'" 2>/dev/null | tail -1)
-    
+    local content_column="content"
+    [ "$type" = "skill" ] && table="skills" && content_column="readme"
+
+    local escaped_name
+    escaped_name=$(sql_escape "$name")
+    local escaped_ref
+    escaped_ref=$(sql_escape "$commit_ref")
+
+    local content
+    content=$(json_first_field "SELECT $content_column FROM $table AS OF '$escaped_ref' WHERE name = '$escaped_name' LIMIT 1" "$content_column")
+
     if [ -z "$content" ]; then
         error "$type '$name' not found at $commit_ref"
         exit 1
     fi
-    
-    local desc=$(dolt sql -r csv -q "SELECT description FROM $table AS OF '$commit_ref' WHERE name = '$name'" 2>/dev/null | tail -1)
-    
-    # Escape for SQL
-    local escaped=$(echo "$content" | sed "s/'/''/g")
+
+    local desc
+    desc=$(json_first_field "SELECT description FROM $table AS OF '$escaped_ref' WHERE name = '$escaped_name' LIMIT 1" description)
+
+    local escaped_content
+    escaped_content=$(sql_escape "$content")
     local escaped_desc=""
-    [ -n "$desc" ] && escaped_desc=$(echo "$desc" | sed "s/'/''/g")
-    
-    # Update current version
+    [ -n "$desc" ] && escaped_desc=$(sql_escape "$desc")
+
     if [ "$type" = "template" ]; then
-        dolt sql -q "UPDATE prompt_templates SET content = '$escaped', description = '$escaped_desc' WHERE name = '$name'"
+        dolt sql -q "UPDATE prompt_templates SET content = '$escaped_content', description = '$escaped_desc' WHERE name = '$escaped_name'"
     else
-        dolt sql -q "UPDATE skills SET readme = '$escaped', description = '$escaped_desc' WHERE name = '$name'"
+        dolt sql -q "UPDATE skills SET readme = '$escaped_content', description = '$escaped_desc' WHERE name = '$escaped_name'"
     fi
-    
+
     success "Rolled back $type '$name' to state at $commit_ref"
     info "Commit with: pv commit 'Rollback $name to $commit_ref'"
 }
@@ -580,7 +597,8 @@ cmd_watch() {
             fi
             
             # Check if content actually changed
-            local current_hash=$(get_content_hash)
+            local current_hash
+            current_hash=$(get_content_hash)
             if [ "$current_hash" != "$last_hash" ]; then
                 info "Content changed, exporting..."
                 cmd_export > /dev/null
@@ -716,13 +734,15 @@ cmd_cleanup() {
     echo "=== Execution Log Cleanup ==="
     
     # Count records to delete
-    local count=$(dolt sql -r csv -q "
+    local count
+    count=$(dolt sql -r csv -q "
         SELECT COUNT(*) FROM executions 
         WHERE created_at < DATE_SUB(NOW(), INTERVAL $days DAY)
     " | tail -1)
-    
+
     # Count total records
-    local total=$(dolt sql -r csv -q "SELECT COUNT(*) FROM executions" | tail -1)
+    local total
+    total=$(dolt sql -r csv -q "SELECT COUNT(*) FROM executions" | tail -1)
     
     echo "Total executions: $total"
     echo "Older than $days days: $count"
@@ -761,7 +781,8 @@ cmd_cleanup() {
     success "Cleaned up $count old records"
     
     # Show new total
-    local new_total=$(dolt sql -r csv -q "SELECT COUNT(*) FROM executions" | tail -1)
+    local new_total
+    new_total=$(dolt sql -r csv -q "SELECT COUNT(*) FROM executions" | tail -1)
     echo "Remaining executions: $new_total"
 }
 
