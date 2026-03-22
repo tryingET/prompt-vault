@@ -242,27 +242,35 @@ cmd_edit_template() {
     ensure_vault
     local name="${1:-}"
     [ -z "$name" ] && { error "Usage: pv edit-template <name>"; exit 1; }
-    
-    # Export to temp file
-    local tmp_file
-    local escaped_name
-    tmp_file=$(mktemp --suffix=.md)
+
+    local tmp_file escaped_name current_content content escaped_content version_before version_after
     escaped_name=$(sql_escape "$name")
-    json_first_field "SELECT content FROM prompt_templates WHERE name = '$escaped_name' AND status = 'active' ORDER BY version DESC LIMIT 1" content > "$tmp_file"
-    
-    # Open editor
+    current_content=$(json_first_field "SELECT content FROM prompt_templates WHERE name = '$escaped_name' AND status IN ('active', 'draft') ORDER BY version DESC LIMIT 1" content)
+
+    if [ -z "$current_content" ]; then
+        error "Template '$name' not found"
+        exit 1
+    fi
+
+    tmp_file=$(mktemp --suffix=.md)
+    trap 'rm -f "$tmp_file"' RETURN
+    printf '%s\n' "$current_content" > "$tmp_file"
+
     ${EDITOR:-nano} "$tmp_file"
-    
-    # Read back and update
-    local content
+
     content=$(cat "$tmp_file")
-    local escaped_content
+    if [ "$content" = "$current_content" ]; then
+        info "No changes made to '$name'"
+        return 0
+    fi
+
     escaped_content=$(sql_escape "$content")
-    
-    dolt sql -q "CALL create_template_version('$escaped_name', (SELECT description FROM prompt_templates WHERE name = '$escaped_name' LIMIT 1), '$escaped_content', NULL)"
-    
-    rm "$tmp_file"
+    version_before=$(json_first_field "SELECT version FROM prompt_templates WHERE name = '$escaped_name' LIMIT 1" version)
+    dolt sql -q "UPDATE prompt_templates SET content = '$escaped_content', version = COALESCE(version, 0) + 1 WHERE name = '$escaped_name' AND status IN ('active', 'draft')"
+    version_after=$(json_first_field "SELECT version FROM prompt_templates WHERE name = '$escaped_name' LIMIT 1" version)
+
     success "Updated template '$name'"
+    info "Version: ${version_before:-0} -> ${version_after:-0}"
 }
 
 cmd_activate() {

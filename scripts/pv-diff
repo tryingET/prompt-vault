@@ -8,8 +8,6 @@ VAULT_DIR="${VAULT_DIR:-$SCRIPT_DIR/../prompt-vault-db}"
 # shellcheck disable=SC1091
 source "$SCRIPT_DIR/pv-lib.sh"
 
-ensure_vault
-
 from="${1:-HEAD~1}"
 to="${2:-HEAD}"
 type="${3:-all}"
@@ -37,8 +35,8 @@ show_template_diff() {
     echo -e "${CYAN}Template: $name${NC}"
     echo ""
 
-    from_content=$(json_first_field "SELECT content FROM prompt_templates AS OF '$escaped_from' WHERE name = '$escaped_name' LIMIT 1" content)
-    to_content=$(json_first_field "SELECT content FROM prompt_templates AS OF '$escaped_to' WHERE name = '$escaped_name' LIMIT 1" content)
+    from_content=$(json_first_field "SELECT content FROM prompt_templates AS OF '$escaped_from' WHERE name = '$escaped_name' ORDER BY version DESC LIMIT 1" content)
+    to_content=$(json_first_field "SELECT content FROM prompt_templates AS OF '$escaped_to' WHERE name = '$escaped_name' ORDER BY version DESC LIMIT 1" content)
 
     if [ -n "$from_content" ] && [ -n "$to_content" ]; then
         diff -u <(printf '%s\n' "$from_content") <(printf '%s\n' "$to_content") 2>/dev/null | head -100 || echo "(no changes)"
@@ -50,6 +48,8 @@ show_template_diff() {
 
 case "$type" in
     all)
+        ensure_vault
+
         echo -e "${CYAN}Prompt Vault Diff: $from..$to${NC}"
         echo ""
 
@@ -68,26 +68,33 @@ case "$type" in
         ;;
 
     templates)
+        ensure_vault
         show_table_diff "prompt_templates"
         ;;
 
     skills)
+        ensure_vault
         show_table_diff "skills"
         ;;
 
     template)
+        ensure_vault
         name="${4:-}"
         [ -z "$name" ] && { echo "Usage: pv-diff <from> <to> template <name>" >&2; exit 1; }
         show_template_diff "$name"
         ;;
 
     stats)
+        ensure_vault
+
         echo -e "${CYAN}Diff Statistics: $from..$to${NC}"
         echo ""
         dolt diff --stat "$from" "$to" 2>/dev/null
         ;;
 
     summary)
+        ensure_vault
+
         echo -e "${CYAN}Summary: $from..$to${NC}"
         echo ""
 
@@ -109,6 +116,8 @@ case "$type" in
         ;;
 
     json)
+        ensure_vault
+
         echo "{"
         echo "  \"from\": \"$from\"," 
         echo "  \"to\": \"$to\"," 

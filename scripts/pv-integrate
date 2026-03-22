@@ -11,15 +11,15 @@ source "$SCRIPT_DIR/pv-lib.sh"
 cmd="${1:-help}"
 shift || true
 
-ensure_vault
-check_deps jq python3
-
 template_rows_sql="SELECT name, description, content, artifact_kind, control_mode, formalization_level, owner_company, visibility_companies, controlled_vocabulary FROM prompt_templates WHERE status = 'active' ORDER BY name"
 skill_rows_sql="SELECT name, description, readme FROM skills WHERE status = 'active' ORDER BY name"
 collection_rows_sql="SELECT name, description FROM collections ORDER BY name"
 
 case "$cmd" in
     langchain)
+        ensure_vault
+        check_deps jq
+
         output="${1:-./langchain-prompts.json}"
         echo "Exporting for LangChain..."
 
@@ -44,6 +44,9 @@ case "$cmd" in
         ;;
 
     openai-functions)
+        ensure_vault
+        check_deps jq
+
         output="${1:-./openai-functions.json}"
         echo "Exporting as OpenAI function definitions..."
 
@@ -69,6 +72,9 @@ case "$cmd" in
         ;;
 
     semantic-kernel)
+        ensure_vault
+        check_deps jq
+
         output_dir="${1:-./semantic-kernel}"
         echo "Exporting for Semantic Kernel..."
 
@@ -94,6 +100,9 @@ EOF
         ;;
 
     embeddings)
+        ensure_vault
+        check_deps jq
+
         output="${1:-./embeddings.jsonl}"
         echo "Generating embeddings-ready content..."
 
@@ -120,6 +129,9 @@ EOF
         ;;
 
     obsidian)
+        ensure_vault
+        check_deps jq
+
         output_dir="${1:-./obsidian-vault}"
         echo "Creating Obsidian vault..."
 
@@ -194,6 +206,9 @@ EOF
         ;;
 
     api-server)
+        ensure_vault
+        check_deps python3
+
         port="${1:-8080}"
         require_numeric "$port" "port"
         visibility_company="${PV_API_VISIBILITY_COMPANY:-${VISIBILITY_COMPANY:-core}}"
@@ -207,7 +222,10 @@ EOF
 
         echo "Starting REST API server on port $port for visibility company '$visibility_company'..."
 
-        cat > /tmp/pv-api.py << 'PYEOF'
+        api_script=$(mktemp "${TMPDIR:-/tmp}/pv-api.XXXXXX.py")
+        trap 'rm -f "$api_script"' EXIT
+
+        cat > "$api_script" << 'PYEOF'
 #!/usr/bin/env python3
 import json
 import os
@@ -228,11 +246,11 @@ def sql_quote(value: str) -> str:
     return value.replace('\\', '\\\\').replace("'", "''")
 
 
-def visibility_clause() -> str:
+def visibility_clause(alias: str) -> str:
     company = sql_quote(VISIBILITY_COMPANY)
     return (
-        f"(owner_company = '{company}' "
-        f"OR JSON_CONTAINS(visibility_companies, JSON_QUOTE('{company}')))"
+        f"({alias}.owner_company = '{company}' "
+        f"OR JSON_CONTAINS({alias}.visibility_companies, JSON_QUOTE('{company}')))"
     )
 
 
@@ -255,7 +273,7 @@ def template_rows(full: bool = False):
         fields = 'name, description, status, owner_company, visibility_companies'
     query = (
         f"SELECT {fields} FROM prompt_templates "
-        f"WHERE status = 'active' AND {visibility_clause()} ORDER BY name"
+        f"WHERE status = 'active' AND {visibility_clause('prompt_templates')} ORDER BY name"
     )
     return run_sql_json(query)
 
@@ -266,9 +284,31 @@ def skill_rows(full: bool = False):
         fields = 'name, description, status, owner_company, visibility_companies'
     query = (
         f"SELECT {fields} FROM skills "
-        f"WHERE status = 'active' AND {visibility_clause()} ORDER BY name"
+        f"WHERE status = 'active' AND {visibility_clause('skills')} ORDER BY name"
     )
     return run_sql_json(query)
+
+
+def visible_execution_count() -> int:
+    query = f'''
+        SELECT COUNT(*) AS executions
+        FROM executions e
+        LEFT JOIN prompt_templates t
+          ON e.entity_type = 'template' AND e.entity_id = t.id
+        LEFT JOIN skills s
+          ON e.entity_type = 'skill' AND e.entity_id = s.id
+        WHERE (
+            e.entity_type = 'template'
+            AND t.status = 'active'
+            AND {visibility_clause('t')}
+        ) OR (
+            e.entity_type = 'skill'
+            AND s.status = 'active'
+            AND {visibility_clause('s')}
+        )
+    '''
+    rows = run_sql_json(query)
+    return rows[0].get('executions', 0) if rows else 0
 
 
 class VaultHandler(BaseHTTPRequestHandler):
@@ -316,13 +356,11 @@ class VaultHandler(BaseHTTPRequestHandler):
             if path == '/api/stats':
                 templates = template_rows(full=False)
                 skills = skill_rows(full=False)
-                exec_rows = run_sql_json('SELECT COUNT(*) AS executions FROM executions')
-                executions = exec_rows[0].get('executions', 0) if exec_rows else 0
                 self.send_json(200, {
                     'rows': [{
                         'templates': len(templates),
                         'skills': len(skills),
-                        'executions': executions,
+                        'executions': visible_execution_count(),
                         'visibility_company': VISIBILITY_COMPANY,
                     }]
                 })
@@ -351,10 +389,12 @@ PYEOF
         export VAULT_DIR="$VAULT_DIR"
         export PORT="$port"
         export PV_API_VISIBILITY_COMPANY="$visibility_company"
-        python3 /tmp/pv-api.py
+        python3 "$api_script"
         ;;
 
     webhook)
+        ensure_vault
+
         event="${1:-push}"
         echo "Processing webhook event: $event"
 

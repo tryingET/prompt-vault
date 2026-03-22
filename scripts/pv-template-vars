@@ -8,8 +8,6 @@ VAULT_DIR="${VAULT_DIR:-$SCRIPT_DIR/../prompt-vault-db}"
 # shellcheck disable=SC1091
 source "$SCRIPT_DIR/pv-lib.sh"
 
-ensure_vault
-
 cmd="${1:-list}"
 shift || true
 
@@ -33,11 +31,49 @@ template_description() {
     local name="$1"
     local escaped_name
     escaped_name=$(sql_escape "$name")
-    json_first_field "SELECT description FROM prompt_templates WHERE name = '$escaped_name' LIMIT 1" description
+    json_first_field "SELECT description FROM prompt_templates WHERE name = '$escaped_name' ORDER BY version DESC LIMIT 1" description
+}
+
+collect_validation_issues() {
+    local content="$1"
+    local positions max i token
+
+    while IFS= read -r token; do
+        [ -z "$token" ] && continue
+        [ "$token" = "$ARGS_ALIAS_PATTERN" ] && continue
+        echo "UNSUPPORTED_VAR:$token"
+    done < <(printf '%s\n' "$content" | grep -oE '\$[A-Za-z_][A-Za-z0-9_]*' | sort -u || true)
+
+    positions=$(printf '%s\n' "$content" | grep -oE '\$[0-9]+' | grep -oE '[0-9]+' | sort -n | uniq || true)
+    max=$(printf '%s\n' "$positions" | tail -1)
+    if [ -n "$max" ]; then
+        for i in $(seq 1 "$max"); do
+            if ! printf '%s\n' "$positions" | grep -q "^$i$"; then
+                echo "MISSING_ARG$i"
+            fi
+        done
+    fi
+}
+
+print_validation_result() {
+    local name="$1"
+    local content="$2"
+    local -a issues=()
+
+    mapfile -t issues < <(collect_validation_issues "$content")
+    if [ ${#issues[@]} -gt 0 ]; then
+        printf '⚠ %s:' "$name"
+        printf ' %s' "${issues[@]}"
+        printf '\n'
+    else
+        echo "✓ $name"
+    fi
 }
 
 case "$cmd" in
     list)
+        ensure_vault
+
         name="${1:-}"
         if [ -z "$name" ]; then
             echo "=== All Template Variables ==="
@@ -57,45 +93,30 @@ case "$cmd" in
         ;;
 
     validate)
+        ensure_vault
+
         name="${1:-}"
         if [ -z "$name" ]; then
             echo "Validating all templates..."
             while IFS= read -r tname; do
                 [ -z "$tname" ] && continue
                 content=$(template_content "$tname")
-                issues=""
-
-                if printf '%s\n' "$content" | grep -qE '\$[^0-9@{ARGUMENTS}]'; then
-                    issues="$issues UNESCAPED_DOLLAR"
-                fi
-
-                positions=$(printf '%s\n' "$content" | grep -oE '\$[0-9]+' | grep -oE '[0-9]+' | sort -n | uniq || true)
-                max=$(printf '%s\n' "$positions" | tail -1)
-                if [ -n "$max" ]; then
-                    for i in $(seq 1 "$max"); do
-                        if ! printf '%s\n' "$positions" | grep -q "^$i$"; then
-                            issues="$issues MISSING_ARG$i"
-                        fi
-                    done
-                fi
-
-                if [ -n "$issues" ]; then
-                    echo "⚠ $tname:$issues"
-                else
-                    echo "✓ $tname"
-                fi
+                print_validation_result "$tname" "$content"
             done < <(json_all_field "SELECT name FROM prompt_templates WHERE status = 'active' ORDER BY name" name)
         else
+            echo "Validating '$name'..."
             content=$(template_content "$name")
-            echo "Variables:"
-            extract_vars "$content"
-            echo ""
-            echo "Usage example:"
-            echo "  /$name arg1 arg2 ..."
+            if [ -z "$content" ]; then
+                error "Template '$name' not found"
+                exit 1
+            fi
+            print_validation_result "$name" "$content"
         fi
         ;;
 
     document)
+        ensure_vault
+
         name="${1:-}"
         [ -z "$name" ] && { echo "Usage: pv-template-vars document <name>" >&2; exit 1; }
 
@@ -135,6 +156,8 @@ case "$cmd" in
         ;;
 
     usage)
+        ensure_vault
+
         name="${1:-}"
         [ -z "$name" ] && { echo "Usage: pv-template-vars usage <name>" >&2; exit 1; }
 

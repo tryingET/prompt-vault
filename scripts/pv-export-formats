@@ -8,9 +8,6 @@ VAULT_DIR="${VAULT_DIR:-$SCRIPT_DIR/../prompt-vault-db}"
 # shellcheck disable=SC1091
 source "$SCRIPT_DIR/pv-lib.sh"
 
-ensure_vault
-check_deps jq
-
 format="${1:-help}"
 output="${2:-}"
 
@@ -19,6 +16,9 @@ skill_rows_sql="SELECT name, description, readme FROM skills WHERE status = 'act
 
 case "$format" in
     markdown)
+        ensure_vault
+        check_deps jq
+
         output="${output:-./prompt-vault-export}"
         mkdir -p "$output/templates" "$output/skills"
 
@@ -80,6 +80,9 @@ EOF
         ;;
 
     jsonl)
+        ensure_vault
+        check_deps jq
+
         output="${output:-./prompts.jsonl}"
 
         echo "Exporting to JSONL..."
@@ -93,6 +96,9 @@ EOF
         ;;
 
     yaml)
+        ensure_vault
+        check_deps jq
+
         output="${output:-./prompts.yaml}"
 
         echo "Exporting to YAML..."
@@ -127,6 +133,9 @@ EOF
         ;;
 
     typescript)
+        ensure_vault
+        check_deps jq
+
         output="${output:-./prompts.ts}"
 
         echo "Exporting to TypeScript..."
@@ -161,23 +170,29 @@ EOF
         ;;
 
     python)
+        ensure_vault
+        check_deps jq
+
         output="${output:-./prompts.py}"
 
         echo "Exporting to Python..."
 
+        templates_json_b64=$(dolt_json_query "$template_rows_sql" | jq -r '(.rows // []) | @base64')
+        skills_json_b64=$(dolt_json_query "$skill_rows_sql" | jq -r '(.rows // []) | @base64')
+        templates_json_b64_literal=$(printf '%s' "$templates_json_b64" | jq -Rs .)
+        skills_json_b64_literal=$(printf '%s' "$skills_json_b64" | jq -Rs .)
+
         {
             echo '"""Auto-generated from Prompt Vault"""'
             echo "# Generated: $(date)"
+            echo "import base64"
             echo "import json"
             echo ""
-            echo "# Raw data exported as JSON - parse with json.loads()"
-            echo "TEMPLATES_JSON = '''"
-            dolt_json_query "$template_rows_sql" | jq '.rows'
-            echo "'''"
+            printf 'TEMPLATES_JSON_B64 = %s\n' "$templates_json_b64_literal"
+            printf 'SKILLS_JSON_B64 = %s\n' "$skills_json_b64_literal"
             echo ""
-            echo "SKILLS_JSON = '''"
-            dolt_json_query "$skill_rows_sql" | jq '.rows'
-            echo "'''"
+            echo "TEMPLATES_JSON = base64.b64decode(TEMPLATES_JSON_B64).decode('utf-8')"
+            echo "SKILLS_JSON = base64.b64decode(SKILLS_JSON_B64).decode('utf-8')"
             echo ""
             echo "# Usage: templates = json.loads(TEMPLATES_JSON)"
         } > "$output"
@@ -186,6 +201,8 @@ EOF
         ;;
 
     csv)
+        ensure_vault
+
         output="${output:-./prompts.csv}"
 
         echo "Exporting to CSV..."

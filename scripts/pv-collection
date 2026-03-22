@@ -8,14 +8,13 @@ VAULT_DIR="${VAULT_DIR:-$SCRIPT_DIR/../prompt-vault-db}"
 # shellcheck disable=SC1091
 source "$SCRIPT_DIR/pv-lib.sh"
 
-ensure_vault
-check_deps jq
-
 cmd="${1:-list}"
 shift || true
 
 case "$cmd" in
     list)
+        ensure_vault
+
         echo "=== Collections ==="
         dolt sql -q "
             SELECT 
@@ -29,6 +28,8 @@ case "$cmd" in
         ;;
 
     create)
+        ensure_vault
+
         name="${1:-}"
         [ -z "$name" ] && { echo "Usage: pv-collection create <name> [description]" >&2; exit 1; }
         desc="${2:-}"
@@ -44,6 +45,8 @@ case "$cmd" in
         ;;
 
     delete)
+        ensure_vault
+
         name="${1:-}"
         [ -z "$name" ] && { echo "Usage: pv-collection delete <name>" >&2; exit 1; }
         escaped_name=$(sql_escape "$name")
@@ -53,6 +56,8 @@ case "$cmd" in
         ;;
 
     add-template)
+        ensure_vault
+
         name="${1:-}"
         template="${2:-}"
         [ -z "$name" ] || [ -z "$template" ] && {
@@ -82,6 +87,8 @@ case "$cmd" in
         ;;
 
     add-skill)
+        ensure_vault
+
         name="${1:-}"
         skill="${2:-}"
         [ -z "$name" ] || [ -z "$skill" ] && {
@@ -111,6 +118,9 @@ case "$cmd" in
         ;;
 
     remove-template)
+        ensure_vault
+        check_deps jq
+
         name="${1:-}"
         template="${2:-}"
         [ -z "$name" ] || [ -z "$template" ] && {
@@ -130,6 +140,8 @@ case "$cmd" in
         ;;
 
     show)
+        ensure_vault
+
         name="${1:-}"
         [ -z "$name" ] && { echo "Usage: pv-collection show <name>" >&2; exit 1; }
         escaped_name=$(sql_escape "$name")
@@ -157,6 +169,9 @@ case "$cmd" in
         ;;
 
     export)
+        ensure_vault
+        check_deps jq
+
         name="${1:-}"
         [ -z "$name" ] && { echo "Usage: pv-collection export <name>" >&2; exit 1; }
         escaped_name=$(sql_escape "$name")
@@ -194,6 +209,22 @@ case "$cmd" in
         ")
 
         echo "✓ Exported collection '$name' to $output_dir"
+        ;;
+
+    help)
+        cat << 'EOF'
+Usage: pv-collection <command> [args]
+
+Commands:
+  list                           List all collections
+  create <name> [desc]           Create new collection
+  delete <name>                  Delete collection
+  add-template <c> <template>    Add template to collection
+  add-skill <c> <skill>          Add skill to collection
+  remove-template <c> <template> Remove template from collection
+  show <name>                    Show collection contents
+  export <name> [dir]            Export collection to files
+EOF
         ;;
 
     *)

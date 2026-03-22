@@ -67,6 +67,9 @@ check "pv tag list" "$SCRIPTS_DIR/pv" tag list
 check "pv search requires arg" bash -c "! $SCRIPTS_DIR/pv search 2>/dev/null"
 check "pv-diff summary" "$SCRIPTS_DIR/pv-diff" HEAD HEAD summary
 check_output "pv-template-vars usage" "<args...>" "$SCRIPTS_DIR/pv-template-vars" usage e3d-htn
+check_output "pv-template-vars validate named" "e3d-htn" "$SCRIPTS_DIR/pv-template-vars" validate e3d-htn
+check_output "pv-integrate help" "Usage: pv-integrate" "$SCRIPTS_DIR/pv-integrate" help
+check_output "pv-export-formats help" "Usage: pv-export-formats" "$SCRIPTS_DIR/pv-export-formats" help
 echo ""
 
 # Quality & lint
