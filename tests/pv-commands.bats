@@ -6,6 +6,11 @@ load 'setup'
 setup() {
     skip_if_no_dolt
     skip_if_no_vault
+    TMP_DIR="$(make_test_tmpdir)"
+}
+
+teardown() {
+    rm -rf "$TMP_DIR"
 }
 
 @test "pv --help shows usage" {
@@ -69,4 +74,112 @@ setup() {
     run "$SCRIPTS_DIR/pv" quality rollup selection_principles
     [ "$status" -eq 0 ]
     [[ "$output" == *"Quality Rollup by selection_principles"* ]]
+}
+
+@test "pv-diff summary runs without shell local errors" {
+    run env VAULT_DIR="$VAULT_DIR" "$SCRIPTS_DIR/pv-diff" HEAD HEAD summary
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"Summary: HEAD..HEAD"* ]]
+    [[ "$output" != *"local: can only be used in a function"* ]]
+}
+
+@test "pv rollback preserves multiline template content" {
+    TEST_VAULT_DIR="$TMP_DIR/prompt-vault-db"
+    copy_test_vault "$TEST_VAULT_DIR"
+
+    before=$(dolt --data-dir "$TEST_VAULT_DIR" sql -r json -q "SELECT content FROM prompt_templates WHERE name = 'inversion' AND status = 'active' LIMIT 1" | jq -r '.rows[0].content')
+    [[ "$before" == *"What must be true for this system to appear healthy while actually being sick?"* ]]
+
+    run env VAULT_DIR="$TEST_VAULT_DIR" "$SCRIPTS_DIR/pv" rollback template inversion HEAD
+    [ "$status" -eq 0 ]
+
+    after=$(dolt --data-dir "$TEST_VAULT_DIR" sql -r json -q "SELECT content FROM prompt_templates WHERE name = 'inversion' AND status = 'active' LIMIT 1" | jq -r '.rows[0].content')
+    [ "$after" = "$before" ]
+}
+
+@test "pv-export-formats markdown preserves multiline prompt content" {
+    output_dir="$TMP_DIR/export-markdown"
+    run env VAULT_DIR="$VAULT_DIR" "$SCRIPTS_DIR/pv-export-formats" markdown "$output_dir"
+    [ "$status" -eq 0 ]
+
+    exported_file="$output_dir/templates/inversion.md"
+    [ -f "$exported_file" ]
+    exported_content=$(python3 - <<'PY' "$exported_file"
+import pathlib, sys
+text = pathlib.Path(sys.argv[1]).read_text()
+marker = "## Prompt\n\n"
+print(text.split(marker, 1)[1], end="")
+PY
+)
+    canonical=$(dolt --data-dir "$VAULT_DIR" sql -r json -q "SELECT content FROM prompt_templates WHERE name = 'inversion' AND status = 'active' LIMIT 1" | jq -r '.rows[0].content')
+    [ "$exported_content" = "$canonical" ]
+}
+
+@test "pv-integrate semantic-kernel preserves multiline prompt content" {
+    output_dir="$TMP_DIR/semantic-kernel"
+    run env VAULT_DIR="$VAULT_DIR" "$SCRIPTS_DIR/pv-integrate" semantic-kernel "$output_dir"
+    [ "$status" -eq 0 ]
+
+    exported_file="$output_dir/inversion.txt"
+    [ -f "$exported_file" ]
+    [[ "$(python3 - <<'PY' "$exported_file"
+import pathlib, sys
+text = pathlib.Path(sys.argv[1]).read_text()
+print(text, end="")
+PY
+)" == *"What must be true for this system to appear healthy while actually being sick?"* ]]
+}
+
+@test "pv-integrate api-server honors CLI port and rejects injected search" {
+    command -v curl >/dev/null 2>&1 || skip "curl not installed"
+
+    port=$((20000 + RANDOM % 10000))
+    server_log="$TMP_DIR/api-server.log"
+
+    run bash -lc '
+        set -euo pipefail
+        port="$1"
+        server_log="$2"
+        export VAULT_DIR="$3"
+        export PV_API_VISIBILITY_COMPANY=software
+        "$4/pv-integrate" api-server "$port" >"$server_log" 2>&1 &
+        server_pid=$!
+        cleanup() {
+            child_pids=$(pgrep -P "$server_pid" || true)
+            if [ -n "$child_pids" ]; then
+                kill $child_pids 2>/dev/null || true
+            fi
+            kill "$server_pid" 2>/dev/null || true
+            wait "$server_pid" 2>/dev/null || true
+        }
+        trap cleanup EXIT
+
+        for _ in $(seq 1 10); do
+            if curl -fsS "http://127.0.0.1:${port}/health" >/dev/null 2>&1; then
+                break
+            fi
+            sleep 1
+        done
+
+        health=$(curl -fsS "http://127.0.0.1:${port}/health")
+        injected=$(curl -fsS "http://127.0.0.1:${port}/api/templates?search=%27%20OR%201%3D1%20--%20")
+
+        printf "health=%s\n" "$health"
+        printf "injected_rows=%s\n" "$(printf "%s" "$injected" | jq ".rows | length")"
+    ' _ "$port" "$server_log" "$VAULT_DIR" "$SCRIPTS_DIR"
+    [ "$status" -eq 0 ]
+    [[ "$output" == *'health={"status": "ok", "visibility_company": "software"}'* ]]
+    [[ "$output" == *'injected_rows=0'* ]]
+}
+
+@test "pv-template-vars document and usage keep dollar-at arguments visible" {
+    expected="\`\$@\` - All arguments joined"
+
+    run env VAULT_DIR="$VAULT_DIR" "$SCRIPTS_DIR/pv-template-vars" document e3d-htn
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"$expected"* ]]
+
+    run env VAULT_DIR="$VAULT_DIR" "$SCRIPTS_DIR/pv-template-vars" usage e3d-htn
+    [ "$status" -eq 0 ]
+    [[ "$output" == *'e3d-htn <args...>'* ]]
 }

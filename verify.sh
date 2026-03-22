@@ -65,6 +65,8 @@ echo ""
 echo -e "${YELLOW}Search & Releases:${NC}"
 check "pv tag list" "$SCRIPTS_DIR/pv" tag list
 check "pv search requires arg" bash -c "! $SCRIPTS_DIR/pv search 2>/dev/null"
+check "pv-diff summary" "$SCRIPTS_DIR/pv-diff" HEAD HEAD summary
+check_output "pv-template-vars usage" "<args...>" "$SCRIPTS_DIR/pv-template-vars" usage e3d-htn
 echo ""
 
 # Quality & lint
@@ -81,7 +83,7 @@ echo ""
 # Subcommands exist
 echo -e "${YELLOW}Subcommand Scripts:${NC}"
 for script in "$SCRIPTS_DIR"/pv-*; do
-    [ -x "$script" ] && check "$(basename $script) executable" test -x "$script"
+    [ -x "$script" ] && check "$(basename "$script") executable" test -x "$script"
 done
 echo ""
 
