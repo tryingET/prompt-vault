@@ -125,3 +125,24 @@ line2")
     [ "$status" -eq 1 ]
     [[ "$output" == *"Vault not initialized"* ]]
 }
+
+@test "pv-lib: expand_template_content preserves escaped vars and expands slices" {
+    run expand_template_content 'literal \$ARGUMENTS | $1 | ${@:2:2} | \\' alpha beta gamma
+    [ "$status" -eq 0 ]
+    [ "$output" = 'literal $ARGUMENTS | alpha | beta gamma | \' ]
+}
+
+@test "pv-lib: make_temp_file preserves existing exit traps and cleans up temp files" {
+    run bash -lc '
+        set -euo pipefail
+        source "$1/pv-lib.sh"
+        trap "echo OUTER" EXIT
+        make_temp_file temp_file .tmp
+        printf "%s\n" "$temp_file"
+    ' _ "$SCRIPTS_DIR"
+    [ "$status" -eq 0 ]
+
+    temp_path=$(printf '%s\n' "$output" | head -n 1)
+    [[ "$output" == *$'\nOUTER'* ]]
+    [ ! -e "$temp_path" ]
+}

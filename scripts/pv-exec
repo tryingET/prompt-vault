@@ -5,6 +5,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 VAULT_DIR="${VAULT_DIR:-$SCRIPT_DIR/../prompt-vault-db}"
+# shellcheck disable=SC1091
 source "$SCRIPT_DIR/pv-lib.sh"
 
 # Parse args
@@ -74,7 +75,7 @@ else
 fi
 
 cd "$VAULT_DIR"
-check_deps jq
+check_deps jq python3
 
 # Get template ID, content, and version safely via JSON
 ESCAPED_TEMPLATE=$(sql_escape "$TEMPLATE")
@@ -94,13 +95,8 @@ TEMPLATE_ID=$(echo "$RESULT" | jq -r '.rows[0].id')
 TEMPLATE_VERSION=$(echo "$RESULT" | jq -r '.rows[0].version')
 CONTENT=$(echo "$RESULT" | jq -r '.rows[0].content // ""')
 
-# Substitute variables
-for i in "${!ARGS[@]}"; do
-    pos=$((i + 1))
-    CONTENT=$(echo "$CONTENT" | sed "s/\$$pos/${ARGS[$i]}/g")
-done
-CONTENT=$(echo "$CONTENT" | sed "s/\$@/${ARGS[*]}/g")
-CONTENT=$(echo "$CONTENT" | sed "s/\$ARGUMENTS/${ARGS[*]}/g")
+# Substitute variables using the shared template semantics
+CONTENT=$(expand_template_content "$CONTENT" "${ARGS[@]}")
 
 # Time execution
 START=$(date +%s%3N)

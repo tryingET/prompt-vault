@@ -258,6 +258,62 @@ PY
     [[ "$output" == *'injected_rows=0'* ]]
 }
 
+@test "pv-integrate api-server shuts down on TERM" {
+    command -v curl >/dev/null 2>&1 || skip "curl not installed"
+
+    port=$((20000 + RANDOM % 10000))
+    server_log="$TMP_DIR/api-server-term.log"
+
+    run bash -lc '
+        set -euo pipefail
+        port="$1"
+        server_log="$2"
+        export VAULT_DIR="$3"
+        "$4/pv-integrate" api-server "$port" >"$server_log" 2>&1 &
+        server_pid=$!
+        cleanup() {
+            child_pids=$(pgrep -P "$server_pid" || true)
+            if [ -n "$child_pids" ]; then
+                kill $child_pids 2>/dev/null || true
+            fi
+            kill "$server_pid" 2>/dev/null || true
+            wait "$server_pid" 2>/dev/null || true
+        }
+        trap cleanup EXIT
+
+        for _ in $(seq 1 10); do
+            if curl -fsS "http://127.0.0.1:${port}/health" >/dev/null 2>&1; then
+                break
+            fi
+            sleep 1
+        done
+
+        curl -fsS "http://127.0.0.1:${port}/health" >/dev/null
+        kill -TERM "$server_pid"
+
+        for _ in $(seq 1 10); do
+            if ! ps -p "$server_pid" >/dev/null 2>&1; then
+                break
+            fi
+            sleep 1
+        done
+
+        if ps -p "$server_pid" >/dev/null 2>&1; then
+            echo "server still running after TERM" >&2
+            exit 1
+        fi
+
+        if curl -fsS "http://127.0.0.1:${port}/health" >/dev/null 2>&1; then
+            echo "health endpoint still reachable after TERM" >&2
+            exit 1
+        fi
+
+        echo "terminated"
+    ' _ "$port" "$server_log" "$VAULT_DIR" "$SCRIPTS_DIR"
+    [ "$status" -eq 0 ]
+    [[ "$output" == *'terminated'* ]]
+}
+
 @test "pv-template-vars document and usage keep dollar-at arguments visible" {
     expected="\`\$@\` - All arguments joined"
 
@@ -312,6 +368,25 @@ PY
     [ "$status" -eq 0 ]
     [[ "$output" == *'UNSUPPORTED_VAR:${HOME}'* ]]
     [[ "$output" == *'UNSUPPORTED_VAR:${PATH}'* ]]
+}
+
+@test "pv-exec preserves escaped vars and expands slices with shared semantics" {
+    TEST_VAULT_DIR="$TMP_DIR/prompt-vault-db"
+    copy_test_vault "$TEST_VAULT_DIR"
+
+    dolt --data-dir "$TEST_VAULT_DIR" sql -q "
+        INSERT INTO prompt_templates (name, description, content, artifact_kind, control_mode, formalization_level, owner_company, visibility_companies, status)
+        VALUES (
+            'exec-var-test',
+            'desc',
+            CONCAT('literal ', CHAR(92), CHAR(36), 'ARGUMENTS | first=', CHAR(36), '1', ' | rest=', CHAR(36), '{@:2:2} | unsupported=', CHAR(36), '{HOME} | slash=', CHAR(92), CHAR(92)),
+            'procedure', 'one_shot', 'structured', 'core', '[\"core\"]', 'active'
+        )
+    "
+
+    run env VAULT_DIR="$TEST_VAULT_DIR" "$SCRIPTS_DIR/pv-exec" exec-var-test alpha beta gamma delta
+    [ "$status" -eq 0 ]
+    [[ "$output" == *'literal $ARGUMENTS | first=alpha | rest=beta gamma | unsupported=${HOME} | slash=\'* ]]
 }
 
 @test "pv-export-formats python escapes triple quotes in generated module" {

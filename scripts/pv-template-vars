@@ -26,7 +26,7 @@ template_field_record() {
 
 extract_vars() {
     local content="$1"
-    parse_template_var_tokens <<< "$content" | jq -r 'select(.kind == "valid") | .token' | sort -u || true
+    template_valid_vars <<< "$content" || true
 }
 
 template_content() {
@@ -46,9 +46,9 @@ collect_validation_issues() {
     while IFS= read -r token; do
         [ -z "$token" ] && continue
         echo "UNSUPPORTED_VAR:$token"
-    done < <(parse_template_var_tokens <<< "$content" | jq -r 'select(.kind == "unsupported") | .token' | sort -u || true)
+    done < <(template_unsupported_vars <<< "$content" || true)
 
-    positions=$(parse_template_var_tokens <<< "$content" | jq -r 'select(.kind == "valid" and (.token | test("^\\$[0-9]+$"))) | (.token | ltrimstr("$"))' | sort -n | uniq || true)
+    positions=$(template_position_indexes <<< "$content" || true)
     max=$(printf '%s\n' "$positions" | tail -1)
     if [ -n "$max" ]; then
         for i in $(seq 1 "$max"); do

@@ -6,10 +6,11 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # Source shared library
+# shellcheck disable=SC1091
 source "$SCRIPT_DIR/pv-lib.sh"
 
 # Check for required dependencies
-check_deps jq dolt
+check_deps jq dolt python3
 
 cd "$VAULT_DIR"
 
@@ -30,7 +31,8 @@ lint_template() {
     echo "=== Template: $name ==="
     
     # Get template data using JSON format for proper handling
-    local data=$(dolt sql -r json -q "
+    local data description content_len desc_len
+    data=$(dolt sql -r json -q "
         SELECT 
             id, 
             COALESCE(description, '') as description, 
@@ -46,9 +48,9 @@ lint_template() {
         return
     fi
     
-    local description=$(echo "$data" | jq -r '.description // empty')
-    local content_len=$(echo "$data" | jq -r '.content_len // 0')
-    local desc_len=$(echo "$data" | jq -r '.desc_len // 0')
+    description=$(echo "$data" | jq -r '.description // empty')
+    content_len=$(echo "$data" | jq -r '.content_len // 0')
+    desc_len=$(echo "$data" | jq -r '.desc_len // 0')
     
     # Check description
     if [ -z "$description" ] || [ "$desc_len" -eq 0 ]; then
@@ -76,10 +78,11 @@ lint_template() {
         ORDER BY version DESC LIMIT 1
     " content)
     
-    # Check for variable definitions
-    local vars=$(echo "$content" | grep -oE '\$[0-9]+|\$@|\$ARGUMENTS|\${@[0-9:]*}' | sort -u || true)
+    # Check for variable definitions using the shared parser
+    local vars
+    vars=$(template_valid_vars <<< "$content" || true)
     if [ -n "$vars" ]; then
-        pass "Variables found: $(echo $vars | tr '\n' ' ')"
+        pass "Variables found: $(printf '%s\n' "$vars" | tr '\n' ' ' | sed 's/[[:space:]]\+$//')"
     fi
     
     # Check for common issues
@@ -88,8 +91,9 @@ lint_template() {
     fi
     
     # Check for unbalanced braces
-    local open_braces=$(echo "$content" | grep -o '{' | wc -l)
-    local close_braces=$(echo "$content" | grep -o '}' | wc -l)
+    local open_braces close_braces
+    open_braces=$(echo "$content" | grep -o '{' | wc -l)
+    close_braces=$(echo "$content" | grep -o '}' | wc -l)
     if [ "$open_braces" != "$close_braces" ]; then
         fail "Unbalanced braces: $open_braces open, $close_braces close"
     fi
@@ -128,7 +132,8 @@ lint_skill() {
     fi
     
     # Get skill data
-    local data=$(dolt sql -r json -q "
+    local data description desc_len readme_len license
+    data=$(dolt sql -r json -q "
         SELECT 
             id,
             COALESCE(description, '') as description,
@@ -145,10 +150,10 @@ lint_skill() {
         return
     fi
     
-    local description=$(echo "$data" | jq -r '.description // empty')
-    local desc_len=$(echo "$data" | jq -r '.desc_len // 0')
-    local readme_len=$(echo "$data" | jq -r '.readme_len // 0')
-    local license=$(echo "$data" | jq -r '.license // empty')
+    description=$(echo "$data" | jq -r '.description // empty')
+    desc_len=$(echo "$data" | jq -r '.desc_len // 0')
+    readme_len=$(echo "$data" | jq -r '.readme_len // 0')
+    license=$(echo "$data" | jq -r '.license // empty')
     
     # Check description
     if [ -z "$description" ] || [ "$desc_len" -eq 0 ]; then
@@ -191,8 +196,9 @@ lint_skill() {
     
     # Check for recommended sections
     if [ "$readme_len" -gt 300 ]; then
-        local has_setup=$(echo "$readme" | grep -qi "setup\|install\|getting started" && echo 1 || echo 0)
-        local has_usage=$(echo "$readme" | grep -qi "usage\|how to use\|example" && echo 1 || echo 0)
+        local has_setup has_usage
+        has_setup=$(echo "$readme" | grep -qi "setup\|install\|getting started" && echo 1 || echo 0)
+        has_usage=$(echo "$readme" | grep -qi "usage\|how to use\|example" && echo 1 || echo 0)
         
         if [ "$has_setup" = "0" ]; then
             warn "Missing Setup/Installation section"
@@ -211,9 +217,11 @@ lint_skill() {
 }
 
 lint_all() {
+    local templates skills
+
     echo "=== Linting all templates ==="
     
-    local templates=$(dolt sql -r csv -q "SELECT name FROM prompt_templates WHERE status = 'active'" | tail -n +2)
+    templates=$(dolt sql -r csv -q "SELECT name FROM prompt_templates WHERE status = 'active'" | tail -n +2)
     for name in $templates; do
         [ -z "$name" ] && continue
         lint_template "$name"
@@ -222,7 +230,7 @@ lint_all() {
     echo ""
     echo "=== Linting all skills ==="
     
-    local skills=$(dolt sql -r csv -q "SELECT name FROM skills WHERE status = 'active'" | tail -n +2)
+    skills=$(dolt sql -r csv -q "SELECT name FROM skills WHERE status = 'active'" | tail -n +2)
     for name in $skills; do
         [ -z "$name" ] && continue
         lint_skill "$name"

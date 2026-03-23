@@ -143,9 +143,37 @@ cleanup_temp_paths() {
 
 declare -ag PV_REGISTERED_TEMP_PATHS=()
 PV_REGISTERED_TEMP_TRAP_INSTALLED=0
+PV_REGISTERED_TEMP_PREVIOUS_EXIT_TRAP_BODY=""
 
-_cleanup_registered_temp_paths() {
+_decode_trap_body() {
+    local trap_definition="${1:-}"
+    local quoted_body
+
+    [ -z "$trap_definition" ] && return 0
+
+    quoted_body=${trap_definition#trap -- }
+    quoted_body=${quoted_body% EXIT}
+
+    [ -z "$quoted_body" ] && return 0
+    eval "printf '%s' $quoted_body"
+}
+
+_current_exit_trap_body() {
+    _decode_trap_body "$(trap -p EXIT || true)"
+}
+
+_run_registered_temp_cleanup_on_exit() {
+    local status=$?
+
     cleanup_temp_paths "${PV_REGISTERED_TEMP_PATHS[@]:-}"
+
+    if [ -n "${PV_REGISTERED_TEMP_PREVIOUS_EXIT_TRAP_BODY:-}" ]; then
+        local previous_exit_trap_body="$PV_REGISTERED_TEMP_PREVIOUS_EXIT_TRAP_BODY"
+        (exit "$status")
+        eval "$previous_exit_trap_body"
+    fi
+
+    return "$status"
 }
 
 register_temp_path() {
@@ -156,7 +184,8 @@ register_temp_path() {
     done
 
     if [ "$PV_REGISTERED_TEMP_TRAP_INSTALLED" -eq 0 ]; then
-        trap '_cleanup_registered_temp_paths' EXIT HUP INT TERM
+        PV_REGISTERED_TEMP_PREVIOUS_EXIT_TRAP_BODY="$(_current_exit_trap_body)"
+        trap '_run_registered_temp_cleanup_on_exit' EXIT
         PV_REGISTERED_TEMP_TRAP_INSTALLED=1
     fi
 }
@@ -195,7 +224,10 @@ length = len(text)
 while i < length:
     ch = text[i]
     if ch == '\\':
-        i += 2 if i + 1 < length else 1
+        if i + 1 < length and text[i + 1] in {'$', '\\'}:
+            i += 2
+        else:
+            i += 1
         continue
     if ch != '$':
         i += 1
@@ -253,6 +285,151 @@ PY
 )"
 }
 
+template_valid_vars() {
+    parse_template_var_tokens | jq -r 'select(.kind == "valid") | .token' | sort -u
+}
+
+template_unsupported_vars() {
+    parse_template_var_tokens | jq -r 'select(.kind == "unsupported") | .token' | sort -u
+}
+
+template_position_indexes() {
+    parse_template_var_tokens | jq -r 'select(.kind == "valid" and (.token | test("^\\$[0-9]+$"))) | (.token | ltrimstr("$"))' | sort -n | uniq
+}
+
+expand_template_content() {
+    local content="${1:-}"
+    shift || true
+
+    TEMPLATE_CONTENT="$content" python3 - "$@" <<'PY'
+import os
+import re
+import sys
+
+text = os.environ.get('TEMPLATE_CONTENT', '')
+args = sys.argv[1:]
+out = []
+i = 0
+length = len(text)
+
+while i < length:
+    ch = text[i]
+
+    if ch == '\\':
+        if i + 1 < length and text[i + 1] in {'$', '\\'}:
+            out.append(text[i + 1])
+            i += 2
+        else:
+            out.append(ch)
+            i += 1
+        continue
+
+    if ch != '$':
+        out.append(ch)
+        i += 1
+        continue
+
+    if i + 1 >= length:
+        out.append(ch)
+        i += 1
+        continue
+
+    nxt = text[i + 1]
+
+    if nxt == '@':
+        out.append(' '.join(args))
+        i += 2
+        continue
+
+    if nxt.isdigit():
+        j = i + 1
+        while j < length and text[j].isdigit():
+            j += 1
+        index = int(text[i + 1:j]) - 1
+        out.append(args[index] if 0 <= index < len(args) else '')
+        i = j
+        continue
+
+    if nxt == '{':
+        j = i + 2
+        while j < length and text[j] != '}':
+            j += 1
+        if j >= length:
+            out.append(text[i:])
+            break
+
+        token = text[i:j + 1]
+        body = text[i + 2:j]
+        match = re.fullmatch(r'@:(\d+)(?::(\d+))?', body)
+        if match:
+            start = int(match.group(1))
+            slice_start = max(start - 1, 0)
+            values = args[slice_start:]
+            if match.group(2) is not None:
+                values = values[:int(match.group(2))]
+            out.append(' '.join(values))
+        else:
+            out.append(token)
+        i = j + 1
+        continue
+
+    if re.match(r'[A-Za-z_]', nxt):
+        j = i + 1
+        while j < length and re.match(r'[A-Za-z0-9_]', text[j]):
+            j += 1
+        token = text[i:j]
+        if token == '$ARGUMENTS':
+            out.append(' '.join(args))
+        else:
+            out.append(token)
+        i = j
+        continue
+
+    out.append(ch)
+    i += 1
+
+print(''.join(out), end='')
+PY
+}
+
+PV_SIGNAL_FORWARD_CHILD_PID=""
+
+_forward_registered_child_signal_and_exit() {
+    local signal="${1:-TERM}"
+    local signal_number
+
+    trap - "$signal"
+
+    if [ -n "${PV_SIGNAL_FORWARD_CHILD_PID:-}" ] && kill -0 "$PV_SIGNAL_FORWARD_CHILD_PID" 2>/dev/null; then
+        kill "-$signal" "$PV_SIGNAL_FORWARD_CHILD_PID" 2>/dev/null || kill "$PV_SIGNAL_FORWARD_CHILD_PID" 2>/dev/null || true
+        wait "$PV_SIGNAL_FORWARD_CHILD_PID" 2>/dev/null || true
+    fi
+
+    signal_number=$(kill -l "$signal" 2>/dev/null || true)
+    if [ -n "$signal_number" ]; then
+        kill "-$signal" "$$" 2>/dev/null || exit $((128 + signal_number))
+    fi
+
+    exit 1
+}
+
+run_with_signal_forwarding() {
+    "$@" &
+    PV_SIGNAL_FORWARD_CHILD_PID=$!
+
+    trap '_forward_registered_child_signal_and_exit TERM' TERM
+    trap '_forward_registered_child_signal_and_exit INT' INT
+    trap '_forward_registered_child_signal_and_exit HUP' HUP
+
+    wait "$PV_SIGNAL_FORWARD_CHILD_PID"
+    local status=$?
+
+    trap - TERM INT HUP
+    PV_SIGNAL_FORWARD_CHILD_PID=""
+
+    return "$status"
+}
+
 # Export functions and variables for sourcing scripts
-export -f info success warn error ensure_vault check_deps sql_escape require_numeric float_gt sanitize_terminal_text terminal_safe_preview sql_escape_base64 sql_decode_base64 dolt_json_query json_first_field json_first_field_record json_all_field json_rows_base64 json_decode_base64 cleanup_temp_paths register_temp_path make_temp_file parse_template_var_tokens
+export -f info success warn error ensure_vault check_deps sql_escape require_numeric float_gt sanitize_terminal_text terminal_safe_preview sql_escape_base64 sql_decode_base64 dolt_json_query json_first_field json_first_field_record json_all_field json_rows_base64 json_decode_base64 cleanup_temp_paths register_temp_path make_temp_file parse_template_var_tokens template_valid_vars template_unsupported_vars template_position_indexes expand_template_content run_with_signal_forwarding
 export SCRIPTS_DIR VAULT_DIR RED GREEN YELLOW BLUE NC

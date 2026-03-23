@@ -14,6 +14,7 @@ shift || true
 template_rows_sql="SELECT name, description, content, artifact_kind, control_mode, formalization_level, owner_company, visibility_companies, controlled_vocabulary FROM prompt_templates WHERE status = 'active' ORDER BY name"
 skill_rows_sql="SELECT name, description, readme FROM skills WHERE status = 'active' ORDER BY name"
 collection_rows_sql="SELECT name, description FROM collections ORDER BY name"
+api_script=""
 
 case "$cmd" in
     langchain)
@@ -388,7 +389,7 @@ PYEOF
         export VAULT_DIR="$VAULT_DIR"
         export PORT="$port"
         export PV_API_VISIBILITY_COMPANY="$visibility_company"
-        python3 "$api_script"
+        run_with_signal_forwarding python3 "$api_script"
         ;;
 
     webhook)
