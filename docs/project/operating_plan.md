@@ -1,41 +1,46 @@
 ---
-summary: "Operating plan and completion record for the ontology-boundary hardening wave after the router-semantic reporting slice."
+summary: "Operating plan and completion record for the first TG3 procedure-layer wave after ontology-boundary hardening completed."
 read_when:
-  - "When reviewing the active repo-local wave after TG4 completed"
-  - "When checking which AK task covered the ontology-boundary hardening slice"
+  - "When reviewing the active repo-local wave after TG2 completed"
+  - "When checking which AK task covered the owner-repo boundary-note procedure slice"
 ---
 
 # Operating Plan
 
 Active strategic goal: **SG1 — Keep Prompt Vault the canonical governed prompt-authoring substrate**
 
-Active tactical goal: **TG2 — Keep ontology/contracts clean and prompt bodies out of the wrong layers**
+Active tactical goal: **TG3 — Expand the reusable procedure layer for recurring governance-shaped work**
 
 ## Status
 
 This operating wave is now materially complete:
-- `pv-verify-ontology-contract` now rejects prompt-body keys in seed-contract metadata
-- the verifier now fails if `ontology/index.md` stops stating that prompt bodies are not part of ontology
-- focused contract tests now cover both failure modes
-- README + handoff docs now describe the active boundary-hardening reality truthfully
+- Prompt Vault now contains the active workflow template `owner-repo-boundary-note`
+- focused bats coverage protects the template metadata and key anti-drift contract phrases
+- README + tactical-goals + handoff docs now describe the promoted TG3 procedure-layer reality truthfully
 
 ## Scope of this operating wave
 
 This wave stays bounded:
-- harden deterministic verification around the DB-vs-ontology authoring boundary
-- keep ontology files contract-only and prompt bodies canonical in the DB
-- refresh direction/handoff docs so operators do not resume from the completed TG4 wave
-- avoid reopening schema-v9 ontology/company-visibility decisions or widening private-output exposure
+- promote TG3 after the completed ontology-boundary hardening wave
+- capture repo-native owner-boundary-note authoring as a reusable Prompt Vault procedure
+- add focused validation so the procedure remains discoverable and authority-preserving
+- refresh repo direction/handoff surfaces so operators start from the new TG3 reality instead of the completed TG2 wave
+- avoid reopening settled ontology/company-visibility/runtime-boundary decisions or widening private-output exposure
 
 ## Completed operating slice in this wave
 
-### OP1 — Harden ontology verification so prompt bodies stay DB-only
-- **AK task:** `#264`
-- **Why now:** TG4 is materially complete, and the next local risk is drift back into ontology-carried prompt content or softened boundary docs.
-- **Deliverable:** deterministic verification now rejects prompt-body leakage in contract fixtures, keeps the ontology index boundary statement explicit, and adds focused failing tests for both regressions.
-- **Completion evidence:** the verifier fails closed on prompt-body boundary regressions and the docs/handoff/validation story all point to DB-only prompt bodies.
+### OP1 — Add an owner-repo boundary-note procedure template for authority-preserving follow-through
+- **AK task:** `#265`
+- **Why now:** recent Prompt Vault work repeatedly needed repo-native boundary notes that distinguish canonical ownership, bounded reads, projection-only surfaces, and warning posture; leaving that structure in session memory would slow future boundary work and invite drift.
+- **Deliverable:** add the active template `owner-repo-boundary-note`, add focused bats coverage for its metadata and anti-cutover phrases, and refresh repo docs/handoff to show TG3 as the current tactical reality.
+- **Completion evidence:** `./scripts/pv show template owner-repo-boundary-note`, `tests/pv-owner-repo-boundary-note-template.bats`, and the updated README/tactical/operating/handoff docs all point to the same procedure-layer truth.
 
-## Previously completed operating wave
+## Previously completed operating waves
+
+### Ontology-boundary hardening
+- **AK task:** `#264`
+- **Status:** complete
+- **Completion evidence:** `pv-verify-ontology-contract` now rejects prompt-body leakage in ontology-shaped surfaces, focused tests cover the regressions, and repo docs/handoff keep prompt bodies DB-only.
 
 ### Router-semantic aggregate reporting + privacy hardening
 - **AK tasks:** `#247`, `#248`, `#246`
@@ -49,17 +54,19 @@ This wave stays bounded:
 
 ## Next decision after this wave
 
-Use AK + current docs to decide whether TG2 needs another bounded repo-local follow-through or whether TG3 should become the next promoted tactical slice.
+Use AK + current docs to decide whether TG3 needs another bounded procedure-layer follow-through or whether SG1 is materially complete and SG2 should be promoted next.
 Do not infer a synthetic next task from this file alone if AK does not currently show one.
 
 ## Validation expectation for this wave
 
 At minimum, re-run:
 ```bash
+./scripts/db-change-preflight.sh --stage db-dev
+./scripts/pv show template owner-repo-boundary-note
+./scripts/pv-bats tests/pv-owner-repo-boundary-note-template.bats
 ./scripts/pv-verify-ontology-contract
-./scripts/pv-bats tests/pv-ontology-contract.bats
 ./verify.sh
 node ~/ai-society/core/agent-scripts/scripts/docs-list.mjs --docs . --strict
 ```
 
-Add any focused tests needed for future DB-vs-ontology boundary regressions in the same slice.
+Add any focused tests needed for future procedure-layer drift in the same slice.

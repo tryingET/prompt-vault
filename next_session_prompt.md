@@ -1,16 +1,16 @@
 ---
-summary: "Repo-local Prompt Vault handoff: schema v9 and the router-semantic/privacy wave remain settled, ontology-boundary hardening task #264 is now complete, and the next session should reassess the next repo-local slice from AK instead of replaying finished work."
+summary: "Repo-local Prompt Vault handoff: schema v9, privacy-safe router reporting, ontology-boundary hardening, and the first TG3 procedure-layer slice are complete; the next session should reassess the next repo-local slice from AK instead of replaying finished work."
 read_when:
   - "Starting the next session in prompt-vault"
-  - "Before choosing the next post-hardening implementation slice"
+  - "Before choosing the next post-TG3 implementation slice"
 system4d:
   container: "Prompt Vault v9 stabilization and delivery planning; separate from vault-client package implementation work"
   compass: "Keep ontology/contracts clean, keep prompt seed content out of ontology, and advance the next real repo-local slice instead of replaying finished waves"
-  engine: "Confirm current schema-v9 reality -> verify the completed ontology-boundary hardening wave -> reassess the next repo-local slice from AK -> update handoff truthfully"
-  fog: "Main risks are stale docs sending work backward, reintroducing prompt bodies into ontology/contracts, or widening private-output exposure while improving reporting"
+  engine: "Confirm current schema-v9 reality -> verify the completed TG2/TG3 slices -> reassess the next repo-local slice from AK -> update handoff truthfully"
+  fog: "Main risks are stale docs sending work backward, reintroducing prompt bodies into ontology/contracts, mistaking projection-only surfaces for cutover, or widening private-output exposure while improving reporting"
 ---
 
-# Next Session Prompt — Prompt Vault Post-Boundary-Hardening Reassessment
+# Next Session Prompt — Prompt Vault Post-TG3 Reassessment
 
 ## Scope boundary
 - Start in `~/ai-society/core/prompt-vault`.
@@ -33,8 +33,9 @@ Current baseline to assume unless validation disproves it:
   - `docs/dev/v4-prompt-authoring-review-input-boundary.md`
 - the Prompt Vault-side shared runtime registry / execution-observability boundary note exists:
   - `docs/dev/shared-runtime-registry-and-execution-observability-boundary.md`
-- the repo-local concern-first governance-behavior review/fan-out procedure template exists in the vault:
+- the repo-local reusable procedure layer now includes:
   - `concern-first-review-fanout`
+  - `owner-repo-boundary-note`
 - the project direction cascade has been refreshed:
   - `docs/project/vision.md`
   - `docs/project/strategic_goals.md`
@@ -44,10 +45,11 @@ Current baseline to assume unless validation disproves it:
   - `./scripts/pv quality rollup selection_principles`
   - router-only bucketing is enforced
   - private output text remains non-previewable in the rollup surface
-- focused validation covers multi-valued router-semantic rollups, privacy boundaries, and ontology boundary drift:
+- focused validation covers multi-valued router-semantic rollups, privacy boundaries, ontology boundary drift, and the new TG3 procedure slice:
   - `tests/pv-quality.bats`
   - `tests/pv-commands.bats`
   - `tests/pv-ontology-contract.bats`
+  - `tests/pv-owner-repo-boundary-note-template.bats`
 
 If you need detail, read `README.md`, the project direction docs, the boundary notes, and run the current deterministic checks instead of expanding this handoff into a second status document.
 
@@ -59,7 +61,7 @@ If you need detail, read `README.md`, the project direction docs, the boundary n
 - do **not** reintroduce legacy `type` or semantic tags as compatibility shortcuts
 - do **not** resume vault-client product work from stale standalone or live-copy locations
 - do **not** let blocked cross-repo boundary work displace the active repo-local operating wave
-- do **not** reopen task `#264`; it is the completed ontology-boundary hardening slice, not the next step
+- do **not** reopen tasks `#264` or `#265`; they are completed slices, not the next step
 
 ## Current goal
 Keep this handoff repo-local and DRY:
@@ -73,6 +75,7 @@ The most recent Prompt Vault repo-local waves are now complete:
 - `#246` — docs and handoff were refreshed for the rollup surface
 - `#245` — Prompt Vault boundary versus shared runtime registry and exported prompt execution observability landed
 - `#264` — ontology contract verification now rejects prompt-body leakage and keeps the ontology index boundary statement explicit
+- `#265` — the reusable owner-repo boundary-note procedure template now exists in the vault with focused validation and docs/handoff refresh
 
 That means the next session should **reassess the next repo-local slice from AK** instead of replaying any of those finished waves.
 
@@ -110,12 +113,14 @@ Prompt Vault should remain the prompt-body / authoring substrate in that design,
 18. `diary/2026-03-22--docs-direction-cascade-refresh.md`
 19. `diary/2026-03-22--operating-plan-router-semantic-rollups.md`
 20. `diary/2026-03-23--ontology-boundary-verification-hardening.md`
+21. `diary/2026-03-23--owner-repo-boundary-note-template.md`
 
 ## Recommended work order
 1. Check AK before choosing work:
    - confirm the completed repo-local wave `#247` -> `#248` -> `#246`
    - confirm the completed boundary-doc follow-through `#245`
    - confirm the completed ontology-boundary hardening slice `#264`
+   - confirm the completed first TG3 procedure-layer slice `#265`
    - inspect whether any new Prompt Vault-ready task exists
    - keep foreign-repo follow-through `#229` out of scope for this repo session unless the operator explicitly asks for cross-repo work
 2. Re-run the current deterministic checks if you need to confirm the shipped surface quickly.
@@ -129,11 +134,14 @@ Prompt Vault should remain the prompt-body / authoring substrate in that design,
 - Keep privacy considerations explicit before storing execution outputs.
 - Treat router prompts as canonical DB content, not docs and not ontology artifacts.
 - Keep multi-valued router reporting aggregate-first; private output text must remain non-previewable unless a separate explicit public boundary says otherwise.
+- Do **not** treat projection-only surfaces as proof of authority cutover.
 
 ## Validation
 From `~/ai-society/core/prompt-vault`:
 ```bash
 ./scripts/db-change-preflight.sh --stage db-dev
+./scripts/pv show template owner-repo-boundary-note
+./scripts/pv-bats tests/pv-owner-repo-boundary-note-template.bats
 ./scripts/pv-verify-ontology-contract
 ./scripts/pv-bats tests/pv-ontology-contract.bats
 ./scripts/pv-bats tests/pv-quality.bats
@@ -141,28 +149,29 @@ From `~/ai-society/core/prompt-vault`:
 node ~/ai-society/core/agent-scripts/scripts/docs-list.mjs --docs . --strict
 ```
 
-Add any focused tests needed for future DB-vs-ontology boundary regressions in the same slice.
+Add any focused tests needed for future DB-vs-ontology or procedure-layer regressions in the same slice.
 
 ## Explicit deferrals
 - No ROCS-backed contract compiler in this pass.
 - No rollback to legacy `type` or tag semantics.
 - No broad raw-output dashboard push that normalizes exposing captured text beyond the explicit public-preview boundary.
 - No moving vault-client implementation work back into Prompt Vault beyond boundary-document updates.
-- No reopening the completed `#245` or `#264` slices unless the underlying ownership/export/privacy or DB-vs-ontology boundary changes again.
+- No reopening the completed `#245`, `#264`, or `#265` slices unless the underlying ownership/export/privacy or DB-vs-ontology boundary changes again.
 
 ## Canonical next slice after this one
 Decide from AK + current repo docs, not from handoff prose memory:
 - the `#247` -> `#248` -> `#246` wave is complete
 - boundary-doc follow-through `#245` is complete
 - ontology-boundary hardening `#264` is complete
-- reassess whether TG2 needs another bounded local follow-through or whether TG3 should be promoted next
+- the first TG3 procedure-layer slice `#265` is complete
+- reassess whether TG3 needs another bounded local follow-through or whether SG1 is materially complete and SG2 should be promoted next
 - do not infer a synthetic next task from this handoff alone if AK does not currently show one
 
 ## First concrete next action
 From `~/ai-society/core/prompt-vault`:
 1. read `README.md`, `docs/project/tactical_goals.md`, and `docs/project/operating_plan.md`
 2. check repo-local AK task state (`ak task ready -F json` / `ak task list -F json --verbose`)
-3. choose the next repo-local task only after confirming it is not just a replay of the completed rollup/boundary-hardening waves
+3. choose the next repo-local task only after confirming it is not just a replay of the completed rollup, boundary-hardening, or first TG3 procedure-layer waves
 
 Foreign-repo follow-through reference only:
 - AK task `#229`

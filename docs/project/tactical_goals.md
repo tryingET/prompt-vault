@@ -21,16 +21,20 @@ Active strategic goal: **SG1 — Keep Prompt Vault the canonical governed prompt
 - **Outcome reached:** `pv quality rollup selection_principles`, focused privacy tests, and the docs/handoff refresh are now in place.
 - **Completion signal:** operators can inspect governed router semantics through aggregate-only reporting and the validation suite protects the privacy boundary.
 
+### TG2 — Keep ontology/contracts clean and prompt bodies out of the wrong layers
+- **Why it mattered:** with the router-semantic reporting wave complete, the clearest repo-local follow-through was preventing drift back into ontology-carried prompt bodies or fuzzy boundary docs.
+- **Outcome reached:** ontology verification now rejects prompt-body fields in seed metadata, fails if `ontology/index.md` stops stating the DB-only authoring boundary explicitly, and the docs/handoff/validation story reinforces that split.
+- **Completion signal:** deterministic checks fail closed on DB-vs-ontology boundary regressions and operators are not sent back toward ontology-carried prompt content.
+
 ## Active tactical goal
 
-### TG2 — Keep ontology/contracts clean and prompt bodies out of the wrong layers
-- **Why this is active now:** with the router-semantic reporting wave complete, the clearest repo-local follow-through is preventing drift back into ontology-carried prompt bodies or fuzzy boundary docs.
-- **Outcome:** ontology files stay contract-only, seeded prompt bodies stay canonical DB content, and verification keeps that split explicit.
-- **Current status:** the first boundary-hardening slice is now complete; ontology verification rejects prompt-body fields in seed metadata and fails if the ontology index stops stating the DB-only authoring boundary explicitly.
-- **Done when:** docs/tests/handoffs consistently reinforce the DB-vs-ontology boundary and no stale guidance suggests otherwise.
-
-## Next tactical goal
-
 ### TG3 — Expand the reusable procedure layer for recurring governance-shaped work
+- **Why this is active now:** recent Prompt Vault work repeatedly needed concern-first review/fan-out plus repo-native owner-boundary-note authoring patterns, and those workflows should live as tested templates instead of only in session memory.
 - **Outcome:** Prompt Vault contains reusable procedures for repeatable cross-repo review/fan-out and adjacent authoring/governance workflows.
+- **Current status:** the first TG3 slice is now complete; the vault now contains `concern-first-review-fanout` and `owner-repo-boundary-note` as tested workflow templates for adjacent governance-shaped work.
 - **Done when:** high-value recurring operator patterns exist as tested, discoverable templates instead of only living in session memory.
+
+## Next tactical decision
+
+Use AK + current docs to decide whether TG3 needs another bounded procedure-layer follow-through or whether SG1 is materially complete and SG2 should be promoted next.
+Do not infer the answer from stale handoff text alone.
