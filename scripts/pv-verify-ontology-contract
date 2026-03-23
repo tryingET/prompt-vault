@@ -4,10 +4,11 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_DIR="$SCRIPT_DIR/.."
-CONTRACT="$REPO_DIR/ontology/v2-contract.json"
-CONTROLLED_CONTRACT="$REPO_DIR/ontology/controlled-vocabulary-contract.json"
-COMPANY_CONTRACT="$REPO_DIR/ontology/company-visibility-contract.json"
-VAULT_DIR="$REPO_DIR/prompt-vault-db"
+CONTRACT="${PV_ONTOLOGY_CONTRACT_PATH:-$REPO_DIR/ontology/v2-contract.json}"
+CONTROLLED_CONTRACT="${PV_CONTROLLED_CONTRACT_PATH:-$REPO_DIR/ontology/controlled-vocabulary-contract.json}"
+COMPANY_CONTRACT="${PV_COMPANY_CONTRACT_PATH:-$REPO_DIR/ontology/company-visibility-contract.json}"
+ONTOLOGY_INDEX="${PV_ONTOLOGY_INDEX_PATH:-$REPO_DIR/ontology/index.md}"
+VAULT_DIR="${PV_VAULT_DIR:-$REPO_DIR/prompt-vault-db}"
 export TMPDIR="${TMPDIR:-$REPO_DIR/.tmp}"
 mkdir -p "$TMPDIR"
 
@@ -19,11 +20,12 @@ require_file() {
 require_file "$CONTRACT"
 require_file "$CONTROLLED_CONTRACT"
 require_file "$COMPANY_CONTRACT"
+require_file "$ONTOLOGY_INDEX"
 [ -d "$VAULT_DIR/.dolt" ] || { echo "Missing Prompt Vault DB: $VAULT_DIR/.dolt" >&2; exit 1; }
 command -v dolt >/dev/null 2>&1 || { echo "dolt is required" >&2; exit 1; }
 command -v python3 >/dev/null 2>&1 || { echo "python3 is required" >&2; exit 1; }
 
-python3 - "$CONTRACT" "$CONTROLLED_CONTRACT" "$COMPANY_CONTRACT" "$VAULT_DIR" <<'PY'
+python3 - "$CONTRACT" "$CONTROLLED_CONTRACT" "$COMPANY_CONTRACT" "$ONTOLOGY_INDEX" "$VAULT_DIR" <<'PY'
 import json
 import pathlib
 import subprocess
@@ -32,10 +34,12 @@ import sys
 contract_path = pathlib.Path(sys.argv[1])
 controlled_contract_path = pathlib.Path(sys.argv[2])
 company_contract_path = pathlib.Path(sys.argv[3])
-vault_dir = pathlib.Path(sys.argv[4])
+ontology_index_path = pathlib.Path(sys.argv[4])
+vault_dir = pathlib.Path(sys.argv[5])
 contract = json.loads(contract_path.read_text())
 controlled_contract = json.loads(controlled_contract_path.read_text())
 company_contract = json.loads(company_contract_path.read_text())
+ontology_index = ontology_index_path.read_text()
 
 required_contract_keys = [
     "contract_version",
@@ -72,6 +76,20 @@ for key in required_controlled_keys:
 for key in required_company_keys:
     if key not in company_contract:
         raise SystemExit(f"company contract missing key: {key}")
+
+required_index_line = "prompt bodies are **not** part of ontology"
+if required_index_line not in ontology_index:
+    raise SystemExit(
+        "ontology index must keep the DB-only authoring boundary explicit: missing 'prompt bodies are **not** part of ontology'"
+    )
+
+for forbidden_top_level in [
+    "seed_prompt_bodies",
+    "seed_prompt_body_fixtures",
+    "seed_prompt_markdown",
+]:
+    if forbidden_top_level in contract:
+        raise SystemExit(f"contract must stay metadata-only: forbidden top-level key {forbidden_top_level}")
 
 facets = contract["facets"]
 controlled_dimensions = controlled_contract["dimensions"]
@@ -111,6 +129,29 @@ for dimension in required_router_dimensions:
 seed_prompts = contract["seed_prompts"]
 if len(seed_prompts) != 3:
     raise SystemExit("seed_prompts must contain exactly 3 prompt definitions")
+
+seed_expected_keys = {"name", "artifact_kind", "control_mode", "formalization_level", "purpose"}
+for seed_prompt in seed_prompts:
+    actual_keys = set(seed_prompt)
+    missing = sorted(seed_expected_keys - actual_keys)
+    extra = sorted(actual_keys - seed_expected_keys)
+    if missing:
+        raise SystemExit(f"seed_prompts entry missing keys: {missing}")
+    if extra:
+        raise SystemExit(
+            f"seed_prompts entries must stay metadata-only; extra keys not allowed: {extra}"
+        )
+    purpose = seed_prompt.get("purpose")
+    if not isinstance(purpose, str) or not purpose.strip():
+        raise SystemExit(f"{seed_prompt.get('name', '<unknown>')}: purpose must be a non-empty string")
+    if "\n" in purpose or "\r" in purpose:
+        raise SystemExit(
+            f"{seed_prompt['name']}: purpose must stay single-line metadata, not prompt-body content"
+        )
+    if len(purpose.strip()) > 240:
+        raise SystemExit(
+            f"{seed_prompt['name']}: purpose is too long for metadata and looks like prompt-body leakage"
+        )
 
 seed_by_name = {item["name"]: item for item in seed_prompts}
 expected_seed_names = ["analysis-router", "post-review-router", "review-closeout-router"]
@@ -164,6 +205,30 @@ def normalize_json_field(value):
         return json.loads(value)
     raise SystemExit(f"unexpected JSON field value: {value!r}")
 
+
+for fixture_name, fixture in fixture_expectations.items():
+    actual_keys = set(fixture)
+    expected_keys = set(required_router_dimensions)
+    missing = sorted(expected_keys - actual_keys)
+    extra = sorted(actual_keys - expected_keys)
+    if missing:
+        raise SystemExit(f"{fixture_name}: controlled-vocabulary fixture missing keys: {missing}")
+    if extra:
+        raise SystemExit(
+            f"{fixture_name}: controlled-vocabulary fixture must stay metadata-only; extra keys not allowed: {extra}"
+        )
+
+for fixture_name, fixture in company_fixture_expectations.items():
+    actual_keys = set(fixture)
+    expected_keys = {"owner_company", "visibility_companies"}
+    missing = sorted(expected_keys - actual_keys)
+    extra = sorted(actual_keys - expected_keys)
+    if missing:
+        raise SystemExit(f"{fixture_name}: company fixture missing keys: {missing}")
+    if extra:
+        raise SystemExit(
+            f"{fixture_name}: company fixture must stay metadata-only; extra keys not allowed: {extra}"
+        )
 
 for row in rows:
     name = row.get("name")
