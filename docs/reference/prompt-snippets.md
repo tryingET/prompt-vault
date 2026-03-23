@@ -947,7 +947,7 @@ Invoke by name or essence:
 - "Design the ESCAPE HATCH first"
 - "Map the DEPENDENCY graph"
 - "Apply TRANSCENDENT REFACTOR to this document"
-- "/deep-review uncommitted|staged files — apply an in-depth adversarial review of the current diff using ~/steve/prompts/prompt-snippets.md as mandatory cognitive stack (INVERSION, TELESCOPIC, NEXUS, AUDIT, BLAST RADIUS, ESCAPE HATCH, KNOWLEDGE CRYSTALLIZATION). Output: ranked bugs (with file:line and repro path), debt/smells/gaps, blast radius (direct/secondary/tertiary), rollback commands, and crystallized learnings. Be ruthless: assume hidden failure modes, partial rollout, and drift."
+- "/deep-review uncommitted|staged files — apply an in-depth adversarial review of the current diff using ~/steve/prompts/prompt-snippets.md as mandatory cognitive stack (INVERSION, TELESCOPIC, NEXUS, AUDIT, BLAST RADIUS, ESCAPE HATCH, KNOWLEDGE CRYSTALLIZATION). Output: ranked bugs (with real file:line, repro path, and Underground Time derived from actual git blame for the cited line/span), debt/smells/gaps, blast radius (direct/secondary/tertiary), rollback commands, and crystallized learnings. If blame is unavailable, say so explicitly; do not guess. Be ruthless: assume hidden failure modes, partial rollout, and drift."
 - "Apply ATOMIC COMPLETION — resolve all surfaced findings now; defer only with explicit contract (rationale, owner, trigger, deadline, blast radius, authority binding)."
 - "DIAGNOSE → 100x (delete > add) → 100x (compound check) → DISSOLVE → REBUILD → NAME DEBT. Stop when boring. Kill if explaining > showing."
 - "Apply THE MIRROR — write a test generator for this module; surface hidden assumptions about input domains and expected behaviors"
