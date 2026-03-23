@@ -76,6 +76,12 @@ teardown() {
     [[ "$output" == *"Quality Rollup by selection_principles"* ]]
 }
 
+@test "pv quality rollup visibility_companies runs" {
+    run "$SCRIPTS_DIR/pv" quality rollup visibility_companies
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"Quality Rollup by visibility_companies"* ]]
+}
+
 @test "pv-diff summary runs without shell local errors" {
     run env VAULT_DIR="$VAULT_DIR" "$SCRIPTS_DIR/pv-diff" HEAD HEAD summary
     [ "$status" -eq 0 ]

@@ -109,6 +109,69 @@ teardown() {
     [[ "$output" != *"never show this private selection principle payload"* ]]
 }
 
+@test "pv-quality visibility_companies rollup supports governed company buckets without leaking private output text" {
+    run env VAULT_DIR="$TEST_VAULT_DIR" "$SCRIPTS_DIR/pv-exec" analysis-router "sample context" --output-text "never show this private visibility payload"
+    [ "$status" -eq 0 ]
+
+    exec_id=$(dolt --data-dir "$TEST_VAULT_DIR" sql -r csv -q "SELECT MAX(id) FROM executions WHERE entity_type = 'template'" | tail -1)
+    [ -n "$exec_id" ]
+
+    run dolt --data-dir "$TEST_VAULT_DIR" sql -q "INSERT INTO feedback (execution_id, rating, notes, issues, would_use_again) VALUES ($exec_id, 5, 'great', '[]', TRUE)"
+    [ "$status" -eq 0 ]
+
+    run env VAULT_DIR="$TEST_VAULT_DIR" "$SCRIPTS_DIR/pv-quality" rollup visibility_companies
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"Quality Rollup by visibility_companies"* ]]
+    [[ "$output" == *"software"* ]]
+    [[ "$output" == *"avg_quality_score"* ]]
+    [[ "$output" != *"never show this private visibility payload"* ]]
+}
+
+@test "pv-quality visibility_companies rollup counts a template in every governed company bucket it declares" {
+    run env VAULT_DIR="$TEST_VAULT_DIR" "$SCRIPTS_DIR/pv-quality" rollup visibility_companies
+    [ "$status" -eq 0 ]
+    baseline_software=$(printf '%s\n' "$output" | awk -F'|' '/software/ {gsub(/ /, "", $3); print $3; exit}')
+    baseline_holding=$(printf '%s\n' "$output" | awk -F'|' '/holding/ {gsub(/ /, "", $3); print $3; exit}')
+    baseline_core=$(printf '%s\n' "$output" | awk -F'|' '/core/ {gsub(/ /, "", $3); print $3; exit}')
+    [ -n "$baseline_software" ]
+    [ -n "$baseline_holding" ]
+    [ -n "$baseline_core" ]
+
+    run dolt --data-dir "$TEST_VAULT_DIR" sql -q "
+        INSERT INTO prompt_templates (
+            name,
+            description,
+            content,
+            artifact_kind,
+            control_mode,
+            formalization_level,
+            owner_company,
+            visibility_companies,
+            status
+        ) VALUES (
+            'visibility-multi-company-template',
+            'This active template proves that one template can contribute to multiple company-visibility buckets.',
+            REPEAT('v', 150),
+            'procedure',
+            'one_shot',
+            'structured',
+            'software',
+            '[\"software\",\"holding\"]',
+            'active'
+        )
+    "
+    [ "$status" -eq 0 ]
+
+    run env VAULT_DIR="$TEST_VAULT_DIR" "$SCRIPTS_DIR/pv-quality" rollup visibility_companies
+    [ "$status" -eq 0 ]
+    after_software=$(printf '%s\n' "$output" | awk -F'|' '/software/ {gsub(/ /, "", $3); print $3; exit}')
+    after_holding=$(printf '%s\n' "$output" | awk -F'|' '/holding/ {gsub(/ /, "", $3); print $3; exit}')
+    after_core=$(printf '%s\n' "$output" | awk -F'|' '/core/ {gsub(/ /, "", $3); print $3; exit}')
+    [ "$after_software" = "$((baseline_software + 1))" ]
+    [ "$after_holding" = "$((baseline_holding + 1))" ]
+    [ "$after_core" = "$baseline_core" ]
+}
+
 @test "pv-quality selection_principles rollup counts a router in every governed principle bucket it declares" {
     run env VAULT_DIR="$TEST_VAULT_DIR" "$SCRIPTS_DIR/pv-quality" rollup selection_principles
     [ "$status" -eq 0 ]

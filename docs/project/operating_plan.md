@@ -1,46 +1,51 @@
 ---
-summary: "Operating plan and completion record for the first TG3 procedure-layer wave after ontology-boundary hardening completed."
+summary: "Operating plan and completion record for the first SG2 company-visibility evidence rollup wave after SG1 stabilization."
 read_when:
-  - "When reviewing the active repo-local wave after TG2 completed"
-  - "When checking which AK task covered the owner-repo boundary-note procedure slice"
+  - "When reviewing the active repo-local wave after SG1 became materially complete"
+  - "When checking which AK task covered the company-visibility evidence rollup slice"
 ---
 
 # Operating Plan
 
-Active strategic goal: **SG1 — Keep Prompt Vault the canonical governed prompt-authoring substrate**
+Active strategic goal: **SG2 — Deepen privacy-safe evidence and downstream usability without collapsing boundaries**
 
-Active tactical goal: **TG3 — Expand the reusable procedure layer for recurring governance-shaped work**
+Active tactical goal: **TG5 — Expand aggregate-first evidence surfaces across governed company visibility**
 
 ## Status
 
 This operating wave is now materially complete:
-- Prompt Vault now contains the active workflow template `owner-repo-boundary-note`
-- focused bats coverage protects the template metadata and key anti-drift contract phrases
-- README + tactical-goals + handoff docs now describe the promoted TG3 procedure-layer reality truthfully
+- `pv quality rollup visibility_companies` is live as an aggregate-only quality/evidence surface
+- focused bats coverage protects privacy posture and multi-valued company-bucket behavior
+- README + strategic/tactical/operating/handoff docs now describe the promoted SG2/TG5 reality truthfully
 
 ## Scope of this operating wave
 
 This wave stays bounded:
-- promote TG3 after the completed ontology-boundary hardening wave
-- capture repo-native owner-boundary-note authoring as a reusable Prompt Vault procedure
-- add focused validation so the procedure remains discoverable and authority-preserving
-- refresh repo direction/handoff surfaces so operators start from the new TG3 reality instead of the completed TG2 wave
-- avoid reopening settled ontology/company-visibility/runtime-boundary decisions or widening private-output exposure
+- promote SG2 after SG1 became materially complete
+- add aggregate-only company-visibility rollups using the governed company contract
+- keep private captured output non-previewable while improving downstream evidence usability
+- add focused validation so multi-company bucketing stays deterministic and privacy-safe
+- refresh repo direction/handoff surfaces so operators start from the new SG2/TG5 reality instead of the completed SG1/TG3 wave
 
 ## Completed operating slice in this wave
 
-### OP1 — Add an owner-repo boundary-note procedure template for authority-preserving follow-through
-- **AK task:** `#265`
-- **Why now:** recent Prompt Vault work repeatedly needed repo-native boundary notes that distinguish canonical ownership, bounded reads, projection-only surfaces, and warning posture; leaving that structure in session memory would slow future boundary work and invite drift.
-- **Deliverable:** add the active template `owner-repo-boundary-note`, add focused bats coverage for its metadata and anti-cutover phrases, and refresh repo docs/handoff to show TG3 as the current tactical reality.
-- **Completion evidence:** `./scripts/pv show template owner-repo-boundary-note`, `tests/pv-owner-repo-boundary-note-template.bats`, and the updated README/tactical/operating/handoff docs all point to the same procedure-layer truth.
+### OP1 — Add a governed `visibility_companies` quality rollup for privacy-safe evidence planning
+- **AK task:** `#270`
+- **Why now:** downstream operators could inspect evidence by owner company and router semantics, but not by the governed multi-company visibility boundary that determines who can actually consume a prompt safely.
+- **Deliverable:** add `pv quality rollup visibility_companies`, back it with governed company buckets from `ontology/company-visibility-contract.json`, add focused bats coverage for privacy + multi-bucket behavior, and refresh repo docs/handoff to show SG2/TG5 as the active reality.
+- **Completion evidence:** `./scripts/pv quality rollup visibility_companies`, `tests/pv-quality.bats`, `tests/pv-commands.bats`, and the updated README/strategy/tactical/operating/handoff docs all point to the same aggregate-first company-visibility truth.
 
 ## Previously completed operating waves
+
+### Procedure-layer expansion for governance-shaped work
+- **AK task:** `#265`
+- **Status:** complete
+- **Completion evidence:** Prompt Vault now contains `owner-repo-boundary-note`, focused tests protect the template, and repo docs/handoff reflect TG3 truthfully.
 
 ### Ontology-boundary hardening
 - **AK task:** `#264`
 - **Status:** complete
-- **Completion evidence:** `pv-verify-ontology-contract` now rejects prompt-body leakage in ontology-shaped surfaces, focused tests cover the regressions, and repo docs/handoff keep prompt bodies DB-only.
+- **Completion evidence:** `pv-verify-ontology-contract` rejects prompt-body leakage in ontology-shaped surfaces, focused tests cover the regressions, and repo docs/handoff keep prompt bodies DB-only.
 
 ### Router-semantic aggregate reporting + privacy hardening
 - **AK tasks:** `#247`, `#248`, `#246`
@@ -54,19 +59,18 @@ This wave stays bounded:
 
 ## Next decision after this wave
 
-Use AK + current docs to decide whether TG3 needs another bounded procedure-layer follow-through or whether SG1 is materially complete and SG2 should be promoted next.
+Use AK + current docs to decide whether TG5 needs another bounded aggregate-evidence follow-through or whether downstream contract/usability should become the next active slice.
 Do not infer a synthetic next task from this file alone if AK does not currently show one.
 
 ## Validation expectation for this wave
 
 At minimum, re-run:
 ```bash
-./scripts/db-change-preflight.sh --stage db-dev
-./scripts/pv show template owner-repo-boundary-note
-./scripts/pv-bats tests/pv-owner-repo-boundary-note-template.bats
-./scripts/pv-verify-ontology-contract
+./scripts/pv quality rollup visibility_companies
+./scripts/pv-bats tests/pv-quality.bats
+./scripts/pv-bats tests/pv-commands.bats
 ./verify.sh
 node ~/ai-society/core/agent-scripts/scripts/docs-list.mjs --docs . --strict
 ```
 
-Add any focused tests needed for future procedure-layer drift in the same slice.
+Add any focused tests needed for future aggregate-evidence or visibility-boundary drift in the same slice.

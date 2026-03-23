@@ -1,5 +1,5 @@
 ---
-summary: "Tactical goals for the active strategic goal: keep Prompt Vault the canonical governed prompt-authoring substrate."
+summary: "Tactical goals for the active SG2 wave: deepen privacy-safe evidence and downstream usability without weakening boundaries."
 read_when:
   - "When turning the active strategic goal into medium-sized repo-local waves"
   - "When deciding which repo-local direction slice should be active now"
@@ -7,7 +7,7 @@ read_when:
 
 # Tactical Goals
 
-Active strategic goal: **SG1 — Keep Prompt Vault the canonical governed prompt-authoring substrate**
+Active strategic goal: **SG2 — Deepen privacy-safe evidence and downstream usability without collapsing boundaries**
 
 ## Recently completed tactical goals
 
@@ -26,15 +26,20 @@ Active strategic goal: **SG1 — Keep Prompt Vault the canonical governed prompt
 - **Outcome reached:** ontology verification now rejects prompt-body fields in seed metadata, fails if `ontology/index.md` stops stating the DB-only authoring boundary explicitly, and the docs/handoff/validation story reinforces that split.
 - **Completion signal:** deterministic checks fail closed on DB-vs-ontology boundary regressions and operators are not sent back toward ontology-carried prompt content.
 
+### TG3 — Expand the reusable procedure layer for recurring governance-shaped work
+- **Why it mattered:** recent Prompt Vault work repeatedly needed concern-first review/fan-out plus repo-native owner-boundary-note authoring patterns, and those workflows should live as tested templates instead of only in session memory.
+- **Outcome reached:** Prompt Vault now contains `concern-first-review-fanout` and `owner-repo-boundary-note` as tested workflow templates for adjacent governance-shaped work.
+- **Completion signal:** high-value recurring operator patterns exist as tested, discoverable templates instead of only living in session memory.
+
 ## Active tactical goal
 
-### TG3 — Expand the reusable procedure layer for recurring governance-shaped work
-- **Why this is active now:** recent Prompt Vault work repeatedly needed concern-first review/fan-out plus repo-native owner-boundary-note authoring patterns, and those workflows should live as tested templates instead of only in session memory.
-- **Outcome:** Prompt Vault contains reusable procedures for repeatable cross-repo review/fan-out and adjacent authoring/governance workflows.
-- **Current status:** the first TG3 slice is now complete; the vault now contains `concern-first-review-fanout` and `owner-repo-boundary-note` as tested workflow templates for adjacent governance-shaped work.
-- **Done when:** high-value recurring operator patterns exist as tested, discoverable templates instead of only living in session memory.
+### TG5 — Expand aggregate-first evidence surfaces across governed company visibility
+- **Why this is active now:** with SG1 materially stable, the next high-value evidence surface is showing how quality/evidence distribute across governed company visibility without exposing private captured text or blurring visibility ownership.
+- **Outcome:** operators can inspect aggregate quality/evidence by `visibility_companies` using the governed company contract instead of inferring visibility health ad hoc.
+- **Current status:** the first TG5 slice is now complete; `pv quality rollup visibility_companies` is live with focused regression coverage and aligned docs/handoff updates.
+- **Done when:** high-value governed boundary dimensions are available through privacy-safe aggregate evidence surfaces that downstream consumers can trust without re-owning prompt visibility semantics.
 
 ## Next tactical decision
 
-Use AK + current docs to decide whether TG3 needs another bounded procedure-layer follow-through or whether SG1 is materially complete and SG2 should be promoted next.
+Use AK + current docs to decide whether TG5 needs another bounded aggregate-evidence follow-through or whether downstream contract/usability should become the next active tactical focus.
 Do not infer the answer from stale handoff text alone.

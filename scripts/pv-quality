@@ -35,7 +35,7 @@ Coverage:
   Private captures stay aggregated-only; no raw output text is rendered.
 
 Rollup dimensions:
-  artifact_kind | control_mode | formalization_level | owner_company
+  artifact_kind | control_mode | formalization_level | owner_company | visibility_companies
   routing_context | activity_phase | input_artifact | transition_target_type | selection_principles | output_commitment
 
 Grades:
@@ -237,20 +237,22 @@ GROUP BY e.entity_id
 EOF
 }
 
-selection_principles_bucket_table_sql() {
-    local contract="$SCRIPT_DIR/../ontology/controlled-vocabulary-contract.json"
+contract_bucket_table_sql() {
+    local contract="$1"
+    local jq_path="$2"
+    local label="$3"
     local values=()
     local i
 
     [ -f "$contract" ] || {
-        error "Missing controlled-vocabulary contract: $contract" >&2
+        error "Missing $label contract: $contract" >&2
         exit 1
     }
 
-    mapfile -t values < <(jq -r '.dimensions.selection_principles[]' "$contract")
+    mapfile -t values < <(jq -r "$jq_path[]" "$contract")
 
     [ "${#values[@]}" -gt 0 ] || {
-        error "No governed selection_principles values found in $contract" >&2
+        error "No governed $label values found in $contract" >&2
         exit 1
     }
 
@@ -264,16 +266,24 @@ selection_principles_bucket_table_sql() {
     done
 }
 
+selection_principles_bucket_table_sql() {
+    contract_bucket_table_sql "$SCRIPT_DIR/../ontology/controlled-vocabulary-contract.json" '.dimensions.selection_principles' "selection_principles"
+}
+
+visibility_companies_bucket_table_sql() {
+    contract_bucket_table_sql "$SCRIPT_DIR/../ontology/company-visibility-contract.json" '.companies' "company visibility"
+}
+
 normalize_rollup_dimension() {
     local dimension="${1:-control_mode}"
 
     case "$dimension" in
-        artifact_kind|control_mode|formalization_level|owner_company|routing_context|activity_phase|input_artifact|transition_target_type|selection_principles|output_commitment)
+        artifact_kind|control_mode|formalization_level|owner_company|visibility_companies|routing_context|activity_phase|input_artifact|transition_target_type|selection_principles|output_commitment)
             printf '%s' "$dimension"
             ;;
         *)
             error "Unsupported rollup dimension: $dimension" >&2
-            error "Allowed dimensions: artifact_kind, control_mode, formalization_level, owner_company, routing_context, activity_phase, input_artifact, transition_target_type, selection_principles, output_commitment" >&2
+            error "Allowed dimensions: artifact_kind, control_mode, formalization_level, owner_company, visibility_companies, routing_context, activity_phase, input_artifact, transition_target_type, selection_principles, output_commitment" >&2
             exit 1
             ;;
     esac
@@ -321,9 +331,20 @@ quality_rollup_sql() {
 
     stats_sql=$(template_rollup_entity_stats_sql)
 
-    if [ "$dimension" = "selection_principles" ]; then
+    if [ "$dimension" = "selection_principles" ] || [ "$dimension" = "visibility_companies" ]; then
         local bucket_table_sql
-        bucket_table_sql=$(selection_principles_bucket_table_sql)
+        local base_join_clause
+        local bucket_join_clause
+
+        if [ "$dimension" = "selection_principles" ]; then
+            bucket_table_sql=$(selection_principles_bucket_table_sql)
+            base_join_clause="t.status = 'active' AND t.artifact_kind = 'procedure' AND t.control_mode = 'router' AND t.controlled_vocabulary IS NOT NULL"
+            bucket_join_clause="JSON_SEARCH(t.controlled_vocabulary, 'one', buckets.bucket, NULL, '$.selection_principles[*]') IS NOT NULL"
+        else
+            bucket_table_sql=$(visibility_companies_bucket_table_sql)
+            base_join_clause="t.status = 'active' AND t.visibility_companies IS NOT NULL"
+            bucket_join_clause="JSON_SEARCH(t.visibility_companies, 'one', buckets.bucket) IS NOT NULL"
+        fi
 
         cat <<EOF
 SELECT
@@ -378,11 +399,8 @@ FROM (
 $bucket_table_sql
 ) buckets
 JOIN prompt_templates t
-  ON t.status = 'active'
- AND t.artifact_kind = 'procedure'
- AND t.control_mode = 'router'
- AND t.controlled_vocabulary IS NOT NULL
- AND JSON_SEARCH(t.controlled_vocabulary, 'one', buckets.bucket, NULL, '$.selection_principles[*]') IS NOT NULL
+  ON $base_join_clause
+ AND $bucket_join_clause
 LEFT JOIN (
 $stats_sql
 ) es ON es.entity_id = t.id

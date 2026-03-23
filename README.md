@@ -22,7 +22,7 @@ Prompt Vault treats prompts as structured data in a SQL database with Git-style 
 ## Current reality
 
 - Prompt Vault is now facet-native on schema v9 (`artifact_kind`, `control_mode`, `formalization_level`) with governed router vocabulary and company visibility.
-- Aggregate-only router-semantic quality rollups now include multi-valued `selection_principles` support without previewing private captured output.
+- Aggregate-only quality rollups now cover multi-valued router semantics (`selection_principles`) and company visibility (`visibility_companies`) without previewing private captured output.
 - Ontology verification now fails closed if seed-contract metadata starts carrying prompt-body content or if the ontology index stops stating the DB-only authoring boundary explicitly.
 - Reusable procedure coverage now includes `concern-first-review-fanout` and `owner-repo-boundary-note` for recurring governance and authority-boundary workflows.
 - The canonical Pi integration lives in `~/ai-society/softwareco/owned/pi-extensions/packages/pi-vault-client`.
@@ -156,6 +156,7 @@ skills ──► skill_assets
 ./pv quality rollup control_mode  # Aggregate quality/evidence by facet
 ./pv quality rollup routing_context  # Aggregate quality/evidence by exact-one router vocabulary
 ./pv quality rollup selection_principles  # Aggregate quality/evidence by multi-valued router semantics
+./pv quality rollup visibility_companies  # Aggregate quality/evidence by multi-valued company visibility
 ./pv exec x "arg"           # Run with tracking
 ./pv rate <id> 4 "notes"    # Record feedback
 ```
