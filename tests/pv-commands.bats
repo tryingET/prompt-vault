@@ -389,6 +389,35 @@ PY
     [[ "$output" == *'literal $ARGUMENTS | first=alpha | rest=beta gamma | unsupported=${HOME} | slash=\'* ]]
 }
 
+@test "pv-lint targets the requested template" {
+    TEST_VAULT_DIR="$TMP_DIR/prompt-vault-db"
+    copy_test_vault "$TEST_VAULT_DIR"
+
+    dolt --data-dir "$TEST_VAULT_DIR" sql -q "
+        INSERT INTO prompt_templates (name, description, content, artifact_kind, control_mode, formalization_level, owner_company, visibility_companies, status)
+        VALUES ('lint-target-test', 'description long enough for targeted linting', 'hello world', 'procedure', 'one_shot', 'structured', 'core', '[\"core\"]', 'active')
+    "
+
+    run env VAULT_DIR="$TEST_VAULT_DIR" "$SCRIPTS_DIR/pv-lint" lint-target-test
+    [ "$status" -eq 0 ]
+    [[ "$output" != *'=== Linting all templates ==='* ]]
+    [[ "$output" == *'=== Template: lint-target-test ==='* ]]
+}
+
+@test "pv-lint handles quoted template names" {
+    TEST_VAULT_DIR="$TMP_DIR/prompt-vault-db"
+    copy_test_vault "$TEST_VAULT_DIR"
+
+    dolt --data-dir "$TEST_VAULT_DIR" sql -q "
+        INSERT INTO prompt_templates (name, description, content, artifact_kind, control_mode, formalization_level, owner_company, visibility_companies, status)
+        VALUES ('quote''name', 'description long enough for quoted name linting', 'hello world', 'procedure', 'one_shot', 'structured', 'core', '[\"core\"]', 'active')
+    "
+
+    run env VAULT_DIR="$TEST_VAULT_DIR" "$SCRIPTS_DIR/pv-lint" "quote'name"
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"=== Template: quote'name ==="* ]]
+}
+
 @test "pv-export-formats python escapes triple quotes in generated module" {
     TEST_VAULT_DIR="$TMP_DIR/prompt-vault-db"
     copy_test_vault "$TEST_VAULT_DIR"

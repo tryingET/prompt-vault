@@ -143,23 +143,49 @@ cleanup_temp_paths() {
 
 declare -ag PV_REGISTERED_TEMP_PATHS=()
 PV_REGISTERED_TEMP_TRAP_INSTALLED=0
-PV_REGISTERED_TEMP_PREVIOUS_EXIT_TRAP_BODY=""
+PV_REGISTERED_TEMP_PREVIOUS_EXIT_TRAP_DEFINITION=""
+
+_trap_definition() {
+    local signal="${1:-EXIT}"
+    trap -p "$signal" || true
+}
 
 _decode_trap_body() {
     local trap_definition="${1:-}"
+    local signal="${2:-EXIT}"
     local quoted_body
 
     [ -z "$trap_definition" ] && return 0
 
     quoted_body=${trap_definition#trap -- }
-    quoted_body=${quoted_body% EXIT}
+    quoted_body=${quoted_body% " $signal"}
 
     [ -z "$quoted_body" ] && return 0
     eval "printf '%s' $quoted_body"
 }
 
-_current_exit_trap_body() {
-    _decode_trap_body "$(trap -p EXIT || true)"
+_restore_trap_definition() {
+    local signal="${1:-EXIT}"
+    local trap_definition="${2:-}"
+
+    if [ -n "$trap_definition" ]; then
+        eval "$trap_definition"
+    else
+        trap - "$signal"
+    fi
+}
+
+_run_decoded_trap_body_with_status() {
+    local trap_definition="${1:-}"
+    local status="${2:-0}"
+    local signal="${3:-EXIT}"
+    local trap_body
+
+    trap_body=$(_decode_trap_body "$trap_definition" "$signal")
+    [ -z "$trap_body" ] && return 0
+
+    (exit "$status")
+    eval "$trap_body"
 }
 
 _run_registered_temp_cleanup_on_exit() {
@@ -167,10 +193,8 @@ _run_registered_temp_cleanup_on_exit() {
 
     cleanup_temp_paths "${PV_REGISTERED_TEMP_PATHS[@]:-}"
 
-    if [ -n "${PV_REGISTERED_TEMP_PREVIOUS_EXIT_TRAP_BODY:-}" ]; then
-        local previous_exit_trap_body="$PV_REGISTERED_TEMP_PREVIOUS_EXIT_TRAP_BODY"
-        (exit "$status")
-        eval "$previous_exit_trap_body"
+    if [ -n "${PV_REGISTERED_TEMP_PREVIOUS_EXIT_TRAP_DEFINITION:-}" ]; then
+        _run_decoded_trap_body_with_status "$PV_REGISTERED_TEMP_PREVIOUS_EXIT_TRAP_DEFINITION" "$status" EXIT
     fi
 
     return "$status"
@@ -184,7 +208,7 @@ register_temp_path() {
     done
 
     if [ "$PV_REGISTERED_TEMP_TRAP_INSTALLED" -eq 0 ]; then
-        PV_REGISTERED_TEMP_PREVIOUS_EXIT_TRAP_BODY="$(_current_exit_trap_body)"
+        PV_REGISTERED_TEMP_PREVIOUS_EXIT_TRAP_DEFINITION="$(_trap_definition EXIT)"
         trap '_run_registered_temp_cleanup_on_exit' EXIT
         PV_REGISTERED_TEMP_TRAP_INSTALLED=1
     fi
@@ -247,7 +271,8 @@ while i < length:
         j = i + 1
         while j < length and text[j].isdigit():
             j += 1
-        tokens.append({"kind": "valid", "token": text[i:j]})
+        token = text[i:j]
+        tokens.append({"kind": "valid" if re.fullmatch(r'\$[1-9][0-9]*', token) else "unsupported", "token": token})
         i = j
         continue
 
@@ -261,7 +286,7 @@ while i < length:
 
         token = text[i:j + 1]
         body = text[i + 2:j]
-        if re.fullmatch(r'@:\d+(?::\d+)?', body):
+        if re.fullmatch(r'@:[1-9][0-9]*(?::[1-9][0-9]*)?', body):
             tokens.append({"kind": "valid", "token": token})
         else:
             tokens.append({"kind": "unsupported", "token": token})
@@ -345,8 +370,12 @@ while i < length:
         j = i + 1
         while j < length and text[j].isdigit():
             j += 1
-        index = int(text[i + 1:j]) - 1
-        out.append(args[index] if 0 <= index < len(args) else '')
+        token = text[i:j]
+        if re.fullmatch(r'\$[1-9][0-9]*', token):
+            index = int(text[i + 1:j]) - 1
+            out.append(args[index] if 0 <= index < len(args) else '')
+        else:
+            out.append(token)
         i = j
         continue
 
@@ -360,10 +389,10 @@ while i < length:
 
         token = text[i:j + 1]
         body = text[i + 2:j]
-        match = re.fullmatch(r'@:(\d+)(?::(\d+))?', body)
+        match = re.fullmatch(r'@:([1-9][0-9]*)(?::([1-9][0-9]*))?', body)
         if match:
             start = int(match.group(1))
-            slice_start = max(start - 1, 0)
+            slice_start = start - 1
             values = args[slice_start:]
             if match.group(2) is not None:
                 values = values[:int(match.group(2))]
@@ -393,17 +422,69 @@ PY
 }
 
 PV_SIGNAL_FORWARD_CHILD_PID=""
+PV_SIGNAL_FORWARD_PREVIOUS_TERM_TRAP_DEFINITION=""
+PV_SIGNAL_FORWARD_PREVIOUS_INT_TRAP_DEFINITION=""
+PV_SIGNAL_FORWARD_PREVIOUS_HUP_TRAP_DEFINITION=""
+PV_SIGNAL_FORWARD_GRACE_LOOPS="${PV_SIGNAL_FORWARD_GRACE_LOOPS:-25}"
+PV_SIGNAL_FORWARD_GRACE_SLEEP="${PV_SIGNAL_FORWARD_GRACE_SLEEP:-0.2}"
+
+_previous_signal_trap_definition() {
+    local signal="${1:-TERM}"
+
+    case "$signal" in
+        TERM) printf '%s' "$PV_SIGNAL_FORWARD_PREVIOUS_TERM_TRAP_DEFINITION" ;;
+        INT) printf '%s' "$PV_SIGNAL_FORWARD_PREVIOUS_INT_TRAP_DEFINITION" ;;
+        HUP) printf '%s' "$PV_SIGNAL_FORWARD_PREVIOUS_HUP_TRAP_DEFINITION" ;;
+        *) return 1 ;;
+    esac
+}
+
+_store_previous_signal_trap_definition() {
+    local signal="${1:-TERM}"
+    local trap_definition="${2:-}"
+
+    case "$signal" in
+        TERM) PV_SIGNAL_FORWARD_PREVIOUS_TERM_TRAP_DEFINITION="$trap_definition" ;;
+        INT) PV_SIGNAL_FORWARD_PREVIOUS_INT_TRAP_DEFINITION="$trap_definition" ;;
+        HUP) PV_SIGNAL_FORWARD_PREVIOUS_HUP_TRAP_DEFINITION="$trap_definition" ;;
+        *) return 1 ;;
+    esac
+}
+
+_restore_previous_signal_trap_definition() {
+    local signal="${1:-TERM}"
+    _restore_trap_definition "$signal" "$(_previous_signal_trap_definition "$signal")"
+}
+
+_forward_signal_to_registered_child() {
+    local signal="${1:-TERM}"
+    local remaining_loops
+
+    if [ -z "${PV_SIGNAL_FORWARD_CHILD_PID:-}" ] || ! kill -0 "$PV_SIGNAL_FORWARD_CHILD_PID" 2>/dev/null; then
+        return 0
+    fi
+
+    kill "-$signal" "$PV_SIGNAL_FORWARD_CHILD_PID" 2>/dev/null || kill "$PV_SIGNAL_FORWARD_CHILD_PID" 2>/dev/null || true
+
+    remaining_loops="$PV_SIGNAL_FORWARD_GRACE_LOOPS"
+    while [ "$remaining_loops" -gt 0 ] && kill -0 "$PV_SIGNAL_FORWARD_CHILD_PID" 2>/dev/null; do
+        sleep "$PV_SIGNAL_FORWARD_GRACE_SLEEP"
+        remaining_loops=$((remaining_loops - 1))
+    done
+
+    if kill -0 "$PV_SIGNAL_FORWARD_CHILD_PID" 2>/dev/null; then
+        kill -KILL "$PV_SIGNAL_FORWARD_CHILD_PID" 2>/dev/null || true
+    fi
+
+    wait "$PV_SIGNAL_FORWARD_CHILD_PID" 2>/dev/null || true
+}
 
 _forward_registered_child_signal_and_exit() {
     local signal="${1:-TERM}"
     local signal_number
 
-    trap - "$signal"
-
-    if [ -n "${PV_SIGNAL_FORWARD_CHILD_PID:-}" ] && kill -0 "$PV_SIGNAL_FORWARD_CHILD_PID" 2>/dev/null; then
-        kill "-$signal" "$PV_SIGNAL_FORWARD_CHILD_PID" 2>/dev/null || kill "$PV_SIGNAL_FORWARD_CHILD_PID" 2>/dev/null || true
-        wait "$PV_SIGNAL_FORWARD_CHILD_PID" 2>/dev/null || true
-    fi
+    _restore_previous_signal_trap_definition "$signal"
+    _forward_signal_to_registered_child "$signal"
 
     signal_number=$(kill -l "$signal" 2>/dev/null || true)
     if [ -n "$signal_number" ]; then
@@ -417,6 +498,10 @@ run_with_signal_forwarding() {
     "$@" &
     PV_SIGNAL_FORWARD_CHILD_PID=$!
 
+    _store_previous_signal_trap_definition TERM "$(_trap_definition TERM)"
+    _store_previous_signal_trap_definition INT "$(_trap_definition INT)"
+    _store_previous_signal_trap_definition HUP "$(_trap_definition HUP)"
+
     trap '_forward_registered_child_signal_and_exit TERM' TERM
     trap '_forward_registered_child_signal_and_exit INT' INT
     trap '_forward_registered_child_signal_and_exit HUP' HUP
@@ -424,7 +509,9 @@ run_with_signal_forwarding() {
     wait "$PV_SIGNAL_FORWARD_CHILD_PID"
     local status=$?
 
-    trap - TERM INT HUP
+    _restore_previous_signal_trap_definition TERM
+    _restore_previous_signal_trap_definition INT
+    _restore_previous_signal_trap_definition HUP
     PV_SIGNAL_FORWARD_CHILD_PID=""
 
     return "$status"

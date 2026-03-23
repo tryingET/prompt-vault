@@ -146,3 +146,45 @@ line2")
     [[ "$output" == *$'\nOUTER'* ]]
     [ ! -e "$temp_path" ]
 }
+
+@test "pv-lib: run_with_signal_forwarding preserves existing TERM traps" {
+    marker_file="$BATS_TEST_TMPDIR/term-marker"
+    pid_file="$BATS_TEST_TMPDIR/wrapper.pid"
+
+    bash -lc '
+        set -euo pipefail
+        source "$1/pv-lib.sh"
+        marker_file="$2"
+        pid_file="$3"
+        trap "echo OUTER > \"$marker_file\"; exit 0" TERM
+        printf "%s\n" "$$" > "$pid_file"
+        run_with_signal_forwarding bash -lc '\''trap "exit 0" TERM; while true; do sleep 1; done'\''
+    ' _ "$SCRIPTS_DIR" "$marker_file" "$pid_file" &
+    launcher_pid=$!
+
+    for _ in $(seq 1 50); do
+        [ -f "$pid_file" ] && break
+        sleep 0.1
+    done
+
+    [ -f "$pid_file" ]
+    wrapper_pid=$(cat "$pid_file")
+    kill -TERM "$wrapper_pid"
+    wait "$launcher_pid"
+
+    [ -f "$marker_file" ]
+    [ "$(cat "$marker_file")" = "OUTER" ]
+}
+
+@test "pv-lib: unsupported zero-style argument syntax remains literal" {
+    run expand_template_content '$0 ${@:0} ${@:01} $01' alpha beta
+    [ "$status" -eq 0 ]
+    [ "$output" = '$0 ${@:0} ${@:01} $01' ]
+
+    run template_unsupported_vars <<< '$0 ${@:0} ${@:01} $01'
+    [ "$status" -eq 0 ]
+    [[ "$output" == *'$0'* ]]
+    [[ "$output" == *'${@:0}'* ]]
+    [[ "$output" == *'${@:01}'* ]]
+    [[ "$output" == *'$01'* ]]
+}

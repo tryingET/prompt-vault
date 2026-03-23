@@ -28,8 +28,8 @@ validate_template() {
     fi
     
     # Check for valid variable syntax (optional warning, not error)
-    # Variables should be $1, $2, $@, ${@:N}, ${N}
-    # Invalid: $, $$, $!, $@ with spaces, unclosed ${
+    # Variables should be $1, $2, $@, ${@:N}, ${@:N:M}, and $ARGUMENTS (N/M are positive integers)
+    # Invalid: $, $$, $!, $0, $01, ${@:0}, $@ with spaces, unclosed ${
     local invalid_vars
     invalid_vars=$(echo "$content" | grep -oE '\$[^0-9@{a-zA-Z_]' || true)
     if [ -n "$invalid_vars" ]; then

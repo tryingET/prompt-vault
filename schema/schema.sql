@@ -34,7 +34,7 @@ CREATE TABLE IF NOT EXISTS schema_version (
 INSERT IGNORE INTO schema_version (version, description) VALUES (9, 'Add optional execution output capture with explicit privacy mode');
 
 -- Core entity: reusable prompt templates
--- Variables use pi syntax: $1, $2, $@, ${@:N}
+-- Variables use pi syntax: $1, $2, $@, ${@:N}, ${@:N:M} (N and M must be positive integers)
 -- Prompt ontology is modeled as orthogonal facets, not a single overloaded type axis.
 CREATE TABLE IF NOT EXISTS prompt_templates (
     id INT AUTO_INCREMENT PRIMARY KEY,

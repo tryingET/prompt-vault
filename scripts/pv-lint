@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # pv-lint - Lint and validate templates and skills
-# Usage: pv-lint [--fix] [template-name]
+# Usage: pv-lint [--fix] [target-name]
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -14,8 +14,20 @@ check_deps jq dolt python3
 
 cd "$VAULT_DIR"
 
-FIX="${1:-}"
-TARGET="${2:-}"
+FIX=""
+TARGET=""
+
+case "${1:-}" in
+    --fix)
+        FIX="--fix"
+        TARGET="${2:-}"
+        ;;
+    "")
+        ;;
+    *)
+        TARGET="$1"
+        ;;
+esac
 
 errors=0
 warnings=0
@@ -26,9 +38,12 @@ warn() { echo -e "\033[33m!\033[0m $1"; ((warnings++)) || true; }
 
 lint_template() {
     local name="$1"
+    local escaped_name
     
     echo ""
     echo "=== Template: $name ==="
+
+    escaped_name=$(sql_escape "$name")
     
     # Get template data using JSON format for proper handling
     local data description content_len desc_len
@@ -39,7 +54,7 @@ lint_template() {
             CHAR_LENGTH(content) as content_len,
             CHAR_LENGTH(description) as desc_len
         FROM prompt_templates 
-        WHERE name = '$name' AND status = 'active' 
+        WHERE name = '$escaped_name' AND status = 'active' 
         ORDER BY version DESC LIMIT 1
     " 2>/dev/null | jq -r '.rows[0] // empty')
     
@@ -74,7 +89,7 @@ lint_template() {
     local content
     content=$(json_first_field "
         SELECT content FROM prompt_templates
-        WHERE name = '$name' AND status = 'active'
+        WHERE name = '$escaped_name' AND status = 'active'
         ORDER BY version DESC LIMIT 1
     " content)
     
@@ -92,8 +107,8 @@ lint_template() {
     
     # Check for unbalanced braces
     local open_braces close_braces
-    open_braces=$(echo "$content" | grep -o '{' | wc -l)
-    close_braces=$(echo "$content" | grep -o '}' | wc -l)
+    open_braces=$(printf '%s' "$content" | { grep -o '{' || true; } | wc -l)
+    close_braces=$(printf '%s' "$content" | { grep -o '}' || true; } | wc -l)
     if [ "$open_braces" != "$close_braces" ]; then
         fail "Unbalanced braces: $open_braces open, $close_braces close"
     fi
@@ -118,9 +133,12 @@ lint_template() {
 
 lint_skill() {
     local name="$1"
+    local escaped_name
     
     echo ""
     echo "=== Skill: $name ==="
+
+    escaped_name=$(sql_escape "$name")
     
     # Validate name per Agent Skills spec
     if [[ ! "$name" =~ ^[a-z0-9]([a-z0-9-]*[a-z0-9])?$ ]]; then
@@ -141,7 +159,7 @@ lint_skill() {
             CHAR_LENGTH(description) as desc_len,
             COALESCE(license, '') as license
         FROM skills 
-        WHERE name = '$name' AND status = 'active' 
+        WHERE name = '$escaped_name' AND status = 'active' 
         ORDER BY version DESC LIMIT 1
     " 2>/dev/null | jq -r '.rows[0] // empty')
     
@@ -177,7 +195,7 @@ lint_skill() {
     local readme
     readme=$(json_first_field "
         SELECT readme FROM skills
-        WHERE name = '$name' AND status = 'active'
+        WHERE name = '$escaped_name' AND status = 'active'
         ORDER BY version DESC LIMIT 1
     " readme)
     
@@ -243,13 +261,15 @@ if [ "$FIX" = "--fix" ]; then
     TARGET="${2:-}"
 fi
 
-if [ -n "$TARGET" ] && [ "$TARGET" != "--fix" ]; then
+if [ -n "$TARGET" ]; then
+    local_target=$(sql_escape "$TARGET")
+
     # Check if template or skill
     type=$(dolt sql -r csv -q "
         SELECT 
             CASE 
-                WHEN EXISTS (SELECT 1 FROM prompt_templates WHERE name = '$TARGET') THEN 'template'
-                WHEN EXISTS (SELECT 1 FROM skills WHERE name = '$TARGET') THEN 'skill'
+                WHEN EXISTS (SELECT 1 FROM prompt_templates WHERE name = '$local_target') THEN 'template'
+                WHEN EXISTS (SELECT 1 FROM skills WHERE name = '$local_target') THEN 'skill'
                 ELSE 'unknown'
             END
     " | tail -1)
