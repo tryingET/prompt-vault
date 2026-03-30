@@ -30,3 +30,6 @@ Thumbs.db
 # Repo-local temp dirs
 .tmp/
 .tmp-tests/
+
+# ROCS generated ontology artifacts
+ontology/dist/

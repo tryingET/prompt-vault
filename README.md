@@ -28,6 +28,7 @@ Prompt Vault treats prompts as structured data in a SQL database with Git-style 
 - The canonical Pi integration lives in `~/ai-society/softwareco/owned/pi-extensions/packages/pi-vault-client`.
 - Shared runtime registry bridges and Pi-side local receipts/telemetry are downstream runtime concerns, not Prompt Vault authority surfaces; Prompt Vault exports schema-governed execution facts and privacy-safe aggregate observability.
 - Current health should be derived from deterministic checks and analytics commands, not from a separate `status.md` mirror.
+- ROCS repo checks now run through `./scripts/rocs.sh` against workspace-local ontology layer paths; the repo no longer depends on a vendored GitLab-locator compatibility path.
 - Keep repo-level orientation DRY in this `README.md`; keep live execution/task authority in AK or other canonical machine surfaces.
 
 ## The Problem
