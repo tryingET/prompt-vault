@@ -29,6 +29,7 @@ Prompt Vault treats prompts as structured data in a SQL database with Git-style 
 - Shared runtime registry bridges and Pi-side local receipts/telemetry are downstream runtime concerns, not Prompt Vault authority surfaces; Prompt Vault exports schema-governed execution facts and privacy-safe aggregate observability.
 - Current health should be derived from deterministic checks and analytics commands, not from a separate `status.md` mirror.
 - ROCS repo checks now run through `./scripts/rocs.sh` against workspace-local ontology layer paths; the repo no longer depends on a vendored GitLab-locator compatibility path.
+- Repo-local Agent Kernel task/work-item access now goes through `./scripts/ak.sh`, which prefers vendored or workspace-core Agent Kernel CLI paths before falling back to `ak` on `PATH`.
 - Keep repo-level orientation DRY in this `README.md`; keep live execution/task authority in AK or other canonical machine surfaces.
 
 ## The Problem
@@ -181,6 +182,7 @@ skills ──► skill_assets
 
 ```bash
 ./verify.sh                              # quick verification suite
+./scripts/ak.sh --doctor                 # repo-local AK launcher resolution
 ./scripts/pv-verify-evidence-promotion-ledger
 ./scripts/pv-bats tests/                 # full suite with repo-local TMPDIR
 ```

@@ -82,14 +82,15 @@ The most recent Prompt Vault repo-local waves are now complete:
 
 That means the next session should **reassess the next repo-local slice from AK** instead of replaying any of those finished waves.
 
-At the moment, the only remaining repo-local pending task in AK is the conditional coordination-only slice `#458`; do **not** act on it unless the live teacher-prep runner work actually exposes a reusable prompt-authority gap.
+At the moment, the only remaining repo-local pending task in AK is the conditional coordination-only slice `#458`; it should still stay dormant because the downstream teacher-prep authority decision remains deferred in the owner-repo backlog, so do **not** act on it unless the live teacher-prep runner work actually exposes a reusable prompt-authority gap.
 
 Do **not** restate foreign-repo implementation backlog here.
 Cross-repo extension/client follow-through remains tracked elsewhere, but it is not the next Prompt Vault repo-local step.
 
 ## AK note
-- Plain `ak` on `PATH` may currently fail against `~/ai-society/society.v2.db` with a schema-version mismatch.
-- If that happens, use the vendored Agent Kernel CLI from the repo that owns AK:
+- Prefer `./scripts/ak.sh ...`; it resolves through vendored or workspace-core Agent Kernel CLI paths before falling back to `ak` on `PATH`.
+- Plain `ak` on `PATH` may still fail against `~/ai-society/society.v2.db` with a schema-version mismatch, which is why the wrapper should be the default entrypoint.
+- If the wrapper cannot resolve AK for some reason, use the workspace Agent Kernel CLI directly:
   ```bash
   cargo run --quiet --manifest-path ~/ai-society/softwareco/owned/agent-kernel/crates/ak-cli/Cargo.toml --bin ak -- <args...>
   ```
@@ -189,5 +190,5 @@ Decide from AK + current repo docs, not from handoff prose memory:
 ## First concrete next action
 From `~/ai-society/core/prompt-vault`:
 1. read `README.md`, `docs/project/strategic_goals.md`, `docs/project/tactical_goals.md`, and `docs/project/operating_plan.md`
-2. check repo-local AK task state (use `ak task ready -F json` / `ak task list -F json --verbose`, or the vendored AK cargo invocation above if the PATH binary is stale)
+2. check repo-local AK task state (use `./scripts/ak.sh task ready -F json` / `./scripts/ak.sh task list -F json --verbose`; fall back to the direct cargo invocation above only if the wrapper cannot resolve AK)
 3. choose the next repo-local task only after confirming it is not just a replay of the completed rollup, boundary-hardening, reusable procedure, or ROCS compatibility-cleanup waves
