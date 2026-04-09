@@ -41,5 +41,6 @@ Active strategic goal: **SG2 — Deepen privacy-safe evidence and downstream usa
 
 ## Next tactical decision
 
-Use AK + current docs to decide whether TG5 needs another bounded aggregate-evidence follow-through or whether downstream contract/usability should become the next active tactical focus.
+The coordination-only teacher-prep prompt-authority follow-through `#458` is now complete and did **not** activate a new repo-local authoring wave: the live runner already resolves canonical template/version truth from Prompt Vault and keeps pack-local prompt-like artifacts derived-only.
+Use AK + current docs to decide whether TG5 needs another bounded aggregate-evidence follow-through, whether downstream contract/usability should become the next active tactical focus, or whether no new repo-local task is currently ready.
 Do not infer the answer from stale handoff text alone.

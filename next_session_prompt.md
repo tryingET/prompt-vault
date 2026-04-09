@@ -1,5 +1,5 @@
 ---
-summary: "Repo-local Prompt Vault handoff: SG1 is materially complete, the first SG2 company-visibility evidence slice is complete, ROCS now resolves through shared-core workspace layer paths, and the next session should reassess any remaining repo-local slice from AK instead of replaying finished work."
+summary: "Repo-local Prompt Vault handoff: SG1 is materially complete, the first SG2 company-visibility evidence slice is complete, the coordination-only teacher-prep prompt-authority follow-through is closed, ROCS now resolves through shared-core workspace layer paths, and the next session should reassess AK instead of replaying finished work."
 read_when:
   - "Starting the next session in prompt-vault"
   - "Before choosing the next post-SG2 implementation slice"
@@ -35,6 +35,8 @@ Current baseline to assume unless validation disproves it:
   - `docs/dev/v4-prompt-authoring-review-input-boundary.md`
 - the Prompt Vault-side shared runtime registry / execution-observability boundary note exists:
   - `docs/dev/shared-runtime-registry-and-execution-observability-boundary.md`
+- the teacher-prep live-runner prompt-authority boundary note exists:
+  - `docs/dev/teacher-prep-media-prompt-authority-boundary.md`
 - the repo-local reusable procedure layer includes:
   - `concern-first-review-fanout`
   - `owner-repo-boundary-note`
@@ -43,11 +45,12 @@ Current baseline to assume unless validation disproves it:
   - `docs/project/strategic_goals.md`
   - `docs/project/tactical_goals.md`
   - `docs/project/operating_plan.md`
-- focused validation covers router/company rollups, privacy boundaries, ontology boundary drift, the reusable procedure layer, and ROCS workspace-path resolution via the shared core runner:
+- focused validation covers router/company rollups, privacy boundaries, ontology boundary drift, the reusable procedure layer, the teacher-prep prompt-authority layer, and ROCS workspace-path resolution via the shared core runner:
   - `tests/pv-quality.bats`
   - `tests/pv-commands.bats`
   - `tests/pv-ontology-contract.bats`
   - `tests/pv-owner-repo-boundary-note-template.bats`
+  - `tests/pv-teacher-prep-media-templates.bats`
   - `scripts/rocs.sh`
   - `scripts/ci/full.sh`
 
@@ -62,6 +65,7 @@ If you need detail, read `README.md`, the project direction docs, the boundary n
 - do **not** resume vault-client product work from stale standalone or live-copy locations
 - do **not** let blocked cross-repo boundary work displace the active repo-local operating wave
 - do **not** reintroduce legacy `<gitlab:...>` ROCS locators or prefer a repo-local vendored ROCS runner over `./scripts/rocs.sh`
+- do **not** reopen task `#458` unless the live teacher-prep runner boundary changes again and a real reusable prompt-authority defect appears
 - do **not** reopen tasks `#245`, `#264`, `#265`, `#270`, or `#280`; they are completed slices, not the next step
 
 ## Current goal
@@ -79,10 +83,11 @@ The most recent Prompt Vault repo-local waves are now complete:
 - `#265` — the reusable owner-repo boundary-note procedure template now exists in the vault with focused validation and docs/handoff refresh
 - `#270` — aggregate-only `visibility_companies` rollup support landed with focused validation and docs/handoff refresh
 - `#280` — the repo-local ROCS GitLab baseline-resolution compatibility path is gone; ontology checks now resolve through the shared workspace `core/rocs-cli` runner using workspace-local layer paths
+- `#458` — the coordination-only teacher-prep prompt-authority follow-through is closed: the live runner already resolves canonical Prompt Vault template/version truth, pack-local prompt-like artifacts stay derived-only, and no new repo-local authoring change was needed
 
 That means the next session should **reassess the next repo-local slice from AK** instead of replaying any of those finished waves.
 
-At the moment, the only remaining repo-local pending task in AK is the conditional coordination-only slice `#458`; it should still stay dormant because the downstream teacher-prep authority decision remains deferred in the owner-repo backlog, so do **not** act on it unless the live teacher-prep runner work actually exposes a reusable prompt-authority gap.
+At the moment there is no pending repo-local AK task in this repo. If AK still shows no new Prompt Vault-ready item, stop rather than synthesizing work from stale handoff prose.
 
 Do **not** restate foreign-repo implementation backlog here.
 Cross-repo extension/client follow-through remains tracked elsewhere, but it is not the next Prompt Vault repo-local step.
@@ -124,11 +129,13 @@ Prompt Vault should remain the prompt-body / authoring substrate in that design,
 15. `docs/dev/vault-client-relocation-interface.md`
 16. `docs/dev/v4-prompt-authoring-review-input-boundary.md`
 17. `docs/dev/shared-runtime-registry-and-execution-observability-boundary.md`
-18. `diary/2026-03-22--procedure-governance-behavior-fanout-template.md`
-19. `diary/2026-03-23--ontology-boundary-verification-hardening.md`
-20. `diary/2026-03-23--owner-repo-boundary-note-template.md`
-21. `diary/2026-03-23--visibility-companies-rollup.md`
-22. `diary/2026-03-30--rocs-workspace-path-contract-adoption.md`
+18. `docs/dev/teacher-prep-media-prompt-authority-boundary.md`
+19. `diary/2026-03-22--procedure-governance-behavior-fanout-template.md`
+20. `diary/2026-03-23--ontology-boundary-verification-hardening.md`
+21. `diary/2026-03-23--owner-repo-boundary-note-template.md`
+22. `diary/2026-03-23--visibility-companies-rollup.md`
+23. `diary/2026-03-30--rocs-workspace-path-contract-adoption.md`
+24. `diary/2026-04-09--teacher-prep-prompt-authority-confirmation.md`
 
 ## Recommended work order
 1. Check AK before choosing work:
@@ -138,6 +145,7 @@ Prompt Vault should remain the prompt-body / authoring substrate in that design,
    - confirm the completed first TG3 procedure-layer slice `#265`
    - confirm the completed first SG2/TG5 slice `#270`
    - confirm the completed ROCS workspace-path cleanup slice `#280`
+   - confirm the completed coordination-only closeout `#458`
    - inspect whether any new Prompt Vault-ready task exists
 2. Re-run the current deterministic checks if you need to confirm the shipped surface quickly.
 3. Choose the next repo-local task from AK + current docs rather than from stale session memory.
@@ -159,6 +167,7 @@ From `~/ai-society/core/prompt-vault`:
 ./scripts/pv quality rollup visibility_companies
 ./scripts/pv-bats tests/pv-quality.bats
 ./scripts/pv-bats tests/pv-commands.bats
+./scripts/pv-bats tests/pv-teacher-prep-media-templates.bats
 ./scripts/pv-verify-ontology-contract
 ./scripts/rocs.sh --doctor
 ./scripts/ci/full.sh
@@ -174,7 +183,7 @@ Add any focused tests needed for future aggregate-evidence or visibility-boundar
 - No broad raw-output dashboard push that normalizes exposing captured text beyond the explicit public-preview boundary.
 - No moving vault-client implementation work back into Prompt Vault beyond boundary-document updates.
 - No reintroducing repo-local vendored ROCS GitLab locator fallback into the active repo contract.
-- No reopening the completed `#245`, `#264`, `#265`, `#270`, or `#280` slices unless the underlying ownership/export/privacy, visibility-reporting, or workspace-path contract changes again.
+- No reopening the completed `#245`, `#264`, `#265`, `#270`, `#280`, or `#458` slices unless the underlying ownership/export/privacy, visibility-reporting, workspace-path, or teacher-prep prompt-authority boundary changes again.
 
 ## Canonical next slice after this one
 Decide from AK + current repo docs, not from handoff prose memory:
@@ -184,11 +193,12 @@ Decide from AK + current repo docs, not from handoff prose memory:
 - the first TG3 procedure-layer slice `#265` is complete
 - the first SG2/TG5 visibility rollup slice `#270` is complete
 - repo-local ROCS compatibility cleanup `#280` is complete
-- reassess whether TG5 needs another bounded local follow-through or whether downstream contract/usability should be promoted next
+- coordination-only teacher-prep prompt-authority closeout `#458` is complete
+- reassess whether TG5 needs another bounded local follow-through, whether downstream contract/usability should be promoted next, or whether no repo-local task is currently ready
 - do not infer a synthetic next task from this handoff alone if AK does not currently show one
 
 ## First concrete next action
 From `~/ai-society/core/prompt-vault`:
 1. read `README.md`, `docs/project/strategic_goals.md`, `docs/project/tactical_goals.md`, and `docs/project/operating_plan.md`
 2. check repo-local AK task state (use `./scripts/ak.sh task ready -F json` / `./scripts/ak.sh task list -F json --verbose`; fall back to the direct cargo invocation above only if the wrapper cannot resolve AK)
-3. choose the next repo-local task only after confirming it is not just a replay of the completed rollup, boundary-hardening, reusable procedure, or ROCS compatibility-cleanup waves
+3. choose the next repo-local task only after confirming it is not just a replay of the completed rollup, boundary-hardening, reusable procedure, ROCS compatibility-cleanup, or teacher-prep prompt-authority closeout waves

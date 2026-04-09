@@ -27,6 +27,7 @@ Prompt Vault treats prompts as structured data in a SQL database with Git-style 
 - Reusable procedure coverage now includes `concern-first-review-fanout` and `owner-repo-boundary-note` for recurring governance and authority-boundary workflows.
 - The canonical Pi integration lives in `~/ai-society/softwareco/owned/pi-extensions/packages/pi-vault-client`.
 - Shared runtime registry bridges and Pi-side local receipts/telemetry are downstream runtime concerns, not Prompt Vault authority surfaces; Prompt Vault exports schema-governed execution facts and privacy-safe aggregate observability.
+- The teacher-prep media live runner still points reusable prompt authority back to Prompt Vault: downstream Teaching Packs may record live `entity_version` and optional `execution_id` provenance, but pack-local prompt-like artifacts remain derived output only.
 - Current health should be derived from deterministic checks and analytics commands, not from a separate `status.md` mirror.
 - ROCS repo checks now run through `./scripts/rocs.sh` against workspace-local ontology layer paths; the repo no longer depends on a vendored GitLab-locator compatibility path.
 - Repo-local Agent Kernel task/work-item access now goes through `./scripts/ak.sh`, which prefers vendored or workspace-core Agent Kernel CLI paths before falling back to `ak` on `PATH`.
@@ -197,6 +198,7 @@ skills ──► skill_assets
 | [COMPARISON.md](docs/COMPARISON.md) | Deciding vault vs flat files |
 | [CRYSTALLIZED.md](docs/CRYSTALLIZED.md) | Patterns, anti-patterns, lessons learned |
 | [Runtime-registry + observability boundary](docs/dev/shared-runtime-registry-and-execution-observability-boundary.md) | What Prompt Vault exports canonically versus runtime-local receipt/telemetry discovery |
+| [Teacher-prep media prompt-authority boundary](docs/dev/teacher-prep-media-prompt-authority-boundary.md) | Clarify how the live teacher-prep runner records Prompt Vault provenance without creating local shadow prompt canon |
 | [Fuzzy selector troubleshooting](docs/reference/fuzzy-selector-troubleshooting.md) | PTX or vault selectors report "selection unavailable" / fzf issues |
 
 ## Pi Integration

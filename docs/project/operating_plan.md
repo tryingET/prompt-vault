@@ -1,5 +1,5 @@
 ---
-summary: "Operating plan and completion record for the first SG2 company-visibility evidence rollup wave after SG1 stabilization."
+summary: "Operating plan and completion record for the first SG2 company-visibility evidence rollup wave plus the coordination-only teacher-prep prompt-authority confirmation."
 read_when:
   - "When reviewing the active repo-local wave after SG1 became materially complete"
   - "When checking which AK task covered the company-visibility evidence rollup slice"
@@ -16,6 +16,7 @@ Active tactical goal: **TG5 — Expand aggregate-first evidence surfaces across 
 This operating wave is now materially complete:
 - `pv quality rollup visibility_companies` is live as an aggregate-only quality/evidence surface
 - focused bats coverage protects privacy posture and multi-valued company-bucket behavior
+- the coordination-only teacher-prep prompt-authority check confirmed the live runner still consumes canonical Prompt Vault template/version truth without creating local shadow prompt canon
 - README + strategic/tactical/operating/handoff docs now describe the promoted SG2/TG5 reality truthfully
 
 ## Scope of this operating wave
@@ -34,6 +35,12 @@ This wave stays bounded:
 - **Why now:** downstream operators could inspect evidence by owner company and router semantics, but not by the governed multi-company visibility boundary that determines who can actually consume a prompt safely.
 - **Deliverable:** add `pv quality rollup visibility_companies`, back it with governed company buckets from `ontology/company-visibility-contract.json`, add focused bats coverage for privacy + multi-bucket behavior, and refresh repo docs/handoff to show SG2/TG5 as the active reality.
 - **Completion evidence:** `./scripts/pv quality rollup visibility_companies`, `tests/pv-quality.bats`, `tests/pv-commands.bats`, and the updated README/strategy/tactical/operating/handoff docs all point to the same aggregate-first company-visibility truth.
+
+### OP2 — Confirm the teacher-prep live runner still treats Prompt Vault as canonical prompt authority
+- **AK task:** `#458`
+- **Why now:** the FCOS-M29 cross-repo fanout left Prompt Vault with a conditional prompt-authority follow-through task in case the live teacher-prep runner started creating reusable prompt/provenance drift downstream.
+- **Deliverable:** verify the live runner still resolves canonical Prompt Vault template/version truth for `teacher-prep-media-image-pack`, `teacher-prep-media-storyboard`, and `teacher-prep-media-video-prompt`; write a repo-native boundary note; add focused validation for the canonical teacher-prep prompt layer; refresh docs/handoff so operators do not keep treating `#458` as pending work.
+- **Completion evidence:** `docs/dev/teacher-prep-media-prompt-authority-boundary.md`, `tests/pv-teacher-prep-media-templates.bats`, the downstream boundary evidence in `workstation-capabilities/apps/teacher-prep-media`, and the updated README/tactical/operating/handoff docs all point to the same conclusion: Prompt Vault remains canonical and no new repo-local authoring change was needed.
 
 ## Previously completed operating waves
 
@@ -59,7 +66,7 @@ This wave stays bounded:
 
 ## Next decision after this wave
 
-Use AK + current docs to decide whether TG5 needs another bounded aggregate-evidence follow-through or whether downstream contract/usability should become the next active slice.
+Use AK + current docs to decide whether TG5 needs another bounded aggregate-evidence follow-through, whether downstream contract/usability should become the next active slice, or whether no new repo-local task is currently ready.
 Do not infer a synthetic next task from this file alone if AK does not currently show one.
 
 ## Validation expectation for this wave
@@ -69,6 +76,7 @@ At minimum, re-run:
 ./scripts/pv quality rollup visibility_companies
 ./scripts/pv-bats tests/pv-quality.bats
 ./scripts/pv-bats tests/pv-commands.bats
+./scripts/pv-bats tests/pv-teacher-prep-media-templates.bats
 ./verify.sh
 node ~/ai-society/core/agent-scripts/scripts/docs-list.mjs --docs . --strict
 ```
