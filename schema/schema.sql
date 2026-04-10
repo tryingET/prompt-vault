@@ -2,7 +2,7 @@
 -- Run with: dolt sql < schema/schema.sql
 --
 -- Design principles:
--- - Every entity has version tracking via parent_id chain
+-- - Every entity has version tracking via version counters plus changelog audit entries
 -- - Status lifecycle: draft → active → deprecated → archived
 -- - Executions/feedback enable the quality feedback loop
 -- - Collections provide logical grouping without hierarchy
@@ -49,7 +49,7 @@ CREATE TABLE IF NOT EXISTS prompt_templates (
     variables JSON,                           -- extracted ["$1", "$@"]
     controlled_vocabulary JSON,               -- governed retrieval/orchestration metadata
     version INT DEFAULT 1,                    -- increments on edit
-    parent_id INT,                            -- previous version for history
+    parent_id INT,                            -- reserved for future immutable row-chain versioning
     status ENUM('draft', 'active', 'deprecated', 'archived') DEFAULT 'draft',
     export_to_pi BOOLEAN NOT NULL DEFAULT FALSE, -- explicit pi publishing switch
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -76,7 +76,7 @@ CREATE TABLE IF NOT EXISTS skills (
     owner_company ENUM('core', 'software', 'finance', 'house', 'health', 'teaching', 'holding') NOT NULL DEFAULT 'core',
     visibility_companies JSON NOT NULL,
     version INT DEFAULT 1,
-    parent_id INT,
+    parent_id INT,                            -- reserved for future immutable row-chain versioning
     status ENUM('draft', 'active', 'deprecated', 'archived') DEFAULT 'draft',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
