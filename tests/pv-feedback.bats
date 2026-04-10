@@ -37,3 +37,30 @@ teardown() {
     [ "$status" -ne 0 ]
     [[ "$output" == *"Feedback already exists for execution $exec_id"* ]]
 }
+
+@test "pv-rate rejects non-numeric execution ids" {
+    run env VAULT_DIR="$TEST_VAULT_DIR" "$SCRIPTS_DIR/pv-rate" "1 OR 1=1" 5 "note"
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"execution-id must be a non-negative integer"* ]]
+}
+
+@test "pv-rate suggests the correct follow-up surface for skill executions" {
+    run dolt --data-dir "$TEST_VAULT_DIR" sql -q "
+        INSERT INTO skills (name, description, readme, owner_company, visibility_companies, status)
+        VALUES ('skill-feedback-test', 'desc', 'readme', 'core', '[\"core\"]', 'active')
+    "
+    [ "$status" -eq 0 ]
+
+    skill_id=$(dolt --data-dir "$TEST_VAULT_DIR" sql -r csv -q "SELECT id FROM skills WHERE name = 'skill-feedback-test'" | tail -1)
+    [ -n "$skill_id" ]
+
+    run dolt --data-dir "$TEST_VAULT_DIR" sql -q "INSERT INTO executions (entity_type, entity_id, entity_version, model, success) VALUES ('skill', $skill_id, 1, 'test-model', TRUE)"
+    [ "$status" -eq 0 ]
+
+    exec_id=$(dolt --data-dir "$TEST_VAULT_DIR" sql -r csv -q "SELECT MAX(id) FROM executions" | tail -1)
+    [ -n "$exec_id" ]
+
+    run env VAULT_DIR="$TEST_VAULT_DIR" "$SCRIPTS_DIR/pv-rate" "$exec_id" 5 "solid"
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"View skill: pv show skill skill-feedback-test"* ]]
+}

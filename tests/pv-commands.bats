@@ -510,3 +510,62 @@ PY
     [ "$status" -eq 0 ]
     [[ "$output" == *"Usage: pv-integrate"* ]]
 }
+
+@test "pv deprecate rejects quoted missing names without mutating other templates" {
+    TEST_VAULT_DIR="$TMP_DIR/prompt-vault-db"
+    copy_test_vault "$TEST_VAULT_DIR"
+
+    before=$(dolt --data-dir "$TEST_VAULT_DIR" sql -r csv -q "SELECT status, COUNT(*) FROM prompt_templates GROUP BY status ORDER BY status")
+
+    run env VAULT_DIR="$TEST_VAULT_DIR" "$SCRIPTS_DIR/pv" deprecate template "x' OR 1=1 -- "
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"template 'x' OR 1=1 -- ' not found"* ]]
+
+    after=$(dolt --data-dir "$TEST_VAULT_DIR" sql -r csv -q "SELECT status, COUNT(*) FROM prompt_templates GROUP BY status ORDER BY status")
+    [ "$after" = "$before" ]
+}
+
+@test "pv stats reports named template usage without stored procedure dependency" {
+    TEST_VAULT_DIR="$TMP_DIR/prompt-vault-db"
+    copy_test_vault "$TEST_VAULT_DIR"
+
+    template_row=$(dolt --data-dir "$TEST_VAULT_DIR" sql -r csv -q "SELECT id, version FROM prompt_templates WHERE name = 'inversion' LIMIT 1" | tail -1)
+    template_id=$(echo "$template_row" | cut -d',' -f1)
+    template_version=$(echo "$template_row" | cut -d',' -f2)
+
+    dolt --data-dir "$TEST_VAULT_DIR" sql -q "
+        INSERT INTO executions (entity_type, entity_id, entity_version, latency_ms, success, output_capture_mode, output_text)
+        VALUES ('template', $template_id, $template_version, 123, TRUE, 'public', 'ok')
+    "
+    exec_id=$(dolt --data-dir "$TEST_VAULT_DIR" sql -r csv -q "SELECT MAX(id) FROM executions" | tail -1)
+    dolt --data-dir "$TEST_VAULT_DIR" sql -q "INSERT INTO feedback (execution_id, rating, notes) VALUES ($exec_id, 5, 'great')"
+
+    run env VAULT_DIR="$TEST_VAULT_DIR" "$SCRIPTS_DIR/pv" stats inversion
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"=== Statistics: inversion ==="* ]]
+    [[ "$output" == *"executions"* ]]
+    [[ "$output" == *"feedback_rows"* ]]
+    [[ "$output" == *"avg_rating"* ]]
+}
+
+@test "pv history shows entity-scoped changelog after edit" {
+    TEST_VAULT_DIR="$TMP_DIR/prompt-vault-db"
+    copy_test_vault "$TEST_VAULT_DIR"
+
+    editor_script="$TMP_DIR/history-editor.sh"
+    cat > "$editor_script" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+printf 'updated history body\n' > "$1"
+EOF
+    chmod +x "$editor_script"
+
+    run env VAULT_DIR="$TEST_VAULT_DIR" EDITOR="$editor_script" "$SCRIPTS_DIR/pv" edit-template inversion
+    [ "$status" -eq 0 ]
+
+    run env VAULT_DIR="$TEST_VAULT_DIR" "$SCRIPTS_DIR/pv" history template inversion
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"Current state:"* ]]
+    [[ "$output" == *"Updated template 'inversion'"* ]]
+    [[ "$output" != *"execution-chain-overview"* ]]
+}

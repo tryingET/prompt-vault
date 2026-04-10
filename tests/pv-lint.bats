@@ -47,7 +47,7 @@ setup() {
 
 @test "pv lint reads multiline template content without false Usage warning" {
     cd "$VAULT_DIR"
-    run "$SCRIPTS_DIR/pv-lint" _ docs-normalize
+    run "$SCRIPTS_DIR/pv-lint" docs-normalize
     [ "$status" -eq 0 ]
     [[ "$output" == *"Content present"* ]]
     [[ "$output" != *"Long template missing Usage/Example/Setup section"* ]]
