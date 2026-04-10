@@ -249,7 +249,7 @@ contract_bucket_table_sql() {
         exit 1
     }
 
-    mapfile -t values < <(jq -r "$jq_path[]" "$contract")
+    mapfile -t values < <(jq -r "${jq_path}[]" "$contract")
 
     [ "${#values[@]}" -gt 0 ] || {
         error "No governed $label values found in $contract" >&2

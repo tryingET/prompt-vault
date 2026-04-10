@@ -6,9 +6,12 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 VAULT_DIR="${VAULT_DIR:-$SCRIPT_DIR/../prompt-vault-db}"
 
+# shellcheck disable=SC1091
+source "$SCRIPT_DIR/pv-lib.sh"
+
 type="${1:-help}"
 name="${2:-}"
-shift 2 || true
+extra_arg_1="${3:-}"
 
 scaffold_template() {
     local name="$1"
@@ -240,69 +243,105 @@ command --option value
 EOF
 }
 
+frontmatter_field() {
+    local field="$1"
+    local path="$2"
+
+    python3 - "$field" "$path" <<'PY'
+import pathlib
+import sys
+
+field = sys.argv[1]
+path = pathlib.Path(sys.argv[2])
+text = path.read_text()
+if not text.startswith('---\n'):
+    raise SystemExit(0)
+parts = text.split('\n---\n', 1)
+if len(parts) != 2:
+    raise SystemExit(0)
+frontmatter = parts[0].splitlines()[1:]
+for line in frontmatter:
+    if line.startswith(field + ':'):
+        print(line.split(':', 1)[1].strip())
+        break
+PY
+}
+
+body_without_frontmatter() {
+    local path="$1"
+
+    python3 - "$path" <<'PY'
+import pathlib
+import sys
+
+path = pathlib.Path(sys.argv[1])
+text = path.read_text()
+if text.startswith('---\n'):
+    parts = text.split('\n---\n', 1)
+    if len(parts) == 2:
+        print(parts[1], end='')
+        raise SystemExit(0)
+print(text, end='')
+PY
+}
+
 case "$type" in
     template)
         [ -z "$name" ] && { echo "Usage: pv-scaffold template <name> [category]" >&2; exit 1; }
-        category="${1:-general}"
-        scaffold_template "$name" "$category"
+        scaffold_template "$name" "${extra_arg_1:-general}"
         ;;
     
     skill)
         [ -z "$name" ] && { echo "Usage: pv-scaffold skill <name> [category]" >&2; exit 1; }
-        category="${1:-general}"
-        scaffold_skill "$name" "$category"
+        scaffold_skill "$name" "${extra_arg_1:-general}"
         ;;
     
     collection)
         [ -z "$name" ] && { echo "Usage: pv-scaffold collection <name> <description>" >&2; exit 1; }
-        desc="${1:-Collection of prompts}"
-        scaffold_collection "$name" "$desc"
+        scaffold_collection "$name" "${extra_arg_1:-Collection of prompts}"
         ;;
     
     script)
         [ -z "$name" ] && { echo "Usage: pv-scaffold script <name> [type]" >&2; exit 1; }
-        scaffold_script "$name" "${1:-helper}"
+        scaffold_script "$name" "${extra_arg_1:-helper}"
         ;;
     
     reference)
         [ -z "$name" ] && { echo "Usage: pv-scaffold reference <name> [topic]" >&2; exit 1; }
-        scaffold_reference "$name" "${1:-api}"
+        scaffold_reference "$name" "${extra_arg_1:-api}"
         ;;
     
     create)
-        # Create actual files
-        create_type="${1:-}"
-        create_name="${2:-}"
-        [ -z "$create_type" ] || [ -z "$create_name" ] && { 
+        create_type="${2:-}"
+        create_name="${3:-}"
+        [ -z "$create_type" ] || [ -z "$create_name" ] && {
             echo "Usage: pv-scaffold create <template|skill|script|reference> <name>" >&2
             exit 1
         }
         
         case "$create_type" in
             template)
-                cd "$VAULT_DIR"
-                scaffold_template "$create_name" > /tmp/scaffold.md
-                ${EDITOR:-nano} /tmp/scaffold.md
-                
-                # Parse and insert
-                desc=$(sed -n 's/^description: *//p' /tmp/scaffold.md)
-                content=$(sed '1,/^---$/d' /tmp/scaffold.md | sed '1,/^---$/d')
-                escaped_content=$(echo "$content" | sed "s/'/''/g")
-                escaped_desc=$(echo "$desc" | sed "s/'/''/g")
-                
-                dolt sql -q "
-                    INSERT INTO prompt_templates (name, description, content, status)
-                    VALUES ('$create_name', '$escaped_desc', '$escaped_content', 'draft')
-                "
+                ensure_vault
+                scaffold_file=""
+                make_temp_file scaffold_file .md
+                scaffold_template "$create_name" > "$scaffold_file"
+                ${EDITOR:-nano} "$scaffold_file"
+
+                desc=$(frontmatter_field description "$scaffold_file")
+                content=$(body_without_frontmatter "$scaffold_file")
+                visibility_companies_json=$(json_array_from_csv "core,software,finance,house,health,teaching,holding")
+                create_template_entity "$create_name" "$desc" "$content" procedure one_shot structured core "$visibility_companies_json" "" draft
+
                 echo "✓ Created template '$create_name' (draft)"
                 echo "Activate with: pv activate template $create_name"
                 ;;
             
             skill)
-                mkdir -p "/tmp/$create_name/scripts" "/tmp/$create_name/references"
-                scaffold_skill "$create_name" > "/tmp/$create_name/SKILL.md"
-                ${EDITOR:-nano} "/tmp/$create_name/SKILL.md"
-                echo "✓ Created skill scaffold at /tmp/$create_name/"
+                skill_dir=$(mktemp -d "${TMPDIR:-/tmp}/pv-skill-scaffold.XXXXXX")
+                mkdir -p "$skill_dir/scripts" "$skill_dir/references"
+                scaffold_skill "$create_name" > "$skill_dir/SKILL.md"
+                ${EDITOR:-nano} "$skill_dir/SKILL.md"
+                echo "✓ Created skill scaffold at $skill_dir/"
                 echo "Move to: ~/.pi/agent/skills/$create_name/"
                 ;;
             
@@ -313,7 +352,7 @@ case "$type" in
         esac
         ;;
     
-    help|*)
+    help|--help|-h|*)
         cat << 'EOF'
 Usage: pv-scaffold <type> <name> [options]
 
@@ -336,5 +375,8 @@ Examples:
   pv-scaffold create template my-review
   pv-scaffold script process.sh
 EOF
+        if [ "$type" != "help" ] && [ "$type" != "--help" ] && [ "$type" != "-h" ] && [ -n "$type" ]; then
+            exit 1
+        fi
         ;;
 esac

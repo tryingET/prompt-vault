@@ -36,6 +36,8 @@ cmd_templates() {
         if [[ "$facet_filter" == *=* ]]; then
             local facet_name="${facet_filter%%=*}"
             local facet_value="${facet_filter#*=}"
+            local escaped_value
+            escaped_value=$(sql_escape "$facet_value")
             if [ "$facet_name" = "export_to_pi" ]; then
                 case "$facet_value" in
                     true|TRUE|1) where="WHERE export_to_pi = TRUE" ;;
@@ -43,19 +45,29 @@ cmd_templates() {
                     *) error "export_to_pi filter must be true/false"; exit 1 ;;
                 esac
             elif [ "$facet_name" = "visibility_company" ]; then
-                where="WHERE JSON_SEARCH(visibility_companies, 'one', '${facet_value}') IS NOT NULL"
+                where="WHERE JSON_SEARCH(visibility_companies, 'one', '$escaped_value') IS NOT NULL"
             elif [[ "$facet_name" == cv.* ]]; then
                 local cv_key="${facet_name#cv.}"
+                case "$cv_key" in
+                    routing_context|activity_phase|input_artifact|transition_target_type|selection_principles|output_commitment) ;;
+                    *) error "Unsupported controlled vocabulary filter: $cv_key"; exit 1 ;;
+                esac
                 if [ "$cv_key" = "selection_principles" ]; then
-                    where="WHERE JSON_SEARCH(controlled_vocabulary, 'one', '${facet_value}', NULL, '$.selection_principles[*]') IS NOT NULL"
+                    where="WHERE JSON_SEARCH(controlled_vocabulary, 'one', '$escaped_value', NULL, '$.selection_principles[*]') IS NOT NULL"
                 else
-                    where="WHERE JSON_UNQUOTE(JSON_EXTRACT(controlled_vocabulary, '$.${cv_key}')) = '${facet_value}'"
+                    where="WHERE JSON_UNQUOTE(JSON_EXTRACT(controlled_vocabulary, '$.${cv_key}')) = '$escaped_value'"
                 fi
             else
-                where="WHERE ${facet_name} = '${facet_value}'"
+                case "$facet_name" in
+                    artifact_kind|control_mode|formalization_level|owner_company|status) ;;
+                    *) error "Unsupported template filter field: $facet_name"; exit 1 ;;
+                esac
+                where="WHERE ${facet_name} = '$escaped_value'"
             fi
         else
-            where="WHERE artifact_kind = '$facet_filter' OR control_mode = '$facet_filter' OR formalization_level = '$facet_filter'"
+            local escaped_filter
+            escaped_filter=$(sql_escape "$facet_filter")
+            where="WHERE artifact_kind = '$escaped_filter' OR control_mode = '$escaped_filter' OR formalization_level = '$escaped_filter'"
         fi
         echo "=== Prompt Templates ($facet_filter) ==="
     else
@@ -114,18 +126,12 @@ cmd_new_template() {
     read -r visibility_companies_csv
     visibility_companies_csv=${visibility_companies_csv:-core,software,finance,house,health,teaching,holding}
 
-    local visibility_companies_json visibility_companies_sql
-    visibility_companies_json=$(python3 - <<PY
-import json
-items = [item.strip() for item in """$visibility_companies_csv""".split(",") if item.strip()]
-print(json.dumps(items))
-PY
-)
-    visibility_companies_sql="'$(sql_escape "$visibility_companies_json")'"
+    local visibility_companies_json
+    visibility_companies_json=$(json_array_from_csv "$visibility_companies_csv")
 
-    local controlled_vocabulary_sql="NULL"
+    local controlled_vocabulary_json=""
     if [ "$control_mode" = "router" ]; then
-        local routing_context activity_phase input_artifact transition_target_type selection_principles_csv output_commitment controlled_vocabulary_json escaped_controlled_vocabulary
+        local routing_context activity_phase input_artifact transition_target_type selection_principles_csv output_commitment
 
         echo -n "Routing context [analysis_followup]: "
         read -r routing_context
@@ -164,24 +170,12 @@ print(json.dumps({
 }))
 PY
 )
-        escaped_controlled_vocabulary=$(sql_escape "$controlled_vocabulary_json")
-        controlled_vocabulary_sql="'$escaped_controlled_vocabulary'"
     fi
 
     echo "Content (Ctrl+D to finish):"
     content=$(cat)
 
-    local escaped_name
-    local escaped_content
-    local escaped_desc
-    escaped_name=$(sql_escape "$name")
-    escaped_content=$(sql_escape "$content")
-    escaped_desc=$(sql_escape "$description")
-
-    dolt sql -q "
-        INSERT INTO prompt_templates (name, description, content, artifact_kind, control_mode, formalization_level, owner_company, visibility_companies, controlled_vocabulary, status)
-        VALUES ('$escaped_name', '$escaped_desc', '$escaped_content', '$artifact_kind', '$control_mode', '$formalization_level', '$owner_company', $visibility_companies_sql, $controlled_vocabulary_sql, 'draft')
-    "
+    create_template_entity "$name" "$description" "$content" "$artifact_kind" "$control_mode" "$formalization_level" "$owner_company" "$visibility_companies_json" "$controlled_vocabulary_json" draft
 
     success "Created template '$name' (draft)"
     info "Edit with: pv edit-template $name"
@@ -216,23 +210,10 @@ cmd_new_skill() {
     echo "README content (Ctrl+D to finish):"
     readme=$(cat)
 
-    local escaped_readme
-    local escaped_desc
-    local visibility_companies_json visibility_companies_sql
-    escaped_readme=$(sql_escape "$readme")
-    escaped_desc=$(sql_escape "$description")
-    visibility_companies_json=$(python3 - <<PY
-import json
-items = [item.strip() for item in """$visibility_companies_csv""".split(",") if item.strip()]
-print(json.dumps(items))
-PY
-)
-    visibility_companies_sql="'$(sql_escape "$visibility_companies_json")'"
-    
-    dolt sql -q "
-        INSERT INTO skills (name, description, readme, license, compatibility, owner_company, visibility_companies, status)
-        VALUES ('$name', '$escaped_desc', '$escaped_readme', '$license', '$compatibility', '$owner_company', $visibility_companies_sql, 'draft')
-    "
+    local visibility_companies_json
+    visibility_companies_json=$(json_array_from_csv "$visibility_companies_csv")
+
+    create_skill_entity "$name" "$description" "$readme" "$license" "$compatibility" "$owner_company" "$visibility_companies_json" draft
     
     success "Created skill '$name' (draft)"
     info "Activate with: pv activate skill $name"
@@ -244,16 +225,11 @@ cmd_edit_template() {
     local name="${1:-}"
     [ -z "$name" ] && { error "Usage: pv edit-template <name>"; exit 1; }
 
-    local tmp_file escaped_name current_record current_found current_content content escaped_content version_before version_after
-    escaped_name=$(sql_escape "$name")
-    current_record=$(json_first_field_record "SELECT content FROM prompt_templates WHERE name = '$escaped_name' AND status IN ('active', 'draft') ORDER BY version DESC LIMIT 1" content)
-    current_found=$(printf '%s' "$current_record" | jq -r '.found')
-    current_content=$(printf '%s' "$current_record" | jq -r '.value')
-
-    if [ "$current_found" != "true" ]; then
-        error "Template '$name' not found"
-        exit 1
-    fi
+    local tmp_file current_record current_content current_description content version_before version_after
+    current_record=$(require_entity_record_json template "$name" "content, description, version" "status IN ('active', 'draft')")
+    current_content=$(printf '%s' "$current_record" | jq -r '.rows[0].content')
+    current_description=$(printf '%s' "$current_record" | jq -r '.rows[0].description // ""')
+    version_before=$(printf '%s' "$current_record" | jq -r '.rows[0].version')
 
     make_temp_file tmp_file .md
     printf '%s\n' "$current_content" > "$tmp_file"
@@ -266,10 +242,7 @@ cmd_edit_template() {
         return 0
     fi
 
-    escaped_content=$(sql_escape "$content")
-    version_before=$(json_first_field "SELECT version FROM prompt_templates WHERE name = '$escaped_name' ORDER BY version DESC LIMIT 1" version)
-    dolt sql -q "UPDATE prompt_templates SET content = '$escaped_content', version = COALESCE(version, 0) + 1 WHERE name = '$escaped_name' AND status IN ('active', 'draft')"
-    version_after=$(json_first_field "SELECT version FROM prompt_templates WHERE name = '$escaped_name' ORDER BY version DESC LIMIT 1" version)
+    version_after=$(update_entity_content_and_description template "$name" "$content" "$current_description" "Updated template '$name'")
 
     success "Updated template '$name'"
     info "Version: ${version_before:-0} -> ${version_after:-0}"
@@ -281,16 +254,8 @@ cmd_activate() {
     local name="${2:-}"
     
     [ -z "$type" ] || [ -z "$name" ] && { error "Usage: pv activate <template|skill> <name>"; exit 1; }
-    
-    if [ "$type" = "template" ]; then
-        dolt sql -q "UPDATE prompt_templates SET status = 'active' WHERE name = '$name'"
-    elif [ "$type" = "skill" ]; then
-        dolt sql -q "UPDATE skills SET status = 'active' WHERE name = '$name'"
-    else
-        error "Type must be 'template' or 'skill'"
-        exit 1
-    fi
-    
+
+    set_entity_status "$type" "$name" active
     success "Activated $type '$name'"
 }
 
@@ -299,9 +264,7 @@ cmd_publish() {
     local name="${1:-}"
     [ -z "$name" ] && { error "Usage: pv publish <template>"; exit 1; }
 
-    local escaped_name
-    escaped_name=$(sql_escape "$name")
-    dolt sql -q "UPDATE prompt_templates SET export_to_pi = TRUE WHERE name = '$escaped_name'"
+    set_template_export_flag "$name" true
     success "Published template '$name' for pi export"
 }
 
@@ -310,9 +273,7 @@ cmd_unpublish() {
     local name="${1:-}"
     [ -z "$name" ] && { error "Usage: pv unpublish <template>"; exit 1; }
 
-    local escaped_name
-    escaped_name=$(sql_escape "$name")
-    dolt sql -q "UPDATE prompt_templates SET export_to_pi = FALSE WHERE name = '$escaped_name'"
+    set_template_export_flag "$name" false
     success "Unpublished template '$name' from pi export"
 }
 
@@ -322,13 +283,8 @@ cmd_deprecate() {
     local name="${2:-}"
     
     [ -z "$type" ] || [ -z "$name" ] && { error "Usage: pv deprecate <template|skill> <name>"; exit 1; }
-    
-    if [ "$type" = "template" ]; then
-        dolt sql -q "UPDATE prompt_templates SET status = 'deprecated' WHERE name = '$name'"
-    elif [ "$type" = "skill" ]; then
-        dolt sql -q "UPDATE skills SET status = 'deprecated' WHERE name = '$name'"
-    fi
-    
+
+    set_entity_status "$type" "$name" deprecated
     success "Deprecated $type '$name'"
 }
 
@@ -379,7 +335,55 @@ cmd_stats() {
     local name="${1:-}"
     
     if [ -n "$name" ]; then
-        dolt sql -q "CALL template_stats('$name')" -r tabular
+        local escaped_name
+        local exists
+        escaped_name=$(sql_escape "$name")
+        exists=$(json_first_field "SELECT COUNT(*) AS count FROM prompt_templates WHERE name = '$escaped_name' AND status = 'active'" count)
+        if [ "$exists" = "0" ]; then
+            error "Active template '$name' not found"
+            exit 1
+        fi
+
+        echo "=== Statistics: $name ==="
+        dolt sql -q "
+            SELECT
+                t.name,
+                t.version,
+                t.status,
+                COALESCE(exec.executions, 0) AS executions,
+                COALESCE(exec.successes, 0) AS successes,
+                exec.avg_latency_ms,
+                COALESCE(exec.captured_outputs, 0) AS captured_outputs,
+                COALESCE(feed.feedback_rows, 0) AS feedback_rows,
+                feed.avg_rating,
+                exec.last_execution_at
+            FROM prompt_templates t
+            LEFT JOIN (
+                SELECT
+                    entity_id,
+                    COUNT(*) AS executions,
+                    SUM(CASE WHEN success THEN 1 ELSE 0 END) AS successes,
+                    ROUND(AVG(latency_ms), 1) AS avg_latency_ms,
+                    SUM(CASE WHEN output_text IS NOT NULL THEN 1 ELSE 0 END) AS captured_outputs,
+                    MAX(created_at) AS last_execution_at
+                FROM executions
+                WHERE entity_type = 'template'
+                GROUP BY entity_id
+            ) exec ON exec.entity_id = t.id
+            LEFT JOIN (
+                SELECT
+                    e.entity_id,
+                    COUNT(f.id) AS feedback_rows,
+                    ROUND(AVG(f.rating), 2) AS avg_rating
+                FROM executions e
+                LEFT JOIN feedback f ON f.execution_id = e.id
+                WHERE e.entity_type = 'template'
+                GROUP BY e.entity_id
+            ) feed ON feed.entity_id = t.id
+            WHERE t.name = '$escaped_name' AND t.status = 'active'
+            ORDER BY t.version DESC
+            LIMIT 1
+        " -r tabular
     else
         echo "=== Overall Statistics ==="
         dolt sql -q "
@@ -411,6 +415,10 @@ cmd_show() {
     local escaped_name
     escaped_name=$(sql_escape "$name")
 
+    if [ -n "$version" ]; then
+        require_numeric "$version" version
+    fi
+
     if [ "$type" = "template" ]; then
         if [ -n "$version" ]; then
             dolt sql -q "SELECT * FROM prompt_templates WHERE name = '$escaped_name' AND version = $version" -r tabular
@@ -421,7 +429,10 @@ cmd_show() {
             json_first_field "SELECT content FROM prompt_templates WHERE name = '$escaped_name' AND status IN ('active', 'draft') ORDER BY version DESC LIMIT 1" content
         fi
     elif [ "$type" = "skill" ]; then
-        dolt sql -q "SELECT * FROM skills WHERE name = '$name' AND status = 'active' ORDER BY version DESC LIMIT 1" -r tabular
+        dolt sql -q "SELECT * FROM skills WHERE name = '$escaped_name' AND status = 'active' ORDER BY version DESC LIMIT 1" -r tabular
+    else
+        error "Type must be 'template' or 'skill'"
+        exit 1
     fi
 }
 
@@ -434,49 +445,36 @@ cmd_history() {
         error "Usage: pv history <template|skill> <name>"
         exit 1
     fi
-    
-    local table="prompt_templates"
-    [ "$type" = "skill" ] && table="skills"
-    
+
+    local current entity_id current_version current_status updated_at changelog_count
+
     echo "=== History: $type '$name' ==="
     echo ""
-    
-    # Get current state
-    local current
-    current=$(dolt sql -r json -q "
-        SELECT id, version, status, updated_at 
-        FROM $table 
-        WHERE name = '$name' 
-        LIMIT 1
-    " 2>/dev/null)
-    
-    if [ -z "$current" ] || [ "$(echo "$current" | jq -r '.rows | length')" -eq 0 ]; then
-        error "$type '$name' not found"
-        exit 1
-    fi
-    
-    local entity_id
-    local current_version
-    entity_id=$(echo "$current" | jq -r '.rows[0].id')
-    current_version=$(echo "$current" | jq -r '.rows[0].version')
-    
-    # Get changelog entries
+
+    current=$(require_entity_record_json "$type" "$name" "id, version, status, updated_at")
+    entity_id=$(printf '%s' "$current" | jq -r '.rows[0].id')
+    current_version=$(printf '%s' "$current" | jq -r '.rows[0].version')
+    current_status=$(printf '%s' "$current" | jq -r '.rows[0].status')
+    updated_at=$(printf '%s' "$current" | jq -r '.rows[0].updated_at')
+    changelog_count=$(json_first_field "SELECT COUNT(*) AS count FROM changelog WHERE entity_type = '$type' AND entity_id = $entity_id" count)
+
+    echo "Current state:"
+    printf '  version: %s\n' "$current_version"
+    printf '  status: %s\n' "$current_status"
+    printf '  updated_at: %s\n' "$updated_at"
+    echo ""
     echo "Changelog:"
-    dolt sql -q "
-        SELECT change_type, old_version, new_version, summary, author, created_at 
-        FROM changelog 
-        WHERE entity_type = '$type' AND entity_id = $entity_id
-        ORDER BY created_at DESC
-    " -r tabular 2>/dev/null || echo "  No changelog entries"
-    
-    echo ""
-    echo "Dolt commits affecting this $type:"
-    
-    # Find commits that touched this table
-    dolt log --oneline -- "$table" 2>/dev/null | head -10
-    
-    echo ""
-    echo "Current: version $current_version"
+
+    if [ "$changelog_count" = "0" ]; then
+        echo "  No entity-scoped changelog entries recorded yet."
+    else
+        dolt sql -q "
+            SELECT change_type, old_version, new_version, summary, author, created_at
+            FROM changelog
+            WHERE entity_type = '$type' AND entity_id = $entity_id
+            ORDER BY created_at DESC
+        " -r tabular
+    fi
 }
 
 cmd_rollback() {
@@ -491,36 +489,20 @@ cmd_rollback() {
         exit 1
     }
 
-    local table="prompt_templates"
-    local content_column="content"
-    [ "$type" = "skill" ] && table="skills" && content_column="readme"
-
-    local escaped_name
+    local table content_column escaped_name escaped_ref content_record content desc
+    table=$(entity_table_for_type "$type")
+    content_column=$(entity_content_column_for_type "$type")
     escaped_name=$(sql_escape "$name")
-    local escaped_ref
     escaped_ref=$(sql_escape "$commit_ref")
 
-    local content
-    content=$(json_first_field "SELECT $content_column FROM $table AS OF '$escaped_ref' WHERE name = '$escaped_name' LIMIT 1" "$content_column")
-
-    if [ -z "$content" ]; then
+    content_record=$(json_first_field_record "SELECT $content_column FROM $table AS OF '$escaped_ref' WHERE name = '$escaped_name' LIMIT 1" "$content_column")
+    if [ "$(printf '%s' "$content_record" | jq -r '.found')" != "true" ]; then
         error "$type '$name' not found at $commit_ref"
         exit 1
     fi
-
-    local desc
+    content=$(printf '%s' "$content_record" | jq -r '.value')
     desc=$(json_first_field "SELECT description FROM $table AS OF '$escaped_ref' WHERE name = '$escaped_name' LIMIT 1" description)
-
-    local escaped_content
-    escaped_content=$(sql_escape "$content")
-    local escaped_desc=""
-    [ -n "$desc" ] && escaped_desc=$(sql_escape "$desc")
-
-    if [ "$type" = "template" ]; then
-        dolt sql -q "UPDATE prompt_templates SET content = '$escaped_content', description = '$escaped_desc' WHERE name = '$escaped_name'"
-    else
-        dolt sql -q "UPDATE skills SET readme = '$escaped_content', description = '$escaped_desc' WHERE name = '$escaped_name'"
-    fi
+    update_entity_content_and_description "$type" "$name" "$content" "$desc" "Rolled back $type '$name' to $commit_ref" >/dev/null
 
     success "Rolled back $type '$name' to state at $commit_ref"
     info "Commit with: pv commit 'Rollback $name to $commit_ref'"
@@ -740,7 +722,8 @@ cmd_cleanup() {
     ensure_vault
     local days="${1:-30}"
     local dry_run="${2:-}"
-    
+
+    require_numeric "$days" days
     echo "=== Execution Log Cleanup ==="
     
     # Count records to delete
