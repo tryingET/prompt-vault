@@ -1,5 +1,5 @@
 ---
-summary: "Tactical goals for the active SG2 wave: deepen privacy-safe evidence and downstream usability without weakening boundaries."
+summary: "Tactical goals for the active SG2 wave after the first company-visibility evidence slice: keep completed evidence work closed and define bounded downstream handoff contracts for workstation posture machine snapshots."
 read_when:
   - "When turning the active strategic goal into medium-sized repo-local waves"
   - "When deciding which repo-local direction slice should be active now"
@@ -31,16 +31,20 @@ Active strategic goal: **SG2 — Deepen privacy-safe evidence and downstream usa
 - **Outcome reached:** Prompt Vault now contains `concern-first-review-fanout` and `owner-repo-boundary-note` as tested workflow templates for adjacent governance-shaped work.
 - **Completion signal:** high-value recurring operator patterns exist as tested, discoverable templates instead of only living in session memory.
 
+### TG5 — Expand aggregate-first evidence surfaces across governed company visibility
+- **Why it mattered:** downstream operators needed a privacy-safe view of how quality/evidence distribute across the governed multi-company visibility boundary that determines who can consume a prompt safely.
+- **Outcome reached:** `pv quality rollup visibility_companies` is live with focused regression coverage and aligned docs/handoff updates.
+- **Completion signal:** operators can inspect aggregate quality/evidence by `visibility_companies` without exposing private output text or inventing ad-hoc company buckets.
+
 ## Active tactical goal
 
-### TG5 — Expand aggregate-first evidence surfaces across governed company visibility
-- **Why this is active now:** with SG1 materially stable, the next high-value evidence surface is showing how quality/evidence distribute across governed company visibility without exposing private captured text or blurring visibility ownership.
-- **Outcome:** operators can inspect aggregate quality/evidence by `visibility_companies` using the governed company contract instead of inferring visibility health ad hoc.
-- **Current status:** the first TG5 slice is now complete; `pv quality rollup visibility_companies` is live with focused regression coverage and aligned docs/handoff updates.
-- **Done when:** high-value governed boundary dimensions are available through privacy-safe aggregate evidence surfaces that downstream consumers can trust without re-owning prompt visibility semantics.
+### TG6 — Define bounded downstream handoff contracts for workstation posture machine snapshots
+- **Why this is active now:** downstream runtime-aware consumers now have an infra-owned workstation posture machine snapshot to consume, but Prompt Vault still needs one repo-native statement describing what prompt/provenance facts may travel with that machine packet without turning it into prompt canon or private observability.
+- **Outcome:** cold-start operators can combine workstation machine-state gating with Prompt Vault prompt provenance truthfully: machine snapshots remain infra-owned runtime facts, Prompt Vault remains prompt/execution authority, and downstream repos carry only the minimum bounded handoff packet they actually need.
+- **Current status:** the first TG6 slice is now complete; the repo-native handoff note `docs/dev/workstation-posture-machine-snapshot-handoff.md` plus focused validation define the Prompt Vault side of this boundary.
+- **Done when:** downstream runtime-aware consumers can carry bounded Prompt Vault provenance alongside workstation posture snapshots without copying prompt bodies, governance canon, or private outputs into machine-facing packets.
 
 ## Next tactical decision
 
-The coordination-only teacher-prep prompt-authority follow-through `#458` is now complete and did **not** activate a new repo-local authoring wave: the live runner already resolves canonical template/version truth from Prompt Vault and keeps pack-local prompt-like artifacts derived-only.
-Use AK + current docs to decide whether TG5 needs another bounded aggregate-evidence follow-through, whether downstream contract/usability should become the next active tactical focus, or whether no new repo-local task is currently ready.
-Do not infer the answer from stale handoff text alone.
+Use AK + current docs to decide whether another bounded downstream-usability/contract slice is ready or whether no new repo-local task is currently ready.
+Do **not** reopen task `#1717` unless the workstation posture snapshot contract or the bounded Prompt Vault handoff actually changes.
