@@ -79,6 +79,7 @@ layer12-030-product-posture-synthesis
 layer12-050-discovery-router
 layer12-060-design-router
 layer12-070-decision-rfc-review
+layer12-075-review-followup-router
 layer12-090-execution-handoff
 layer12-120-learning-crystallization
 layer12-150-publication-outreach-runner
@@ -103,7 +104,7 @@ Reasons:
 
 1. lexical sorting stays truthful;
 2. future insertions do not require mass renames;
-3. routers and procedures group by protocol stage;
+3. routers and procedures group by protocol stage while preserving a scan-friendly unique slot for active names;
 4. other numbered layers can reuse the convention.
 
 Bad:
@@ -122,7 +123,7 @@ layer12-030-product-posture
 layer12-090-execution
 ```
 
-Reserve `000` for the layer's umbrella/front-door router.
+Reserve `000` for the layer's umbrella/front-door router. When a stage needs a follow-up or sub-procedure, prefer an intermediate slot such as `075` rather than giving two active templates the same numeric prefix.
 
 ## Generic vs layer-aware templates
 
@@ -150,7 +151,7 @@ layer12-000-router
 layer12-050-discovery-router
 layer12-060-design-router
 layer12-070-decision-rfc-review
-layer12-070-review-followup-router
+layer12-075-review-followup-router
 layer12-090-execution-handoff
 ```
 
@@ -171,7 +172,8 @@ Layer 12 is the direction-to-execution workflow, not the owner of every system i
 | `040` | L12.040 Strategy | Strategic frame / direction selection | `layer12-040-direction-to-execution-ak-native` | `layer12-040-strategy-runner` only if repeated workflow support is needed. |
 | `050` | L12.050 Discovery | What exists and who owns it? | `layer12-050-discovery-router` | `layer12-050-discovery-runner` for multi-file scouting/repo-router support. |
 | `060` | L12.060 Design | What bounded shape should change? | `layer12-060-design-router` | `layer12-060-design-runner` for multi-file design workflows. |
-| `070` | L12.070 Decision | Governance / review / ADR membrane | `layer12-070-decision-router`, `layer12-070-decision-rfc-review` | Review-lane skill only if it packages a multi-file review method. |
+| `070` | L12.070 Decision | Governance / review / ADR membrane | `layer12-070-decision-rfc-review` | Review-lane skill only if it packages a multi-file review method. |
+| `075` | L12.075 Review Follow-up | Route review findings/outcome tokens to the next legal move | `layer12-075-review-followup-router` | Usually none; this is a prompt router over existing review artifacts. |
 | `080` | L12.080 Wave | Bounded implementation/publication grouping | `layer12-080-wave-planning` | `layer12-080-wave-runner` if wave setup becomes operationally repeatable. |
 | `090` | L12.090 Execution | Claimable execution leaf / handoff | `layer12-090-execution-handoff`, `layer12-090-analysis-router` | `layer12-090-execution-runner` only for multi-step execution recipes. |
 | `100` | L12.100 Evidence / Receipts | Verification and proof | `layer12-100-evidence-receipts-checklist` | `layer12-100-evidence-runner` if evidence capture needs helper scripts. |
@@ -308,7 +310,7 @@ Safe migration sequence:
 5. Deprecate old names when speculative compatibility would preserve the same confusion.
 6. Keep execution/feedback history and governance ownership intact.
 
-Current non-indexed Layer-12 names are deprecated in favor of indexed successors.
+Current deprecated Layer-12 names are listed below. Most are non-indexed aliases; `layer12-070-review-followup-router` is also deprecated because post-review follow-up now uses the unique `075` substage slot.
 
 | Deprecated name | Indexed successor | Migration posture |
 |---|---|---|
@@ -316,7 +318,8 @@ Current non-indexed Layer-12 names are deprecated in favor of indexed successors
 | `product-posture-synthesis` | `layer12-030-product-posture-synthesis` | Deprecated; use indexed procedure for new Layer-12 posture work. |
 | `repo-direction-to-execution-ak-native` | `layer12-040-direction-to-execution-ak-native` | Deprecated; use indexed procedure for new AK-native direction routing. |
 | `review-rfc-ai-society-lifecycle` | `layer12-070-decision-rfc-review` | Deprecated; use indexed procedure for new RFC/review/ADR legality work. |
-| `layer12-post-review-router` | `layer12-070-review-followup-router` | Deprecated; use indexed procedure for new review-finding follow-up. |
+| `layer12-post-review-router` | `layer12-075-review-followup-router` | Deprecated; use indexed procedure for new review-finding follow-up. |
+| `layer12-070-review-followup-router` | `layer12-075-review-followup-router` | Deprecated; use the unique substage slot for post-review routing. |
 | `layer12-analysis-router` | `layer12-500-analysis-router` | Deprecated; cross-stage analysis belongs in the 500 band. |
 | `layer12-review-closeout-router` | `layer12-600-review-closeout-router` | Deprecated; cross-stage closeout belongs in the 600 band. |
 | `prompt-method-router` | `layer12-000-router` for AI Society routing | Deprecated for AI Society prompt/workflow routing. |
