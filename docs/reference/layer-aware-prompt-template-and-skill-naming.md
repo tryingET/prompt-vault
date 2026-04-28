@@ -241,12 +241,13 @@ Before creating a new layer-aware template:
 
 4. Keep the description explicit about source ownership.
 5. Pick Prompt Vault facets truthfully:
-   - `artifact_kind`: usually `procedure`, sometimes `cognitive` or `session`.
-   - `control_mode`: `router` only when it selects a next prompt/procedure.
-   - `formalization_level`: `structured` or `workflow` for protocol procedures.
+   - `artifact_kind`: usually `procedure`, sometimes `cognitive`; treat `session` as reserved until a positive session-scaffold contract exists.
+   - `control_mode`: `router` only when it selects a next prompt/procedure; `loop` only when the procedure is iterative/phase-gated.
+   - `formalization_level`: `structured` or workflow-grade `workflow` for protocol procedures; this does not imply automatic `workflow_execute(...)` binding.
 6. For routers, set controlled vocabulary rather than burying routing semantics only in prose.
-7. Do not encode runtime state, task ids, or one-off session context into the template name.
-8. Link the template from the owning doc or router only after visibility/ownership are correct.
+7. Do not encode runtime state, task ids, one-off session context, transcripts, or session JSONL evidence into the template name.
+8. If the template should automatically run through an executor, record or reference an explicit execution binding/orchestration contract instead of relying on `workflow` or the template name.
+9. Link the template from the owning doc or router only after visibility/ownership are correct.
 
 ## Creation checklist: skill
 
