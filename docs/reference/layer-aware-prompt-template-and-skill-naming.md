@@ -319,6 +319,9 @@ Current non-indexed Layer-12 names should remain as compatibility wrappers until
 | `layer12-post-review-router` | `layer12-070-review-followup-router` | Compatibility wrapper; use indexed procedure for new review-finding follow-up. |
 | `layer12-analysis-router` | `layer12-500-analysis-router` | Compatibility wrapper; cross-stage analysis belongs in the 500 band. |
 | `layer12-review-closeout-router` | `layer12-600-review-closeout-router` | Compatibility wrapper; cross-stage closeout belongs in the 600 band. |
+| `prompt-method-router` | `layer12-000-router` for AI Society routing | Compatibility wrapper for AI Society prompt/workflow routing; use only outside Layer 12 when truly generic. |
+
+Compatibility wrappers that only forward to indexed successors should use `control_mode=one_shot`, not `control_mode=router`, so router-list queries surface actual current routers rather than legacy aliases.
 
 Generic core routers such as `analysis-router`, `post-review-router`, and `review-closeout-router` are not the default AI Society front doors. For AI Society/Layer-12 work, route through `layer12-000-router` and its indexed successors. Generic routers may remain useful for non-Layer-12 contexts or as implementation primitives.
 
