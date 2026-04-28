@@ -291,7 +291,7 @@ Check name length before creating Prompt Vault rows; Prompt Vault currently cons
 
 ## Migration policy for existing names
 
-Do not destructively rename live templates just to satisfy this naming contract.
+Do not destructively rename live templates just to satisfy this naming contract. Prefer indexed successors plus explicit deprecation when an old name creates real routing confusion.
 
 Safe migration sequence:
 
@@ -305,23 +305,21 @@ Safe migration sequence:
    - `legacy-deprecate`
 3. Create new indexed names only when the old name creates real routing confusion.
 4. Update routers/docs to prefer the new name.
-5. Preserve old names as compatibility entries or deprecate only after references are gone.
+5. Deprecate old names when speculative compatibility would preserve the same confusion.
 6. Keep execution/feedback history and governance ownership intact.
 
-Current non-indexed Layer-12 names should remain as compatibility wrappers until references are intentionally cleaned up. Do not delete old names.
+Current non-indexed Layer-12 names are deprecated in favor of indexed successors.
 
-| Compatibility name | Indexed successor | Migration posture |
+| Deprecated name | Indexed successor | Migration posture |
 |---|---|---|
-| `layer12-router` | `layer12-000-router` | Compatibility wrapper; use indexed front door for all new AI Society work. |
-| `product-posture-synthesis` | `layer12-030-product-posture-synthesis` | Compatibility wrapper; use indexed procedure for new Layer-12 posture work. |
-| `repo-direction-to-execution-ak-native` | `layer12-040-direction-to-execution-ak-native` | Compatibility wrapper; use indexed procedure for new AK-native direction routing. |
-| `review-rfc-ai-society-lifecycle` | `layer12-070-decision-rfc-review` | Compatibility wrapper; use indexed procedure for new RFC/review/ADR legality work. |
-| `layer12-post-review-router` | `layer12-070-review-followup-router` | Compatibility wrapper; use indexed procedure for new review-finding follow-up. |
-| `layer12-analysis-router` | `layer12-500-analysis-router` | Compatibility wrapper; cross-stage analysis belongs in the 500 band. |
-| `layer12-review-closeout-router` | `layer12-600-review-closeout-router` | Compatibility wrapper; cross-stage closeout belongs in the 600 band. |
-| `prompt-method-router` | `layer12-000-router` for AI Society routing | Compatibility wrapper for AI Society prompt/workflow routing; use only outside Layer 12 when truly generic. |
-
-Compatibility wrappers that only forward to indexed successors should use `control_mode=one_shot`, not `control_mode=router`, so router-list queries surface actual current routers rather than legacy aliases.
+| `layer12-router` | `layer12-000-router` | Deprecated; use indexed front door for all new AI Society work. |
+| `product-posture-synthesis` | `layer12-030-product-posture-synthesis` | Deprecated; use indexed procedure for new Layer-12 posture work. |
+| `repo-direction-to-execution-ak-native` | `layer12-040-direction-to-execution-ak-native` | Deprecated; use indexed procedure for new AK-native direction routing. |
+| `review-rfc-ai-society-lifecycle` | `layer12-070-decision-rfc-review` | Deprecated; use indexed procedure for new RFC/review/ADR legality work. |
+| `layer12-post-review-router` | `layer12-070-review-followup-router` | Deprecated; use indexed procedure for new review-finding follow-up. |
+| `layer12-analysis-router` | `layer12-500-analysis-router` | Deprecated; cross-stage analysis belongs in the 500 band. |
+| `layer12-review-closeout-router` | `layer12-600-review-closeout-router` | Deprecated; cross-stage closeout belongs in the 600 band. |
+| `prompt-method-router` | `layer12-000-router` for AI Society routing | Deprecated for AI Society prompt/workflow routing. |
 
 Generic core routers such as `analysis-router`, `post-review-router`, and `review-closeout-router` are not the default AI Society front doors. For AI Society/Layer-12 work, route through `layer12-000-router` and its indexed successors. Generic routers may remain useful for non-Layer-12 contexts or as implementation primitives.
 
