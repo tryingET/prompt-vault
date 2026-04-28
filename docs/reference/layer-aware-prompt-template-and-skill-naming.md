@@ -308,16 +308,19 @@ Safe migration sequence:
 5. Preserve old names as compatibility entries or deprecate only after references are gone.
 6. Keep execution/feedback history and governance ownership intact.
 
-Current non-indexed Layer-12 names remain valid until a bounded migration lands.
+Current non-indexed Layer-12 names should remain as compatibility wrappers until references are intentionally cleaned up. Do not delete old names.
 
-| Current name | Future indexed candidate | Migration posture |
+| Compatibility name | Indexed successor | Migration posture |
 |---|---|---|
-| `layer12-router` | `layer12-000-router` | Candidate alias/replacement; do not break current refs. |
-| `product-posture-synthesis` | `layer12-030-product-posture-synthesis` | Candidate Layer-12 overlay; current name may remain if used outside Layer 12. |
-| `repo-direction-to-execution-ak-native` | `layer12-040-direction-to-execution-ak-native` | Candidate Layer-12 overlay; preserve current references during migration. |
-| `layer12-analysis-router` | audit before renaming | This router can route an analysis artifact to the earliest lawful stage; do not force a single stage index without testing. |
-| `layer12-post-review-router` | `layer12-070-review-followup-router` if decision-membrane-specific | Candidate indexed rename only if audit confirms it stays inside RFC/review/ADR follow-up. |
-| `layer12-review-closeout-router` | audit before renaming | This router can route toward plan, verify, learning, activation, steward explanation, publication, or no mutation; split or index only after audit. |
+| `layer12-router` | `layer12-000-router` | Compatibility wrapper; use indexed front door for all new AI Society work. |
+| `product-posture-synthesis` | `layer12-030-product-posture-synthesis` | Compatibility wrapper; use indexed procedure for new Layer-12 posture work. |
+| `repo-direction-to-execution-ak-native` | `layer12-040-direction-to-execution-ak-native` | Compatibility wrapper; use indexed procedure for new AK-native direction routing. |
+| `review-rfc-ai-society-lifecycle` | `layer12-070-decision-rfc-review` | Compatibility wrapper; use indexed procedure for new RFC/review/ADR legality work. |
+| `layer12-post-review-router` | `layer12-070-review-followup-router` | Compatibility wrapper; use indexed procedure for new review-finding follow-up. |
+| `layer12-analysis-router` | `layer12-500-analysis-router` | Compatibility wrapper; cross-stage analysis belongs in the 500 band. |
+| `layer12-review-closeout-router` | `layer12-600-review-closeout-router` | Compatibility wrapper; cross-stage closeout belongs in the 600 band. |
+
+Generic core routers such as `analysis-router`, `post-review-router`, and `review-closeout-router` are not the default AI Society front doors. For AI Society/Layer-12 work, route through `layer12-000-router` and its indexed successors. Generic routers may remain useful for non-Layer-12 contexts or as implementation primitives.
 
 ## Generalization to other layers
 
