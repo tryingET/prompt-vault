@@ -161,3 +161,13 @@ Which runtime executor should run this template when the operator asks to execut
 ```
 
 Do not overload `export_to_pi`, `formalization_level`, or `control_mode` to answer both questions.
+
+## Programmatic projection freshness
+
+`pi-vault-client` now exposes a programmatic projection freshness check in `src/dispatchPosture.ts`:
+
+- `checkProjectionFreshness(template)` compares the DB content SHA-256 digest to the local `~/.pi/agent/prompts/<name>.md` file digest.
+- Returns one of: `fresh`, `stale`, `not_exported`, `no_local_file`, `error`.
+- The `vault_schema_diagnostics` tool now includes projection freshness results in its output.
+
+This is a complementary check to `./scripts/pv-export-freshness`, operating from the Pi runtime side rather than the Prompt Vault CLI side. Both should agree when the local projection is current.

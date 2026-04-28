@@ -24,7 +24,9 @@ It also names the missing middle concept needed for safe automatic execution:
 
 - `execution_binding` / `orchestration_contract`
 
-Prompt Vault currently stores reusable prompt artifacts and governed metadata. It does not yet store a machine-readable binding from each template to a Pi/orchestrator executor such as `loop_execute` or `workflow_execute`.
+Prompt Vault currently stores reusable prompt artifacts and governed metadata. It does not yet store a machine-readable binding from each template to a Pi/orchestrator executor such as `loop_execute` or `workflow_execute` as a schema field.
+
+However, `pi-vault-client` now implements a dispatch posture classifier (`src/dispatchPosture.ts`) that maps known `control_mode=loop` templates to their orchestrator execution bindings at runtime. This classifier is the first execution-binding surface: it lives in the client layer rather than in Prompt Vault schema, but it is no longer accurate to say "not modeled yet" for the two known loop templates (`transcendent-iteration` → `loop_execute(loop="transcendent")`, `ooda` → `loop_execute(loop="ooda")`).
 
 For the separate question of whether an active export-enabled template has actually been materialized into local Pi prompt files, read [Pi Export Projection Boundary](./pi-export-projection-boundary.md).
 
@@ -120,7 +122,7 @@ Keep these distinct:
 | Cognitive/procedure classification | artifact kind | `artifact_kind` |
 | One-shot/router/loop topology | process/control type | `control_mode` |
 | Napkin/bounded/structured/workflow grade | representation quality | `formalization_level` |
-| Binding to `loop_execute` / `workflow_execute` | runtime relator | not modeled yet |
+| Binding to `loop_execute` / `workflow_execute` | runtime relator | dispatch posture classifier in `pi-vault-client`; not a schema field |
 | Actual run | execution occurrence | `executions` row or runtime receipt |
 | Live Pi session | runtime container/context | not a Prompt Vault template |
 | Pi session JSONL | forensic evidence | not a Prompt Vault template |
@@ -152,6 +154,25 @@ loop_execute(loop="transcendent", objective=<operator objective>)
 ```
 
 not to generic `workflow_execute` solely because its formalization level is `workflow`.
+
+## Implemented dispatch posture classifier
+
+As of this writing, `pi-vault-client` implements the dispatch posture classifier that this doc originally described as a "needed future field." The implementation lives in `src/dispatchPosture.ts` and exposes:
+
+- `classifyDispatchPosture(template)` — returns one of: `text_ok`, `orchestrator_loop_required`, `orchestrator_workflow_gate_required`, `missing_execution_binding_fail_closed`
+- `checkProjectionFreshness(template)` — compares DB content digest to local Pi prompt file for active `export_to_pi=true` templates
+- `vault_dispatch_check` tool — explicit LLM-callable dispatch posture check
+- `vault_query` and `vault_retrieve` now include `dispatch_postures` in their details output
+- `vault_schema_diagnostics` now includes projection freshness results
+
+Known loop bindings:
+
+```text
+transcendent-iteration → loop_execute(loop="transcendent")
+ooda                   → loop_execute(loop="ooda")
+```
+
+New loop templates require adding a binding to the registry before they can be dispatched. Without a binding, the classifier returns `missing_execution_binding_fail_closed`.
 
 ## Needed future field
 
