@@ -59,6 +59,15 @@ if [ -d "$VAULT_DIR/.dolt" ]; then
     if ! ./pv-lint --quiet 2>/dev/null; then
         echo "Warning: Lint check found issues. Review with: pv lint"
     fi
+
+    if [ "${PV_SKIP_EXPORT_FRESHNESS:-0}" != "1" ] && [ -x ./pv-export-freshness ]; then
+        echo "Checking prompt vault Pi export freshness..."
+        if ! ./pv-export-freshness --quiet; then
+            echo "Error: local Pi prompt projection is stale. Run: ./scripts/pv export"
+            echo "Set PV_SKIP_EXPORT_FRESHNESS=1 only when intentionally pushing without local Pi projection freshness."
+            exit 1
+        fi
+    fi
 fi
 HOOK
         chmod +x "$hooks_dir/pre-push.prompt-vault"
@@ -107,6 +116,9 @@ EOF
             pre-push)
                 export VAULT_DIR
                 "$SCRIPT_DIR/pv-lint" --quiet 2>/dev/null || true
+                if [ "${PV_SKIP_EXPORT_FRESHNESS:-0}" != "1" ]; then
+                    "$SCRIPT_DIR/pv-export-freshness" --quiet
+                fi
                 ;;
             *)
                 echo "Unknown hook: $hook" >&2

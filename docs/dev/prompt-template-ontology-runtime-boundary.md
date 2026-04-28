@@ -26,6 +26,8 @@ It also names the missing middle concept needed for safe automatic execution:
 
 Prompt Vault currently stores reusable prompt artifacts and governed metadata. It does not yet store a machine-readable binding from each template to a Pi/orchestrator executor such as `loop_execute` or `workflow_execute`.
 
+For the separate question of whether an active export-enabled template has actually been materialized into local Pi prompt files, read [Pi Export Projection Boundary](./pi-export-projection-boundary.md).
+
 ## Current schema facts
 
 Current Prompt Vault template facets are:

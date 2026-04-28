@@ -1,0 +1,130 @@
+#!/usr/bin/env bash
+# pv-export-freshness - verify local Pi prompt projection matches active export-enabled vault templates
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+VAULT_DIR="${VAULT_DIR:-$SCRIPT_DIR/../prompt-vault-db}"
+TEMPLATES_DIR="${TEMPLATES_DIR:-$HOME/.pi/agent/prompts}"
+TEMPLATE_EXPORT_STATE="$TEMPLATES_DIR/.prompt-vault-export-state.json"
+
+# shellcheck disable=SC1091
+source "$SCRIPT_DIR/pv-lib.sh"
+
+usage() {
+    cat <<'EOF'
+Usage: pv-export-freshness [--quiet]
+
+Verify that the local Pi prompt projection is fresh against Prompt Vault DB truth.
+
+Fresh means:
+- every active export-enabled template has a local <name>.md file
+- each file's content hash matches the DB content as export-to-pi.sh writes it
+- .prompt-vault-export-state.json exists and records the same version/hash
+- the receipt has no extra template entries outside the active export-enabled set
+
+Environment:
+  VAULT_DIR       Prompt Vault Dolt DB directory
+  TEMPLATES_DIR   Pi prompt projection directory
+EOF
+}
+
+quiet=0
+case "${1:-}" in
+    --quiet) quiet=1 ;;
+    -h|--help) usage; exit 0 ;;
+    "") ;;
+    *) usage_error "pv-export-freshness [--quiet]" "Unknown option: $1" ;;
+esac
+
+ensure_vault
+check_deps jq python3 sha256sum
+
+cd "$VAULT_DIR"
+
+query="SELECT name, version, content FROM prompt_templates WHERE status = 'active' AND export_to_pi = true ORDER BY name"
+db_json_file=$(mktemp "${TMPDIR:-/tmp}/prompt-vault-export-freshness.XXXXXX.json")
+trap 'rm -f "$db_json_file"' EXIT
+
+dolt sql -r json -q "$query" > "$db_json_file"
+
+python3 - "$TEMPLATES_DIR" "$TEMPLATE_EXPORT_STATE" "$quiet" "$db_json_file" <<'PY'
+import hashlib
+import json
+import pathlib
+import sys
+
+templates_dir = pathlib.Path(sys.argv[1])
+state_path = pathlib.Path(sys.argv[2])
+quiet = sys.argv[3] == "1"
+db_json_path = pathlib.Path(sys.argv[4])
+
+db = json.loads(db_json_path.read_text())
+rows = db.get("rows", [])
+problems = []
+expected = {}
+
+if not state_path.exists():
+    problems.append(f"missing export receipt: {state_path}")
+    state = None
+else:
+    try:
+        state = json.loads(state_path.read_text())
+    except json.JSONDecodeError as exc:
+        problems.append(f"invalid export receipt JSON: {state_path}: {exc}")
+        state = None
+
+receipt_templates = {}
+if isinstance(state, dict):
+    if state.get("schema") != "prompt-vault/pi-export-receipt/v1":
+        problems.append(f"unsupported export receipt schema: {state.get('schema')!r}")
+    for item in state.get("templates", []):
+        name = item.get("name")
+        if isinstance(name, str) and name:
+            receipt_templates[name] = item
+
+for row in rows:
+    name = str(row.get("name", ""))
+    if not name:
+        problems.append("DB row missing template name")
+        continue
+    version = int(row.get("version") or 0)
+    content = row.get("content") or ""
+    rel_path = f"{name}.md"
+    path = templates_dir / rel_path
+    # export-to-pi.sh normalizes projected prompt files to exactly one trailing newline.
+    expected_bytes = (content.rstrip("\n") + "\n").encode()
+    expected_sha = hashlib.sha256(expected_bytes).hexdigest()
+    expected[name] = {"version": version, "sha256": expected_sha, "path": rel_path}
+
+    if not path.exists():
+        problems.append(f"missing projected template: {path}")
+    else:
+        actual_sha = hashlib.sha256(path.read_bytes()).hexdigest()
+        if actual_sha != expected_sha:
+            problems.append(f"stale projected template: {path} sha256={actual_sha} expected={expected_sha}")
+
+    receipt = receipt_templates.get(name)
+    if receipt is None:
+        problems.append(f"receipt missing template: {name}")
+    else:
+        if int(receipt.get("version") or 0) != version:
+            problems.append(f"receipt stale version for {name}: {receipt.get('version')} expected={version}")
+        if receipt.get("sha256") != expected_sha:
+            problems.append(f"receipt stale sha256 for {name}: {receipt.get('sha256')} expected={expected_sha}")
+        if receipt.get("path") != rel_path:
+            problems.append(f"receipt path mismatch for {name}: {receipt.get('path')!r} expected={rel_path!r}")
+
+extra = sorted(set(receipt_templates) - set(expected))
+for name in extra:
+    problems.append(f"receipt has extra template outside active export set: {name}")
+
+if problems:
+    print("Pi prompt projection is stale:", file=sys.stderr)
+    for problem in problems:
+        print(f"- {problem}", file=sys.stderr)
+    print("Run: ./scripts/pv export", file=sys.stderr)
+    raise SystemExit(1)
+
+if not quiet:
+    print(f"OK: Pi prompt projection fresh ({len(expected)} templates)")
+PY

@@ -10,6 +10,7 @@ TEMPLATES_DIR="${TEMPLATES_DIR:-$HOME/.pi/agent/prompts}"
 SKILLS_DIR="${SKILLS_DIR:-$HOME/.pi/agent/skills}"
 TEMPLATE_MANIFEST="$TEMPLATES_DIR/.prompt-vault-managed-files"
 SKILL_MANIFEST="$SKILLS_DIR/.prompt-vault-managed-files"
+TEMPLATE_EXPORT_STATE="$TEMPLATES_DIR/.prompt-vault-export-state.json"
 
 if [ ! -d "$VAULT_DIR/.dolt" ]; then
     echo "Error: Vault not initialized. Run init-vault.sh first."
@@ -42,8 +43,9 @@ clean_managed_outputs() {
 # Export templates
 export_templates() {
     local count=0
-    local template_names
+    local template_names receipt_jsonl generated_at
     template_names=$(json_all_field "SELECT name FROM prompt_templates WHERE status = 'active' AND export_to_pi = true ORDER BY name" name)
+    receipt_jsonl=$(mktemp "${TMPDIR:-/tmp}/prompt-vault-template-export.XXXXXX.jsonl")
 
     clean_managed_outputs "$TEMPLATE_MANIFEST" "$TEMPLATES_DIR"
     : > "$TEMPLATE_MANIFEST"
@@ -53,19 +55,42 @@ export_templates() {
 
         local escaped_name
         escaped_name=$(sql_escape "$name")
-        local content
+        local content version
         content=$(json_first_field "SELECT content FROM prompt_templates WHERE name = '$escaped_name' AND status = 'active' ORDER BY version DESC LIMIT 1" content)
+        version=$(json_first_field "SELECT version FROM prompt_templates WHERE name = '$escaped_name' AND status = 'active' ORDER BY version DESC LIMIT 1" version)
         
         # Write file
         local output_file="$TEMPLATES_DIR/${name}.md"
         printf '%s\n' "$content" > "$output_file"
         echo "${name}.md" >> "$TEMPLATE_MANIFEST"
 
+        local sha256
+        sha256=$(sha256sum "$output_file" | awk '{print $1}')
+        jq -n \
+            --arg name "$name" \
+            --arg path "${name}.md" \
+            --arg version "$version" \
+            --arg sha256 "$sha256" \
+            '{name: $name, path: $path, version: ($version | tonumber), sha256: $sha256}' >> "$receipt_jsonl"
+
         ((count++)) || true
         echo "  ✓ Exported template: $name"
     done <<< "$template_names"
+
+    generated_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+    jq -s \
+        --arg schema "prompt-vault/pi-export-receipt/v1" \
+        --arg exported_at "$generated_at" \
+        --arg vault_dir "$VAULT_DIR" \
+        --arg templates_dir "$TEMPLATES_DIR" \
+        --arg skills_dir "$SKILLS_DIR" \
+        '{schema: $schema, exported_at: $exported_at, source: {vault_dir: $vault_dir}, targets: {templates_dir: $templates_dir, skills_dir: $skills_dir}, template_count: length, templates: .}' \
+        "$receipt_jsonl" > "$TEMPLATE_EXPORT_STATE"
+    rm -f "$receipt_jsonl"
+    echo "$(basename "$TEMPLATE_EXPORT_STATE")" >> "$TEMPLATE_MANIFEST"
     
     echo "Templates exported: $count → $TEMPLATES_DIR"
+    echo "Template export receipt: $TEMPLATE_EXPORT_STATE"
 }
 
 # Export skills
