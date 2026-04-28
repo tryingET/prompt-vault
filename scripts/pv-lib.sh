@@ -404,6 +404,10 @@ set_template_export_flag() {
     entity_id=$(printf '%s' "$entity_record" | jq -r '.rows[0].id')
     version=$(printf '%s' "$entity_record" | jq -r '.rows[0].version')
     current_export=$(printf '%s' "$entity_record" | jq -r '.rows[0].export_to_pi')
+    case "$current_export" in
+        1|true|TRUE) current_export="true" ;;
+        0|false|FALSE|"") current_export="false" ;;
+    esac
 
     if [ "$current_export" = "$export_enabled" ]; then
         info "template '$name' export_to_pi already $export_enabled"
@@ -417,6 +421,10 @@ set_template_export_flag() {
     fi
 
     updated_export=$(json_first_field "SELECT export_to_pi FROM prompt_templates WHERE name = '$escaped_name' LIMIT 1" export_to_pi)
+    case "$updated_export" in
+        1|true|TRUE) updated_export="true" ;;
+        0|false|FALSE|"") updated_export="false" ;;
+    esac
     if [ "$updated_export" != "$export_enabled" ]; then
         error "Failed to set template '$name' export_to_pi to $export_enabled"
         exit 1

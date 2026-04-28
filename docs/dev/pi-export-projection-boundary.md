@@ -124,10 +124,25 @@ Safe automation should use one of these policies:
    ./scripts/pv export
    ./scripts/pv-export-freshness
    ```
-2. Operator opt-in auto-export for interactive local CLI updates.
+2. Local operator auto-export for `pv` template lifecycle commands that affect an active export-enabled template.
 3. Fail-closed freshness gates before claiming a running Pi surface is current.
 
-A future CLI update path may auto-export active export-enabled template changes when explicitly running in local operator mode. Headless/CI/core DB migration paths should not silently rewrite a user's Pi prompt directory unless configured to do so.
+Current `pv` local operator behavior:
+
+- `pv edit-template <name>` auto-exports after changing an active export-enabled template.
+- `pv activate template <name>` auto-exports when the activated template is export-enabled.
+- `pv publish <name>` auto-exports when the template is active.
+- `pv unpublish <name>` auto-exports when removing an active template from the local projection.
+- `pv deprecate template <name>` auto-exports when removing an active export-enabled template from the local projection.
+- `pv rollback template <name> <commit-ref>` auto-exports when the rolled-back template is active and export-enabled.
+
+Set `PV_AUTO_EXPORT=0` to disable auto-export. In that mode, the same lifecycle command fails closed if the local projection is stale and tells the operator to run:
+
+```bash
+./scripts/pv export
+```
+
+Direct SQL, Dolt-level migrations, governed external clients, and headless/CI paths should still run an explicit projection or freshness check; they must not assume a DB write rewrote the user's local Pi prompt directory.
 
 ## Relation to execution binding
 

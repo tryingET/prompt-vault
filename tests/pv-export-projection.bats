@@ -43,3 +43,26 @@ teardown() {
     [[ "$output" == *"Pi prompt projection is stale"* ]]
     [[ "$output" == *"Run: ./scripts/pv export"* ]]
 }
+
+@test "publishing an active template auto-refreshes the Pi projection by default" {
+    candidate="$(dolt --data-dir "$TEST_VAULT_DIR" sql -r csv -q "SELECT name FROM prompt_templates WHERE status='active' AND export_to_pi=false ORDER BY name LIMIT 1" | tail -1)"
+    [ -n "$candidate" ]
+
+    run env VAULT_DIR="$TEST_VAULT_DIR" TEMPLATES_DIR="$TEST_PROMPTS_DIR" SKILLS_DIR="$TEST_SKILLS_DIR" "$SCRIPTS_DIR/pv" publish "$candidate"
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"Pi prompt projection fresh"* ]]
+    [ -f "$TEST_PROMPTS_DIR/$candidate.md" ]
+
+    run env VAULT_DIR="$TEST_VAULT_DIR" TEMPLATES_DIR="$TEST_PROMPTS_DIR" "$SCRIPTS_DIR/pv-export-freshness"
+    [ "$status" -eq 0 ]
+}
+
+@test "PV_AUTO_EXPORT=0 fails closed when a publish would leave projection stale" {
+    candidate="$(dolt --data-dir "$TEST_VAULT_DIR" sql -r csv -q "SELECT name FROM prompt_templates WHERE status='active' AND export_to_pi=false ORDER BY name LIMIT 1" | tail -1)"
+    [ -n "$candidate" ]
+
+    run env PV_AUTO_EXPORT=0 VAULT_DIR="$TEST_VAULT_DIR" TEMPLATES_DIR="$TEST_PROMPTS_DIR" SKILLS_DIR="$TEST_SKILLS_DIR" "$SCRIPTS_DIR/pv" publish "$candidate"
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"Pi projection is stale after template publish"* ]]
+    [[ "$output" == *"Run: ./scripts/pv export"* ]]
+}

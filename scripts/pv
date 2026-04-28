@@ -182,6 +182,44 @@ PY
     info "Activate with: pv activate template $name"
 }
 
+refresh_pi_projection_after_template_change() {
+    local name="${1:-}"
+    local reason="${2:-template change}"
+    local force="${3:-false}"
+    local escaped_name status export_enabled should_refresh
+
+    [ -z "$name" ] && return 0
+
+    escaped_name=$(sql_escape "$name")
+    status=$(json_first_field "SELECT status FROM prompt_templates WHERE name = '$escaped_name' LIMIT 1" status)
+    export_enabled=$(json_first_field "SELECT export_to_pi FROM prompt_templates WHERE name = '$escaped_name' LIMIT 1" export_to_pi)
+    case "$export_enabled" in
+        1|true|TRUE) export_enabled="true" ;;
+        0|false|FALSE|"") export_enabled="false" ;;
+    esac
+
+    should_refresh="$force"
+    if [ "$status" = "active" ] && [ "$export_enabled" = "true" ]; then
+        should_refresh="true"
+    fi
+
+    [ "$should_refresh" = "true" ] || return 0
+
+    if [ "${PV_AUTO_EXPORT:-1}" = "0" ]; then
+        if ! "$SCRIPT_DIR/pv-export-freshness" --quiet; then
+            error "Pi projection is stale after $reason for '$name'"
+            error "Run: ./scripts/pv export"
+            exit 1
+        fi
+        return 0
+    fi
+
+    info "Refreshing Pi prompt projection after $reason for '$name'"
+    cmd_export >/dev/null
+    "$SCRIPT_DIR/pv-export-freshness" --quiet
+    success "Pi prompt projection fresh"
+}
+
 cmd_new_skill() {
     ensure_vault
     local name="${1:-}"
@@ -246,6 +284,7 @@ cmd_edit_template() {
 
     success "Updated template '$name'"
     info "Version: ${version_before:-0} -> ${version_after:-0}"
+    refresh_pi_projection_after_template_change "$name" "template update"
 }
 
 cmd_activate() {
@@ -257,6 +296,9 @@ cmd_activate() {
 
     set_entity_status "$type" "$name" active
     success "Activated $type '$name'"
+    if [ "$type" = "template" ]; then
+        refresh_pi_projection_after_template_change "$name" "template activation"
+    fi
 }
 
 cmd_publish() {
@@ -266,6 +308,7 @@ cmd_publish() {
 
     set_template_export_flag "$name" true
     success "Published template '$name' for pi export"
+    refresh_pi_projection_after_template_change "$name" "template publish"
 }
 
 cmd_unpublish() {
@@ -273,8 +316,22 @@ cmd_unpublish() {
     local name="${1:-}"
     [ -z "$name" ] && { error "Usage: pv unpublish <template>"; exit 1; }
 
+    local escaped_name status_before export_before force_refresh
+    escaped_name=$(sql_escape "$name")
+    status_before=$(json_first_field "SELECT status FROM prompt_templates WHERE name = '$escaped_name' LIMIT 1" status)
+    export_before=$(json_first_field "SELECT export_to_pi FROM prompt_templates WHERE name = '$escaped_name' LIMIT 1" export_to_pi)
+    case "$export_before" in
+        1|true|TRUE) export_before="true" ;;
+        0|false|FALSE|"") export_before="false" ;;
+    esac
+    force_refresh="false"
+    if [ "$status_before" = "active" ] && [ "$export_before" = "true" ]; then
+        force_refresh="true"
+    fi
+
     set_template_export_flag "$name" false
     success "Unpublished template '$name' from pi export"
+    refresh_pi_projection_after_template_change "$name" "template unpublish" "$force_refresh"
 }
 
 cmd_deprecate() {
@@ -284,8 +341,26 @@ cmd_deprecate() {
     
     [ -z "$type" ] || [ -z "$name" ] && { error "Usage: pv deprecate <template|skill> <name>"; exit 1; }
 
+    local escaped_name status_before export_before force_refresh
+    force_refresh="false"
+    if [ "$type" = "template" ]; then
+        escaped_name=$(sql_escape "$name")
+        status_before=$(json_first_field "SELECT status FROM prompt_templates WHERE name = '$escaped_name' LIMIT 1" status)
+        export_before=$(json_first_field "SELECT export_to_pi FROM prompt_templates WHERE name = '$escaped_name' LIMIT 1" export_to_pi)
+        case "$export_before" in
+            1|true|TRUE) export_before="true" ;;
+            0|false|FALSE|"") export_before="false" ;;
+        esac
+        if [ "$status_before" = "active" ] && [ "$export_before" = "true" ]; then
+            force_refresh="true"
+        fi
+    fi
+
     set_entity_status "$type" "$name" deprecated
     success "Deprecated $type '$name'"
+    if [ "$type" = "template" ]; then
+        refresh_pi_projection_after_template_change "$name" "template deprecation" "$force_refresh"
+    fi
 }
 
 cmd_branch() {
@@ -505,6 +580,9 @@ cmd_rollback() {
     update_entity_content_and_description "$type" "$name" "$content" "$desc" "Rolled back $type '$name' to $commit_ref" >/dev/null
 
     success "Rolled back $type '$name' to state at $commit_ref"
+    if [ "$type" = "template" ]; then
+        refresh_pi_projection_after_template_change "$name" "template rollback"
+    fi
     info "Commit with: pv commit 'Rollback $name to $commit_ref'"
 }
 
