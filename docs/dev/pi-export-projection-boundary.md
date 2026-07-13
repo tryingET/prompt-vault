@@ -7,7 +7,7 @@ read_when:
 system4d:
   container: "Prompt Vault DB truth, local Pi prompt projections, and export freshness receipts."
   compass: "Keep canonical DB truth separate from machine-local projection state while making stale projections detectable."
-  engine: "Select active export-enabled rows -> materialize local prompt files -> write receipt -> verify receipt and file hashes before claiming Pi is current."
+  engine: "Select active export-enabled rows -> classify raw-file eligibility -> export text-safe rows / quarantine gated rows -> write receipt -> verify files and absence before claiming Pi is current."
   fog: "The name export_to_pi can be misread as completed export instead of projection eligibility."
 ---
 
@@ -57,9 +57,10 @@ The truthful lifecycle is:
 ```text
 Prompt Vault row changes
   -> row is active and export_to_pi=true
-  -> ./scripts/pv export materializes local Pi prompt files
+  -> raw projection policy classifies it
+  -> text-safe row is materialized OR gated/unknown/unbound row is quarantined
   -> export writes .prompt-vault-export-state.json receipt
-  -> pv-export-freshness verifies files and receipt against DB truth
+  -> pv-export-freshness verifies exported files and absence of quarantined raw files
 ```
 
 Do not collapse eligibility and materialization.
@@ -75,21 +76,14 @@ Do not collapse eligibility and materialization.
 The receipt uses schema:
 
 ```text
-prompt-vault/pi-export-receipt/v1
+prompt-vault/pi-export-receipt/v2
 ```
 
-For each exported active template it records:
+For each exported text-safe template it records name, path, version, and projected-file SHA-256. For each quarantined candidate it records name, version, source-content SHA-256, facets, and one reason: `malformed`, `unknown`, `unbound`, or `gated`.
 
-```json
-{
-  "name": "transcendent-iteration",
-  "path": "transcendent-iteration.md",
-  "version": 4,
-  "sha256": "..."
-}
-```
+The receipt also records candidate/exported/quarantined counts and policy `prompt-vault/raw-pi-projection-policy/v1`. Exported-file hashes use exactly one trailing newline; quarantine content hashes cover the unprojected source bytes.
 
-The hash is over the file exactly as exported by `export-to-pi.sh`; current prompt-file projection normalizes DB content to exactly one trailing newline.
+`export_to_pi=true` is candidacy, not permission to bypass runtime dispatch. Loop templates are `unbound` at this owner layer because execution bindings are downstream runtime facts; workflow templates are `gated`. Neither is emitted as a raw `.md` prompt.
 
 ## Freshness check
 
@@ -101,11 +95,12 @@ Use:
 
 Fresh means:
 
-- every `status='active' AND export_to_pi=true` template has a local `<name>.md` file
-- each file hash matches the DB content as projected with exactly one trailing newline
-- the receipt exists
-- the receipt version/hash/path matches DB truth
-- the receipt has no extra template entries outside the active export set
+- every active export-enabled candidate has exactly one receipt disposition
+- every text-safe candidate has one matching local `<name>.md` file
+- every gated/unknown/unbound/malformed candidate has no raw prompt file
+- exported and quarantine hashes/facets/reasons match DB truth
+- receipt counts and policy match the recomputed inventory
+- the receipt has no missing, duplicate, or extra entries
 
 If stale, the checker fails closed and prints:
 
@@ -151,7 +146,7 @@ This projection receipt solves a different problem than runtime orchestration.
 Projection freshness answers:
 
 ```text
-Does my local Pi prompt file match the active export-enabled Prompt Vault row?
+Does every active export-enabled row have the correct raw-export or quarantine disposition, and does local Pi state match it?
 ```
 
 Execution binding answers:
