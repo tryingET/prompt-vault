@@ -1,0 +1,290 @@
+{
+  "schema": "prompt-vault/d2e-owner-readback/v1",
+  "generated_at": "2026-08-09T22:09:52Z",
+  "owner_surface": "core/prompt-vault",
+  "status": "owner-authored-candidate-uncommitted",
+  "store_identity": {
+    "database": "prompt-vault-db",
+    "schema_version": 9,
+    "branch": "sf7-iw8-adaptive-portfolio-4163",
+    "dolt_head": "0kgp2ia7jo8rcvkct5221s21druvl7tf",
+    "dolt_head_subject": "Align D2E transfer contracts with verified runtime gate",
+    "working_tree_clean": true
+  },
+  "source_identity": {
+    "repo": "core/prompt-vault",
+    "git_head": "6d653580d299b5e4700dc00bcab843fd59670a19",
+    "git_subject": "feat: quarantine gated Pi prompt projections",
+    "working_tree_clean": false,
+    "interpretation": "The canonical Dolt store was clean at the exact store head. The surrounding Git checkout had pre-existing unrelated modifications, so this candidate was not written or committed into that shared checkout."
+  },
+  "mutation": {
+    "mutation_performed": false,
+    "template_rows_mutated": false,
+    "execution_rows_mutated": false,
+    "dolt_store_mutated": false,
+    "source_repo_mutated": false,
+    "pi_projection_mutated": false,
+    "templates_executed": false
+  },
+  "current_selection_contract": {
+    "row_identity": "prompt_templates.name is UNIQUE",
+    "current_row_resolution": "current table row selected by exact name; all six rows are status=active and export_to_pi=true",
+    "export_to_pi_semantics": "Pi export enabled/candidate, not proof of materialization or runtime execution permission",
+    "historical_versions_concurrently_live_addressable": false,
+    "historical_version_provenance_available": true,
+    "historical_access": "Dolt AS OF / commit history can recover prior row states, but current vault_retrieve/current table exact-name reads do not expose a live revision selector",
+    "evidence": [
+      "schema/schema.sql:39-64",
+      "scripts/pv:486-504",
+      "scripts/pv-diff:38-39",
+      "docs/dev/pi-export-projection-boundary.md"
+    ]
+  },
+  "projection_snapshot": {
+    "producer_reported_freshness_check": "passed",
+    "freshness_command": "./scripts/pv-export-freshness",
+    "receipt_schema": "prompt-vault/pi-export-receipt/v2",
+    "policy": "prompt-vault/raw-pi-projection-policy/v1",
+    "producer_reported_receipt_sha256": "150f80e48b0e70cec437b7e8a051811fa8f1d6bf43cfdd98e922df0a909f7783",
+    "independent_receipt_verification": false,
+    "candidate_count": 72,
+    "exported_count": 57,
+    "quarantined_count": 15,
+    "interpretation": "Producer-observed machine-local projection evidence only. The independent review verified expected policy inventory and selected hashes, but not the external receipt/file state. This does not establish loaded runtime bytes or execution behavior."
+  },
+  "dispatch_observation": {
+    "authority": "downstream pi-vault-client/runtime observation, not Prompt Vault-owned binding authority",
+    "tool": "vault_dispatch_check",
+    "registry_id": "a5920542375bf4e3c6f09b22c081b8cff29cad5f73da592ad43c9cde8ad57917",
+    "interpretation": "Included to report the requested current observed binding while preserving the owner boundary. Pi must independently confirm installed binding/currentness."
+  },
+  "templates": [
+    {
+      "id": 202,
+      "name": "execution-memory-transfer",
+      "owner_company": "core",
+      "status": "active",
+      "export_to_pi": true,
+      "pi_projection_candidate": true,
+      "entity_version": 10,
+      "content_sha256": "9fa43d2872fca6b00d8d4fa144186b210bf456d9eafce41d05fefb3a930d163f",
+      "artifact_kind": "procedure",
+      "control_mode": "one_shot",
+      "formalization_level": "workflow",
+      "visibility_companies": ["core", "software", "finance", "house", "health", "teaching", "holding"],
+      "controlled_vocabulary": null,
+      "created_at": "2026-03-21 07:49:15",
+      "updated_at": "2026-07-31 23:09:00",
+      "stored_execution_count": 0,
+      "historical_distinct_versions": 10,
+      "projection_disposition": {
+        "disposition": "quarantined",
+        "reason": "gated",
+        "receipt_content_sha256_matches_store": true
+      },
+      "observed_dispatch": {
+        "posture": "orchestrator_workflow_gate_required",
+        "execution_surface": "workflow_execute",
+        "workflow_gate": "D2E_EXECUTION_MEMORY_V1",
+        "raw_text_execution_lawful": false
+      }
+    },
+    {
+      "id": 229,
+      "name": "layer12-000-router",
+      "owner_company": "software",
+      "status": "active",
+      "export_to_pi": true,
+      "pi_projection_candidate": true,
+      "entity_version": 3,
+      "content_sha256": "be925b045fd7551757626e2045bf8df4e0f96b4c711746151a4fdefe9ee9479b",
+      "artifact_kind": "procedure",
+      "control_mode": "one_shot",
+      "formalization_level": "workflow",
+      "visibility_companies": ["core", "software", "finance", "house", "health", "teaching", "holding"],
+      "controlled_vocabulary": null,
+      "created_at": "2026-04-28 03:35:22",
+      "updated_at": "2026-04-30 07:26:20",
+      "stored_execution_count": 0,
+      "historical_distinct_versions": 3,
+      "projection_disposition": {
+        "disposition": "quarantined",
+        "reason": "gated",
+        "receipt_content_sha256_matches_store": true
+      },
+      "observed_dispatch": {
+        "posture": "orchestrator_workflow_gate_required",
+        "execution_surface": null,
+        "workflow_gate": null,
+        "verified_concrete_executor_binding": false,
+        "raw_text_execution_lawful": false
+      }
+    },
+    {
+      "id": 231,
+      "name": "layer12-040-direction-to-execution-ak-native",
+      "owner_company": "software",
+      "status": "active",
+      "export_to_pi": true,
+      "pi_projection_candidate": true,
+      "entity_version": 7,
+      "content_sha256": "ae9a0b2972e908dadabb5e06d9a6b9d9b7c678a218e952cb68328f22d37458b3",
+      "artifact_kind": "procedure",
+      "control_mode": "one_shot",
+      "formalization_level": "workflow",
+      "visibility_companies": ["core", "software", "finance", "house", "health", "teaching", "holding"],
+      "controlled_vocabulary": null,
+      "created_at": "2026-04-28 03:35:43",
+      "updated_at": "2026-07-31 23:08:56",
+      "stored_execution_count": 0,
+      "historical_distinct_versions": 7,
+      "projection_disposition": {
+        "disposition": "quarantined",
+        "reason": "gated",
+        "receipt_content_sha256_matches_store": true
+      },
+      "observed_dispatch": {
+        "posture": "orchestrator_workflow_gate_required",
+        "execution_surface": "workflow_execute",
+        "workflow_gate": "D2E_TRANSFER_COMPLETE_V1",
+        "raw_text_execution_lawful": false
+      }
+    },
+    {
+      "id": 234,
+      "name": "layer12-500-analysis-router",
+      "owner_company": "software",
+      "status": "active",
+      "export_to_pi": true,
+      "pi_projection_candidate": true,
+      "entity_version": 2,
+      "content_sha256": "14a29c09f4c05403e6260c799e130c41b57ae786ff9e2d34ccfebf879ed9b621",
+      "artifact_kind": "procedure",
+      "control_mode": "router",
+      "formalization_level": "structured",
+      "visibility_companies": ["core", "software", "finance", "house", "health", "teaching", "holding"],
+      "controlled_vocabulary": {
+        "routing_context": "analysis_followup",
+        "activity_phase": "post_analysis",
+        "input_artifact": "analysis_output",
+        "transition_target_type": "framework_mode",
+        "selection_principles": ["evidence_based", "constraint_preserving"],
+        "output_commitment": "exact_next_prompt"
+      },
+      "created_at": "2026-04-28 03:36:12",
+      "updated_at": "2026-05-06 19:25:35",
+      "stored_execution_count": 0,
+      "historical_distinct_versions": 2,
+      "projection_disposition": {
+        "disposition": "exported",
+        "path": "layer12-500-analysis-router.md",
+        "projected_sha256": "936bda7962e7b59af31be0d17d2f149f1e6cea0410c530998a21ccf24fec4990"
+      },
+      "observed_dispatch": {
+        "posture": "text_ok",
+        "execution_surface": null,
+        "workflow_gate": null,
+        "raw_text_execution_lawful": true
+      }
+    },
+    {
+      "id": 235,
+      "name": "layer12-600-review-closeout-router",
+      "owner_company": "software",
+      "status": "active",
+      "export_to_pi": true,
+      "pi_projection_candidate": true,
+      "entity_version": 3,
+      "content_sha256": "38ec03a6c289cea639c0dbf4435672801b3e68bdd0013e998d067595f4afd60d",
+      "artifact_kind": "procedure",
+      "control_mode": "router",
+      "formalization_level": "structured",
+      "visibility_companies": ["core", "software", "finance", "house", "health", "teaching", "holding"],
+      "controlled_vocabulary": {
+        "routing_context": "review_closeout",
+        "activity_phase": "closeout",
+        "input_artifact": "review_summary",
+        "transition_target_type": "framework_mode",
+        "selection_principles": ["minimal_change", "constraint_preserving"],
+        "output_commitment": "exact_next_prompt"
+      },
+      "created_at": "2026-04-28 03:36:21",
+      "updated_at": "2026-05-06 19:25:22",
+      "stored_execution_count": 0,
+      "historical_distinct_versions": 3,
+      "projection_disposition": {
+        "disposition": "exported",
+        "path": "layer12-600-review-closeout-router.md",
+        "projected_sha256": "01103de5afbcd2bad8ab475375033a3f6f1f0af6310a6091a8a66d3b92fcd3a8"
+      },
+      "observed_dispatch": {
+        "posture": "text_ok",
+        "execution_surface": null,
+        "workflow_gate": null,
+        "raw_text_execution_lawful": true
+      }
+    },
+    {
+      "id": 200,
+      "name": "repo-direction-to-execution",
+      "owner_company": "holding",
+      "status": "active",
+      "export_to_pi": true,
+      "pi_projection_candidate": true,
+      "entity_version": 25,
+      "content_sha256": "8603f8dfb3c6d335361953439fabf372dcafd94401c69f9b78196ff71c7683af",
+      "artifact_kind": "procedure",
+      "control_mode": "one_shot",
+      "formalization_level": "workflow",
+      "visibility_companies": ["core", "software", "finance", "house", "health", "teaching", "holding"],
+      "controlled_vocabulary": null,
+      "created_at": "2026-03-15 09:54:02",
+      "updated_at": "2026-07-31 23:08:58",
+      "stored_execution_count": 0,
+      "historical_distinct_versions": 22,
+      "projection_disposition": {
+        "disposition": "quarantined",
+        "reason": "gated",
+        "receipt_content_sha256_matches_store": true
+      },
+      "observed_dispatch": {
+        "posture": "orchestrator_workflow_gate_required",
+        "execution_surface": "workflow_execute",
+        "workflow_gate": "D2E_TRANSFER_COMPLETE_V1",
+        "raw_text_execution_lawful": false
+      }
+    }
+  ],
+  "execution_history": {
+    "stored_execution_count_for_each_selected_template": 0,
+    "all_selected_counts_zero": true,
+    "total_execution_rows_in_store": 286,
+    "selected_template_execution_entity_versions": [],
+    "privacy": "No output bodies were read or included. Counts were joined by exact selected template id.",
+    "limitation": "Zero stored rows is not proof of zero runtime or package-local executions; Pi-local receipts and trigger telemetry are downstream authority."
+  },
+  "owner_statement": {
+    "currentness": "At clean Dolt head 0kgp2ia7jo8rcvkct5221s21druvl7tf, the six exact rows and digests above are the canonical current Prompt Vault store facts.",
+    "historical_addressability": "Historical row states remain available through Dolt provenance, but the current exact-name Vault retrieval/current table contract does not expose prior versions as concurrently live dispatch targets.",
+    "projection": "The producer-reported machine-local raw prompt projection check passed: two selected routers were reported exported as text-safe files and four selected workflow candidates reported quarantined as gated. The independent review verified the expected policy inventory and selected hashes, not the external receipt/file state.",
+    "binding_boundary": "Execution bindings are downstream Pi/runtime facts. The observed bindings are included for reconciliation but require independent Pi-owner confirmation.",
+    "authorization": "This readback does not authorize template mutation, activation, deprecation, execution, Pi binding change, or RFC/ADR promotion by itself."
+  },
+  "commands": [
+    "git status --short; git rev-parse HEAD",
+    "cd prompt-vault-db && dolt status && dolt log -n 1",
+    "cd prompt-vault-db && dolt sql -r json -q <six-row exact-name metadata-and-SHA2 query>",
+    "cd prompt-vault-db && dolt sql -r json -q <selected execution-count query>",
+    "cd prompt-vault-db && dolt sql -r json -q <dolt_history_prompt_templates version-count query>",
+    "./scripts/pv-export-freshness",
+    "vault_dispatch_check({template_names:[six exact names]})"
+  ],
+  "limitations": [
+    "Candidate is not committed to the owner repo because the shared Git checkout had pre-existing unrelated modifications and ownership could not be established without violating the peer message budget.",
+    "The Git source worktree was dirty; only the clean Dolt store head is claimed as immutable store authority.",
+    "The producer reports projection freshness for that machine-local snapshot; the receipt/file state was not independently verified and does not establish loaded runtime bytes or behavioral conformance.",
+    "Dispatch bindings are downstream observations and are not accepted as Prompt Vault-owned facts.",
+    "Independent review and owner-repo integration are still required before FCOS cites this as immutable committed owner evidence."
+  ]
+}
