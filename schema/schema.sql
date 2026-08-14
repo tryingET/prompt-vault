@@ -32,6 +32,7 @@ CREATE TABLE IF NOT EXISTS schema_version (
 
 -- Insert initial version if not exists
 INSERT IGNORE INTO schema_version (version, description) VALUES (9, 'Add optional execution output capture with explicit privacy mode');
+INSERT IGNORE INTO schema_version (version, description) VALUES (10, 'Add retrievals table for retrieval-usage analytics');
 
 -- Core entity: reusable prompt templates
 -- Variables use pi syntax: $1, $2, $@, ${@:N}, ${@:N:M} (N and M must be positive integers)
