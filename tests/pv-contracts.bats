@@ -114,11 +114,11 @@ seed_old_execution() {
 
     run env VAULT_DIR="$TEST_VAULT_DIR" "$SCRIPTS_DIR/pv-migrate" up
     [ "$status" -eq 0 ]
-    [[ "$output" == *"Backfilled schema version to v9 from current schema shape"* ]]
+    [[ "$output" == *"Backfilled schema version to v10 from current schema shape"* ]]
     [[ "$output" == *"No pending migrations"* ]]
 
     current_version=$(dolt --data-dir "$TEST_VAULT_DIR" sql -r csv -q "SELECT MAX(version) FROM schema_version" | tail -1)
-    [ "$current_version" -eq 9 ]
+    [ "$current_version" -eq 10 ]
 }
 
 @test "pv-migrate create uses the highest existing migration number" {
