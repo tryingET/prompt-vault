@@ -16,7 +16,6 @@ Version-controlled prompt templates using Dolt SQL database with Git semantics, 
 
 ## Guardrails
 - No secrets in git.
-- Never push to `main`; MRs only.
 - Treat `docs/_core/**` as immutable.
 - Run `./verify.sh` before committing changes.
 
@@ -87,6 +86,11 @@ Templates are governed by:
 - Any surface described as machine-readable authority must live in a parseable machine file, not only in Markdown fences.
 - Rollups over governed dimensions must encode the governing entity-class predicate explicitly (for example router vocabulary implies `control_mode=router`).
 
+## Agent discoverability
+- Repo-specific operator knowledge should live primarily in repo-owned skills under `.pi/skills/`.
+- Repo-specific explicit invocation helpers should live under `.pi/prompts/` when a named entrypoint is useful.
+- Keep this `AGENTS.md` focused on repo policy and canonical references; do not duplicate the full operator playbook here when a repo-owned skill or canonical doc is the better home.
+
 ## Knowledge Crystallization Flow
 
 ```
@@ -103,6 +107,11 @@ Forbidden:
 - L1 -> L0
 - L2 -> L1
 - any cycle
+
+
+## Direction workflow
+- When this repo's direction docs under `docs/project/` change, or when current posture needs verification, use `ak direction import|check|export` from the repo root.
+- Treat `ak direction check` as the authority-reconciliation gate between repo direction docs and AK's structured direction substrate.
 
 ## Read order
 1) `README.md` — Project overview + current reality
