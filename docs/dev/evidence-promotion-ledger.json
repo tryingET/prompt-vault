@@ -19,8 +19,8 @@
     ],
     "learnings": [],
     "authority_surfaces": [],
-    "notes": "First transcendent pass identified the authority problem but ended in a failed completion state and was superseded by the refined second pass.",
-    "updated_at": "2026-03-21"
+    "notes": "First transcendent pass identified the authority problem but ended in a failed completion state and was superseded by the refined second pass. (raw session jsonl pruned from machine-local session store; in-repo promoted artifacts are the durable authority).",
+    "updated_at": "2026-08-22"
   },
   {
     "id": "transcendent-1774084798685",
@@ -44,7 +44,7 @@
       "docs/learnings/2026-03-21-session-jsonl-is-forensic-evidence-not-kes-state.md"
     ],
     "authority_surfaces": [],
-    "notes": "Second transcendent pass clarified that JSONL is evidence only and that promotion state must be explicit rather than reconstructed.",
-    "updated_at": "2026-03-21"
+    "notes": "Second transcendent pass clarified that JSONL is evidence only and that promotion state must be explicit rather than reconstructed. (raw session jsonl pruned from machine-local session store; in-repo promoted artifacts are the durable authority).",
+    "updated_at": "2026-08-22"
   }
 ]

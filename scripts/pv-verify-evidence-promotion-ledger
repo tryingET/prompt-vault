@@ -38,12 +38,26 @@ jq -e '
 while IFS= read -r entry_b64; do
     entry_json=$(printf '%s' "$entry_b64" | base64 -d)
     evidence_path=$(printf '%s' "$entry_json" | jq -r '.evidence.path')
-    [ -f "$evidence_path" ] || { echo "Missing evidence file: $evidence_path" >&2; exit 1; }
 
+    # Raw session JSONL is a provenance pointer into the machine-local session
+    # store and may be legitimately pruned. The durable authority is the
+    # repo-owned promoted artifacts (diary/learnings/authority_surfaces),
+    # which are existence-checked below. An entry must retain at least one
+    # of: raw evidence file, or verified in-repo promoted artifacts.
+    artifacts_ok=false
     while IFS= read -r rel_path; do
         [ -z "$rel_path" ] && continue
-        [ -e "$REPO_DIR/$rel_path" ] || { echo "Missing referenced repo path: $rel_path" >&2; exit 1; }
+        if [ ! -e "$REPO_DIR/$rel_path" ]; then
+            echo "Missing referenced repo path: $rel_path" >&2
+            exit 1
+        fi
+        artifacts_ok=true
     done < <(printf '%s' "$entry_json" | jq -r '(.diary + .learnings + .authority_surfaces)[]?')
+
+    if [ ! -f "$evidence_path" ] && [ "$artifacts_ok" != "true" ]; then
+        echo "Entry has neither raw evidence ($evidence_path) nor in-repo promoted artifacts" >&2
+        exit 1
+    fi
 done < <(jq -r '.[] | @base64' "$LEDGER_JSON_PATH")
 
 jq -e '.[] | select(.status == "learning_crystallized")' "$LEDGER_JSON_PATH" >/dev/null
