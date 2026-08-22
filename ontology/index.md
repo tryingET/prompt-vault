@@ -11,6 +11,7 @@ Start here when browsing manually.
 
 - `ontology/manifest.yaml` — which layers apply
 - `ontology/v2-contract.json` — Prompt Vault v2 ontology contract and golden query expectations
+- `docs/dev/prompt-template-ontology-runtime-boundary.md` — clarification for `workflow`, reserved `session`, and missing execution-binding/runtime concepts
 - `ontology/controlled-vocabulary-contract.json` — governed router semantics + semantic metamodel
 - `ontology/company-visibility-contract.json` — owner/visibility governance boundary across companies
 - prompt bodies are **not** part of ontology; inspect the canonical DB content with `./scripts/pv show template <name>` when you need seeded router text

@@ -22,7 +22,50 @@ NC='\033[0m'
 info() { echo -e "${BLUE}▶${NC} $1"; }
 success() { echo -e "${GREEN}✓${NC} $1"; }
 warn() { echo -e "${YELLOW}!${NC} $1"; }
-error() { echo -e "${RED}✗${NC} $1"; }
+error() { echo -e "${RED}✗${NC} $1" >&2; }
+
+usage_error() {
+    local usage="${1:-}"
+    shift || true
+    local detail
+
+    for detail in "$@"; do
+        [ -n "$detail" ] || continue
+        error "$detail"
+    done
+
+    if [ -n "$usage" ]; then
+        error "Usage: $usage"
+    fi
+
+    exit 1
+}
+
+require_option_value() {
+    local option="${1:-option}"
+    local value="${2-}"
+    local usage="${3:-}"
+
+    if [ -z "${value:-}" ]; then
+        usage_error "$usage" "$option requires a value"
+    fi
+}
+
+require_allowed_value() {
+    local label="${1:-value}"
+    local value="${2:-}"
+    local usage="${3:-}"
+    shift 3 || true
+
+    local allowed
+    for allowed in "$@"; do
+        if [ "$value" = "$allowed" ]; then
+            return 0
+        fi
+    done
+
+    usage_error "$usage" "Unsupported $label: $value"
+}
 
 # Ensure vault is initialized
 ensure_vault() {
@@ -86,11 +129,19 @@ terminal_safe_preview() {
     sanitize_terminal_text | python3 -c "import sys; max_len = int(sys.argv[1]); text = sys.stdin.read(); text = text[:max_len] + ('…' if len(text) > max_len else ''); print(text, end='')" "$max_len"
 }
 
+base64_no_wrap() {
+    if [ "$#" -gt 0 ]; then
+        base64 < "$1" | tr -d '\r\n'
+    else
+        base64 | tr -d '\r\n'
+    fi
+}
+
 # Alternative: Use base64 encoding for complex content
 # Decodes in SQL with: FROM_BASE64('<encoded>')
 sql_escape_base64() {
     local content="$1"
-    printf '%s' "$content" | base64 -w0
+    printf '%s' "$content" | base64_no_wrap
 }
 
 # Decode base64 in bash (for round-trip testing)
@@ -131,6 +182,323 @@ json_rows_base64() {
 json_decode_base64() {
     local encoded="$1"
     printf '%s' "$encoded" | base64 -d
+}
+
+dolt_sql_from_string() {
+    local sql="${1:-}"
+    local tmp_file status
+
+    make_temp_file tmp_file .sql
+    printf '%s' "$sql" > "$tmp_file"
+
+    if ! dolt sql < "$tmp_file"; then
+        status=$?
+        rm -f -- "$tmp_file"
+        return "$status"
+    fi
+
+    rm -f -- "$tmp_file"
+}
+
+json_array_from_csv() {
+    local csv="${1:-}"
+
+    python3 - "$csv" <<'PY'
+import json
+import sys
+
+items = [item.strip() for item in sys.argv[1].split(',') if item.strip()]
+print(json.dumps(items))
+PY
+}
+
+entity_table_for_type() {
+    local type="${1:-}"
+
+    case "$type" in
+        template) printf 'prompt_templates' ;;
+        skill) printf 'skills' ;;
+        *)
+            error "Type must be 'template' or 'skill'"
+            exit 1
+            ;;
+    esac
+}
+
+entity_content_column_for_type() {
+    local type="${1:-}"
+
+    case "$type" in
+        template) printf 'content' ;;
+        skill) printf 'readme' ;;
+        *)
+            error "Type must be 'template' or 'skill'"
+            exit 1
+            ;;
+    esac
+}
+
+require_entity_record_json() {
+    local type="${1:-}"
+    local name="${2:-}"
+    local fields="${3:-id, version, status}"
+    local status_predicate="${4:-}"
+    local table escaped_name where_clause record row_count
+
+    check_deps jq
+    table=$(entity_table_for_type "$type")
+    escaped_name=$(sql_escape "$name")
+    where_clause="name = '$escaped_name'"
+    if [ -n "$status_predicate" ]; then
+        where_clause="$where_clause AND $status_predicate"
+    fi
+
+    record=$(dolt_json_query "SELECT $fields FROM $table WHERE $where_clause ORDER BY version DESC LIMIT 1")
+    row_count=$(printf '%s' "$record" | jq -r '(.rows // []) | length')
+
+    if [ "$row_count" -eq 0 ]; then
+        error "$type '$name' not found"
+        exit 1
+    fi
+
+    printf '%s' "$record"
+}
+
+record_changelog() {
+    local entity_type="${1:-}"
+    local entity_id="${2:-}"
+    local old_version="${3:-}"
+    local new_version="${4:-}"
+    local change_type="${5:-update}"
+    local summary="${6:-}"
+    local author escaped_summary escaped_author old_version_sql new_version_sql
+
+    escaped_summary=$(sql_escape "$summary")
+    author="${PV_CHANGELOG_AUTHOR:-$(git config user.name 2>/dev/null || printf '%s' "${USER:-unknown}")}"
+    escaped_author=$(sql_escape "$author")
+    old_version_sql="NULL"
+    new_version_sql="NULL"
+    [ -n "$old_version" ] && old_version_sql="$old_version"
+    [ -n "$new_version" ] && new_version_sql="$new_version"
+
+    dolt sql -q "
+        INSERT INTO changelog (entity_type, entity_id, old_version, new_version, change_type, summary, author)
+        VALUES ('$entity_type', $entity_id, $old_version_sql, $new_version_sql, '$change_type', '$escaped_summary', '$escaped_author')
+    "
+}
+
+create_template_entity() {
+    local name="${1:-}"
+    local description="${2:-}"
+    local content="${3:-}"
+    local artifact_kind="${4:-procedure}"
+    local control_mode="${5:-one_shot}"
+    local formalization_level="${6:-structured}"
+    local owner_company="${7:-core}"
+    local visibility_companies_json="${8:-[]}"
+    local controlled_vocabulary_json="${9:-}"
+    local status="${10:-draft}"
+    local escaped_name escaped_description escaped_content escaped_artifact_kind escaped_control_mode escaped_formalization_level escaped_owner_company escaped_visibility escaped_status controlled_vocabulary_sql entity_record entity_id version
+
+    escaped_name=$(sql_escape "$name")
+    escaped_description=$(sql_escape "$description")
+    escaped_content=$(sql_escape "$content")
+    escaped_artifact_kind=$(sql_escape "$artifact_kind")
+    escaped_control_mode=$(sql_escape "$control_mode")
+    escaped_formalization_level=$(sql_escape "$formalization_level")
+    escaped_owner_company=$(sql_escape "$owner_company")
+    escaped_visibility=$(sql_escape "$visibility_companies_json")
+    escaped_status=$(sql_escape "$status")
+    controlled_vocabulary_sql="NULL"
+    if [ -n "$controlled_vocabulary_json" ]; then
+        controlled_vocabulary_sql="'$(sql_escape "$controlled_vocabulary_json")'"
+    fi
+
+    dolt sql -q "
+        INSERT INTO prompt_templates (
+            name,
+            description,
+            content,
+            artifact_kind,
+            control_mode,
+            formalization_level,
+            owner_company,
+            visibility_companies,
+            controlled_vocabulary,
+            status
+        )
+        VALUES (
+            '$escaped_name',
+            '$escaped_description',
+            '$escaped_content',
+            '$escaped_artifact_kind',
+            '$escaped_control_mode',
+            '$escaped_formalization_level',
+            '$escaped_owner_company',
+            '$escaped_visibility',
+            $controlled_vocabulary_sql,
+            '$escaped_status'
+        )
+    "
+
+    entity_record=$(require_entity_record_json template "$name" "id, version")
+    entity_id=$(printf '%s' "$entity_record" | jq -r '.rows[0].id')
+    version=$(printf '%s' "$entity_record" | jq -r '.rows[0].version')
+    record_changelog template "$entity_id" "" "$version" create "Created template '$name'"
+}
+
+create_skill_entity() {
+    local name="${1:-}"
+    local description="${2:-}"
+    local readme="${3:-}"
+    local license="${4:-}"
+    local compatibility="${5:-}"
+    local owner_company="${6:-core}"
+    local visibility_companies_json="${7:-[]}"
+    local status="${8:-draft}"
+    local escaped_name escaped_description escaped_readme escaped_license escaped_compatibility escaped_owner_company escaped_visibility escaped_status entity_record entity_id version
+
+    escaped_name=$(sql_escape "$name")
+    escaped_description=$(sql_escape "$description")
+    escaped_readme=$(sql_escape "$readme")
+    escaped_license=$(sql_escape "$license")
+    escaped_compatibility=$(sql_escape "$compatibility")
+    escaped_owner_company=$(sql_escape "$owner_company")
+    escaped_visibility=$(sql_escape "$visibility_companies_json")
+    escaped_status=$(sql_escape "$status")
+
+    dolt sql -q "
+        INSERT INTO skills (
+            name,
+            description,
+            readme,
+            license,
+            compatibility,
+            owner_company,
+            visibility_companies,
+            status
+        )
+        VALUES (
+            '$escaped_name',
+            '$escaped_description',
+            '$escaped_readme',
+            '$escaped_license',
+            '$escaped_compatibility',
+            '$escaped_owner_company',
+            '$escaped_visibility',
+            '$escaped_status'
+        )
+    "
+
+    entity_record=$(require_entity_record_json skill "$name" "id, version")
+    entity_id=$(printf '%s' "$entity_record" | jq -r '.rows[0].id')
+    version=$(printf '%s' "$entity_record" | jq -r '.rows[0].version')
+    record_changelog skill "$entity_id" "" "$version" create "Created skill '$name'"
+}
+
+update_entity_content_and_description() {
+    local type="${1:-}"
+    local name="${2:-}"
+    local content="${3:-}"
+    local description="${4:-}"
+    local summary="${5:-Updated ${type} [${name}]}"
+    local table content_column escaped_name escaped_content escaped_description entity_record entity_id version_before version_after
+
+    table=$(entity_table_for_type "$type")
+    content_column=$(entity_content_column_for_type "$type")
+    escaped_name=$(sql_escape "$name")
+    escaped_content=$(sql_escape "$content")
+    escaped_description=$(sql_escape "$description")
+    entity_record=$(require_entity_record_json "$type" "$name" "id, version")
+    entity_id=$(printf '%s' "$entity_record" | jq -r '.rows[0].id')
+    version_before=$(printf '%s' "$entity_record" | jq -r '.rows[0].version')
+
+    dolt sql -q "
+        UPDATE $table
+        SET $content_column = '$escaped_content',
+            description = '$escaped_description',
+            version = COALESCE(version, 0) + 1
+        WHERE name = '$escaped_name'
+    "
+
+    version_after=$(json_first_field "SELECT version FROM $table WHERE name = '$escaped_name' ORDER BY version DESC LIMIT 1" version)
+    record_changelog "$type" "$entity_id" "$version_before" "$version_after" update "$summary"
+    printf '%s' "$version_after"
+}
+
+set_entity_status() {
+    local type="${1:-}"
+    local name="${2:-}"
+    local target_status="${3:-}"
+    local table escaped_name entity_record entity_id version current_status updated_status change_type summary
+
+    table=$(entity_table_for_type "$type")
+    escaped_name=$(sql_escape "$name")
+    entity_record=$(require_entity_record_json "$type" "$name" "id, version, status")
+    entity_id=$(printf '%s' "$entity_record" | jq -r '.rows[0].id')
+    version=$(printf '%s' "$entity_record" | jq -r '.rows[0].version')
+    current_status=$(printf '%s' "$entity_record" | jq -r '.rows[0].status')
+
+    if [ "$current_status" = "$target_status" ]; then
+        info "$type '$name' already $target_status"
+        return 0
+    fi
+
+    dolt sql -q "UPDATE $table SET status = '$target_status' WHERE name = '$escaped_name'"
+    updated_status=$(json_first_field "SELECT status FROM $table WHERE name = '$escaped_name' LIMIT 1" status)
+    if [ "$updated_status" != "$target_status" ]; then
+        error "Failed to set $type '$name' to $target_status"
+        exit 1
+    fi
+
+    case "$target_status" in
+        active) change_type="reactivate" ;;
+        deprecated) change_type="deprecate" ;;
+        archived) change_type="archive" ;;
+        *) change_type="update" ;;
+    esac
+    summary="Status: $current_status -> $target_status"
+    record_changelog "$type" "$entity_id" "$version" "$version" "$change_type" "$summary"
+}
+
+set_template_export_flag() {
+    local name="${1:-}"
+    local export_enabled="${2:-false}"
+    local escaped_name entity_record entity_id version current_export updated_export summary
+
+    escaped_name=$(sql_escape "$name")
+    entity_record=$(require_entity_record_json template "$name" "id, version, export_to_pi")
+    entity_id=$(printf '%s' "$entity_record" | jq -r '.rows[0].id')
+    version=$(printf '%s' "$entity_record" | jq -r '.rows[0].version')
+    current_export=$(printf '%s' "$entity_record" | jq -r '.rows[0].export_to_pi')
+    case "$current_export" in
+        1|true|TRUE) current_export="true" ;;
+        0|false|FALSE|"") current_export="false" ;;
+    esac
+
+    if [ "$current_export" = "$export_enabled" ]; then
+        info "template '$name' export_to_pi already $export_enabled"
+        return 0
+    fi
+
+    if [ "$export_enabled" = "true" ]; then
+        dolt sql -q "UPDATE prompt_templates SET export_to_pi = TRUE WHERE name = '$escaped_name'"
+    else
+        dolt sql -q "UPDATE prompt_templates SET export_to_pi = FALSE WHERE name = '$escaped_name'"
+    fi
+
+    updated_export=$(json_first_field "SELECT export_to_pi FROM prompt_templates WHERE name = '$escaped_name' LIMIT 1" export_to_pi)
+    case "$updated_export" in
+        1|true|TRUE) updated_export="true" ;;
+        0|false|FALSE|"") updated_export="false" ;;
+    esac
+    if [ "$updated_export" != "$export_enabled" ]; then
+        error "Failed to set template '$name' export_to_pi to $export_enabled"
+        exit 1
+    fi
+
+    summary="export_to_pi: $current_export -> $export_enabled"
+    record_changelog template "$entity_id" "$version" "$version" update "$summary"
 }
 
 cleanup_temp_paths() {
@@ -518,5 +886,5 @@ run_with_signal_forwarding() {
 }
 
 # Export functions and variables for sourcing scripts
-export -f info success warn error ensure_vault check_deps sql_escape require_numeric float_gt sanitize_terminal_text terminal_safe_preview sql_escape_base64 sql_decode_base64 dolt_json_query json_first_field json_first_field_record json_all_field json_rows_base64 json_decode_base64 cleanup_temp_paths register_temp_path make_temp_file parse_template_var_tokens template_valid_vars template_unsupported_vars template_position_indexes expand_template_content run_with_signal_forwarding
+export -f info success warn error usage_error require_option_value require_allowed_value ensure_vault check_deps sql_escape require_numeric float_gt sanitize_terminal_text terminal_safe_preview base64_no_wrap sql_escape_base64 sql_decode_base64 dolt_json_query json_first_field json_first_field_record json_all_field json_rows_base64 json_decode_base64 dolt_sql_from_string cleanup_temp_paths register_temp_path make_temp_file parse_template_var_tokens template_valid_vars template_unsupported_vars template_position_indexes expand_template_content run_with_signal_forwarding
 export SCRIPTS_DIR VAULT_DIR RED GREEN YELLOW BLUE NC

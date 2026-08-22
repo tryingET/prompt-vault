@@ -16,7 +16,7 @@ teardown() {
 }
 
 @test "executions exposes output capture columns" {
-    run dolt --data-dir "$VAULT_DIR" sql -r csv -q "SHOW COLUMNS FROM executions"
+    run dolt --data-dir "$TEST_VAULT_DIR" sql -r csv -q "SHOW COLUMNS FROM executions"
     [ "$status" -eq 0 ]
     [[ "$output" == *"output_capture_mode"* ]]
     [[ "$output" == *"output_text"* ]]

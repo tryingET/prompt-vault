@@ -50,6 +50,7 @@ echo ""
 # Prerequisites
 echo -e "${YELLOW}Prerequisites:${NC}"
 check "dolt installed" command -v dolt
+check "bats installed" command -v bats
 check "vault initialized" test -d "$VAULT_DIR/.dolt"
 echo ""
 
@@ -76,11 +77,17 @@ echo ""
 echo -e "${YELLOW}Quality & Lint:${NC}"
 check_output "pv quality check" "Quality checks passed" "$SCRIPTS_DIR/pv" quality check
 check_output "pv analytics outputs" "Output Capture Analytics" "$SCRIPTS_DIR/pv" analytics outputs
-check_output "pv-lint runs" "Linting" "$SCRIPTS_DIR/pv-lint"
+check_output "pv-lint targeted smoke" "=== Template: inversion ===" "$SCRIPTS_DIR/pv-lint" inversion
 check_output "pv-verify-ontology-contract" "Ontology contract verified" "$SCRIPTS_DIR/pv-verify-ontology-contract"
 check_output "pv-verify-evidence-promotion-ledger" "Evidence promotion ledger verified" "$SCRIPTS_DIR/pv-verify-evidence-promotion-ledger"
 check "pv templates controlled-vocabulary filter" bash -c "$SCRIPTS_DIR/pv templates cv.routing_context=analysis_followup >/dev/null"
 check "pv templates company visibility filter" bash -c "$SCRIPTS_DIR/pv templates visibility_company=software >/dev/null"
+if [ "${PV_VERIFY_FULL:-0}" = "1" ]; then
+    check "pv-bats full suite" "$SCRIPTS_DIR/pv-bats" tests/
+else
+    check "pv-bats contract suite" "$SCRIPTS_DIR/pv-bats" tests/pv-contracts.bats
+    echo -e "${BLUE}ℹ${NC} Set PV_VERIFY_FULL=1 to run the full bats suite"
+fi
 echo ""
 
 # Subcommands exist

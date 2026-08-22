@@ -6,6 +6,10 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 VAULT_DIR="${VAULT_DIR:-$SCRIPT_DIR/../prompt-vault-db}"
 
+# shellcheck disable=SC1091
+source "$SCRIPT_DIR/pv-lib.sh"
+check_deps jq
+
 EXEC_ID="${1:-}"
 RATING="${2:-}"
 shift 2 || true
@@ -36,13 +40,18 @@ if [ -z "$EXEC_ID" ] || [ -z "$RATING" ]; then
     exit 1
 fi
 
+require_numeric "$EXEC_ID" execution-id
+
 # Validate rating
 if ! [[ "$RATING" =~ ^[1-5]$ ]]; then
     echo "Error: Rating must be 1-5" >&2
     exit 1
 fi
 
-NOTES=$(echo "$NOTES" | sed 's/^ *//;s/ *$//' | sed "s/'/''/g")
+NOTES=$(printf '%s' "$NOTES" | sed 's/^ *//;s/ *$//')
+RAW_NOTES="$NOTES"
+NOTES=$(sql_escape "$NOTES")
+ISSUES=$(sql_escape "$ISSUES")
 
 cd "$VAULT_DIR"
 
@@ -80,10 +89,30 @@ fi
 
 echo "✓ Recorded feedback for execution $EXEC_ID"
 echo "  Rating: $RATING/5"
-[ -n "$NOTES" ] && echo "  Notes: $NOTES"
+[ -n "$RAW_NOTES" ] && echo "  Notes: $RAW_NOTES"
 echo ""
-echo "View stats: pv stats $(dolt sql -r csv -q "
-    SELECT pt.name FROM prompt_templates pt
-    JOIN executions e ON e.entity_id = pt.id
+
+entity_record=$(dolt sql -r json -q "
+    SELECT e.entity_type,
+           pt.name AS template_name,
+           s.name AS skill_name
+    FROM executions e
+    LEFT JOIN prompt_templates pt ON e.entity_type = 'template' AND e.entity_id = pt.id
+    LEFT JOIN skills s ON e.entity_type = 'skill' AND e.entity_id = s.id
     WHERE e.id = $EXEC_ID
-" | tail -1)"
+    LIMIT 1
+")
+entity_type=$(printf '%s' "$entity_record" | jq -r '.rows[0].entity_type // empty')
+entity_name=$(printf '%s' "$entity_record" | jq -r '.rows[0].template_name // .rows[0].skill_name // empty')
+
+case "$entity_type" in
+    template)
+        echo "View stats: pv stats $entity_name"
+        ;;
+    skill)
+        echo "View skill: pv show skill $entity_name"
+        ;;
+    *)
+        echo "View execution: pv sql \"SELECT * FROM executions WHERE id = $EXEC_ID\""
+        ;;
+esac

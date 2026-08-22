@@ -7,29 +7,13 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # Source shared library
 source "$SCRIPT_DIR/pv-lib.sh"
 
-if [ ! -d "$VAULT_DIR/.dolt" ]; then
-    error "Vault not initialized. Run init-vault.sh first."
-    exit 1
-fi
-
-cd "$VAULT_DIR"
+ensure_vault
 
 echo "=== Importing from pi ==="
 
-# Safely escape content for SQL
-# Uses sed for single-quote escaping (SQL standard: '' for ')
-sql_escape_content() {
-    local content="$1"
-    printf '%s' "$content" | sed "s/'/''/g"
-}
-
-# Execute SQL using temp file to avoid shell interpretation issues
 exec_sql() {
     local sql="$1"
-    local tmp=$(mktemp --suffix=.sql)
-    printf '%s' "$sql" > "$tmp"
-    dolt sql < "$tmp" 2>/dev/null || true
-    rm -f "$tmp"
+    dolt_sql_from_string "$sql"
 }
 
 # Import prompt templates
@@ -59,13 +43,14 @@ import_templates() {
                     description=$(grep -v '^$' "$file" | grep -v '^---' | head -1 | cut -c1-200)
                 fi
                 
-                # Escape for SQL using safer method
-                local escaped_content=$(sql_escape_content "$content")
-                local escaped_desc=$(sql_escape_content "$description")
-                
-                exec_sql "
+                local escaped_name escaped_content escaped_desc
+                escaped_name=$(sql_escape "$name")
+                escaped_content=$(sql_escape "$content")
+                escaped_desc=$(sql_escape "$description")
+
+                if ! exec_sql "
                     INSERT INTO prompt_templates (name, description, content, artifact_kind, control_mode, formalization_level, owner_company, visibility_companies, status)
-                    VALUES ('$name', '$escaped_desc', '$escaped_content', 'procedure', 'one_shot', 'structured', 'core', '["core","software","finance","house","health","teaching","holding"]', 'active')
+                    VALUES ('$escaped_name', '$escaped_desc', '$escaped_content', 'procedure', 'one_shot', 'structured', 'core', '[\"core\",\"software\",\"finance\",\"house\",\"health\",\"teaching\",\"holding\"]', 'active')
                     ON DUPLICATE KEY UPDATE 
                         content = VALUES(content),
                         description = VALUES(description),
@@ -75,8 +60,11 @@ import_templates() {
                         owner_company = VALUES(owner_company),
                         visibility_companies = VALUES(visibility_companies),
                         updated_at = CURRENT_TIMESTAMP
-                " || warn "Could not import $name"
-                
+                "; then
+                    warn "Could not import template: $name"
+                    continue
+                fi
+
                 ((template_count++)) || true
                 success "Imported template: $name"
             done
@@ -121,54 +109,74 @@ import_skills() {
                     compatibility=$(sed -n 's/^compatibility: *//p' "$skill_file" | head -1)
                 fi
                 
-                # Escape for SQL using safer method
-                local escaped_content=$(sql_escape_content "$content")
-                local escaped_desc=$(sql_escape_content "$description" | cut -c1-1024)
-                local escaped_license=$(sql_escape_content "$license")
-                local escaped_compat=$(sql_escape_content "$compatibility")
-                
-                # Insert skill
-                exec_sql "
+                local escaped_skill_name escaped_content escaped_desc escaped_license escaped_compat
+                escaped_skill_name=$(sql_escape "$skill_name")
+                escaped_content=$(sql_escape "$content")
+                escaped_desc=$(printf '%s' "$description" | cut -c1-1024 | sql_escape)
+                escaped_license=$(sql_escape "$license")
+                escaped_compat=$(sql_escape "$compatibility")
+
+                if ! exec_sql "
                     INSERT INTO skills (name, description, readme, license, compatibility, owner_company, visibility_companies, status)
-                    VALUES ('$skill_name', '$escaped_desc', '$escaped_content', '$escaped_license', '$escaped_compat', 'core', '["core","software","finance","house","health","teaching","holding"]', 'active')
+                    VALUES ('$escaped_skill_name', '$escaped_desc', '$escaped_content', '$escaped_license', '$escaped_compat', 'core', '[\"core\",\"software\",\"finance\",\"house\",\"health\",\"teaching\",\"holding\"]', 'active')
                     ON DUPLICATE KEY UPDATE
                         readme = VALUES(readme),
                         description = VALUES(description),
                         owner_company = VALUES(owner_company),
                         visibility_companies = VALUES(visibility_companies),
                         updated_at = CURRENT_TIMESTAMP
-                " || { warn "Could not import skill $skill_name"; continue; }
-                
-                # Get skill ID for assets
-                local skill_id=$(dolt sql -r csv -q "SELECT id FROM skills WHERE name = '$skill_name' ORDER BY id DESC LIMIT 1" | tail -1)
-                
-                # Import assets (scripts, references, etc.)
-                find "$skill_dir" -type f ! -name "SKILL.md" | while read -r asset_file; do
-                    local rel_path=${asset_file#$skill_dir/}
-                    local escaped_path=$(sql_escape_content "$rel_path")
-                    
-                    # Check if binary
+                "; then
+                    warn "Could not import skill: $skill_name"
+                    continue
+                fi
+
+                local skill_id
+                skill_id=$(json_first_field "SELECT id FROM skills WHERE name = '$escaped_skill_name' ORDER BY id DESC LIMIT 1" id)
+                if [ -z "$skill_id" ]; then
+                    warn "Imported skill row not found after insert: $skill_name"
+                    continue
+                fi
+
+                local asset_failures=0
+                while IFS= read -r asset_file; do
+                    [ -f "$asset_file" ] || continue
+
+                    local rel_path escaped_path
+                    rel_path=${asset_file#$skill_dir/}
+                    escaped_path=$(sql_escape "$rel_path")
+
                     if file "$asset_file" | grep -q "text"; then
-                        local asset_content=$(cat "$asset_file")
-                        local escaped_asset=$(sql_escape_content "$asset_content")
-                        exec_sql "
+                        local asset_content escaped_asset
+                        asset_content=$(cat "$asset_file")
+                        escaped_asset=$(sql_escape "$asset_content")
+                        if ! exec_sql "
                             INSERT INTO skill_assets (skill_id, path, content, is_binary)
                             VALUES ($skill_id, '$escaped_path', '$escaped_asset', FALSE)
                             ON DUPLICATE KEY UPDATE content = VALUES(content), updated_at = CURRENT_TIMESTAMP
-                        "
+                        "; then
+                            warn "Could not import asset '$rel_path' for skill '$skill_name'"
+                            asset_failures=$((asset_failures + 1))
+                        fi
                     else
-                        # Store binary files as base64 in binary_content column
-                        local b64_content=$(base64 -w0 "$asset_file")
-                        exec_sql "
+                        local b64_content
+                        b64_content=$(base64_no_wrap "$asset_file")
+                        if ! exec_sql "
                             INSERT INTO skill_assets (skill_id, path, binary_content, is_binary)
                             VALUES ($skill_id, '$escaped_path', FROM_BASE64('$b64_content'), TRUE)
                             ON DUPLICATE KEY UPDATE binary_content = VALUES(binary_content), updated_at = CURRENT_TIMESTAMP
-                        "
+                        "; then
+                            warn "Could not import binary asset '$rel_path' for skill '$skill_name'"
+                            asset_failures=$((asset_failures + 1))
+                        fi
                     fi
-                done
-                
+                done < <(find "$skill_dir" -type f ! -name "SKILL.md")
+
                 ((skill_count++)) || true
-                success "Imported skill: $skill_name"
+                if [ "$asset_failures" -eq 0 ]; then
+                    success "Imported skill: $skill_name"
+                else
+                    warn "Imported skill '$skill_name' with $asset_failures asset failure(s)"
+                fi
             done < <(find "$base_dir" -name "SKILL.md" -print0 2>/dev/null)
         fi
     done

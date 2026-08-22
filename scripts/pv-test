@@ -58,7 +58,7 @@ test_templates() {
         pass "$count active templates found"
         
         # Check each template has required fields
-        dolt sql -r csv -q "SELECT name FROM prompt_templates WHERE status = 'active'" | tail -n +2 | while read name; do
+        dolt sql -r csv -q "SELECT name FROM prompt_templates WHERE status = 'active'" | tail -n +2 | while read -r name; do
             [ -z "$name" ] && continue
             
             desc=$(dolt sql -r csv -q "SELECT CHAR_LENGTH(description) FROM prompt_templates WHERE name = '$name'" | tail -1)
@@ -122,7 +122,7 @@ test_cli_commands() {
     )
     
     for cmd in "${commands[@]}"; do
-        if ./pv $cmd >/dev/null 2>&1; then
+        if bash -lc "./pv $cmd" >/dev/null 2>&1; then
             pass "pv $cmd"
         else
             fail "pv $cmd"
@@ -135,15 +135,19 @@ test_cli_commands() {
     
     cd "$SCRIPT_DIR"
     
+    local export_file
+    export_file=$(mktemp "${TMPDIR:-/tmp}/pv-test-export.XXXXXX.jsonl")
+
     # Test export
-    if ./pv-export-formats jsonl /tmp/test-export.jsonl >/dev/null 2>&1; then
-        if [ -f /tmp/test-export.jsonl ] && [ -s /tmp/test-export.jsonl ]; then
+    if ./pv-export-formats jsonl "$export_file" >/dev/null 2>&1; then
+        if [ -f "$export_file" ] && [ -s "$export_file" ]; then
             pass "Export to JSONL works"
-            rm -f /tmp/test-export.jsonl
+            rm -f "$export_file"
         else
             fail "Export file empty or missing"
         fi
     else
+        rm -f "$export_file"
         fail "Export to JSONL failed"
     fi
 }
@@ -175,7 +179,7 @@ test_backups() {
     backup_dir="$SCRIPT_DIR/../backups"
     
     if [ -d "$backup_dir" ]; then
-        count=$(ls -1 "$backup_dir"/*.tar.gz 2>/dev/null | wc -l)
+        count=$(find "$backup_dir" -maxdepth 1 -type f -name '*.tar.gz' | wc -l)
         if [ "$count" -gt 0 ]; then
             pass "$count backups exist"
         else

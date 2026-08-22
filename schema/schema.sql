@@ -2,7 +2,7 @@
 -- Run with: dolt sql < schema/schema.sql
 --
 -- Design principles:
--- - Every entity has version tracking via parent_id chain
+-- - Every entity has version tracking via version counters plus changelog audit entries
 -- - Status lifecycle: draft → active → deprecated → archived
 -- - Executions/feedback enable the quality feedback loop
 -- - Collections provide logical grouping without hierarchy
@@ -32,6 +32,7 @@ CREATE TABLE IF NOT EXISTS schema_version (
 
 -- Insert initial version if not exists
 INSERT IGNORE INTO schema_version (version, description) VALUES (9, 'Add optional execution output capture with explicit privacy mode');
+INSERT IGNORE INTO schema_version (version, description) VALUES (10, 'Add retrievals table for retrieval-usage analytics');
 
 -- Core entity: reusable prompt templates
 -- Variables use pi syntax: $1, $2, $@, ${@:N}, ${@:N:M} (N and M must be positive integers)
@@ -49,7 +50,7 @@ CREATE TABLE IF NOT EXISTS prompt_templates (
     variables JSON,                           -- extracted ["$1", "$@"]
     controlled_vocabulary JSON,               -- governed retrieval/orchestration metadata
     version INT DEFAULT 1,                    -- increments on edit
-    parent_id INT,                            -- previous version for history
+    parent_id INT,                            -- reserved for future immutable row-chain versioning
     status ENUM('draft', 'active', 'deprecated', 'archived') DEFAULT 'draft',
     export_to_pi BOOLEAN NOT NULL DEFAULT FALSE, -- explicit pi publishing switch
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -76,7 +77,7 @@ CREATE TABLE IF NOT EXISTS skills (
     owner_company ENUM('core', 'software', 'finance', 'house', 'health', 'teaching', 'holding') NOT NULL DEFAULT 'core',
     visibility_companies JSON NOT NULL,
     version INT DEFAULT 1,
-    parent_id INT,
+    parent_id INT,                            -- reserved for future immutable row-chain versioning
     status ENUM('draft', 'active', 'deprecated', 'archived') DEFAULT 'draft',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -118,6 +119,23 @@ CREATE TABLE IF NOT EXISTS executions (
     error_message TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     INDEX idx_entity (entity_type, entity_id),
+    INDEX idx_created (created_at)
+);
+
+-- Retrieval analytics: which templates were surfaced by vault_query/vault_retrieve
+CREATE TABLE IF NOT EXISTS retrievals (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    entity_type ENUM('template', 'skill') NOT NULL DEFAULT 'template',
+    entity_id INT NOT NULL,
+    entity_version INT,
+    tool ENUM('vault_query', 'vault_retrieve', 'other') NOT NULL,
+    query_context TEXT,                       -- JSON: filters or requested names (bounded)
+    selected_rank INT,                        -- 1-based rank in the returned list
+    result_count INT,                         -- total templates in that tool result
+    company VARCHAR(100),                     -- resolved company context
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_entity (entity_type, entity_id),
+    INDEX idx_tool (tool),
     INDEX idx_created (created_at)
 );
 

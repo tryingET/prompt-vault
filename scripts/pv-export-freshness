@@ -1,0 +1,132 @@
+#!/usr/bin/env bash
+# pv-export-freshness - verify local Pi prompt projection and quarantine receipt
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+VAULT_DIR="${VAULT_DIR:-$SCRIPT_DIR/../prompt-vault-db}"
+TEMPLATES_DIR="${TEMPLATES_DIR:-$HOME/.pi/agent/prompts}"
+TEMPLATE_EXPORT_STATE="$TEMPLATES_DIR/.prompt-vault-export-state.json"
+source "$SCRIPT_DIR/pv-lib.sh"
+
+usage() {
+    cat <<'EOF'
+Usage: pv-export-freshness [--quiet]
+
+Verify exported text-safe templates and prove gated/invalid candidates are quarantined.
+EOF
+}
+
+quiet=0
+case "${1:-}" in
+    --quiet) quiet=1 ;;
+    -h|--help) usage; exit 0 ;;
+    "") ;;
+    *) usage_error "pv-export-freshness [--quiet]" "Unknown option: $1" ;;
+esac
+
+ensure_vault
+check_deps jq python3 sha256sum
+cd "$VAULT_DIR"
+
+db_json_file=$(mktemp "${TMPDIR:-/tmp}/prompt-vault-export-freshness-db.XXXXXX.json")
+policy_json_file=$(mktemp "${TMPDIR:-/tmp}/prompt-vault-export-freshness-policy.XXXXXX.json")
+trap 'rm -f "$db_json_file" "$policy_json_file"' EXIT
+
+dolt sql -r json -q "SELECT name, version, content, artifact_kind, control_mode, formalization_level, owner_company, visibility_companies, controlled_vocabulary FROM prompt_templates WHERE status = 'active' AND export_to_pi = true ORDER BY name" > "$db_json_file"
+"$SCRIPT_DIR/pv-export-policy.py" --controlled-vocabulary-contract "$SCRIPT_DIR/../ontology/controlled-vocabulary-contract.json" < "$db_json_file" > "$policy_json_file"
+
+python3 - "$TEMPLATES_DIR" "$TEMPLATE_EXPORT_STATE" "$quiet" "$policy_json_file" <<'PY'
+import hashlib
+import json
+import pathlib
+import re
+import sys
+
+templates_dir = pathlib.Path(sys.argv[1])
+state_path = pathlib.Path(sys.argv[2])
+quiet = sys.argv[3] == "1"
+policy = json.loads(pathlib.Path(sys.argv[4]).read_text())
+problems = []
+
+try:
+    state = json.loads(state_path.read_text())
+except FileNotFoundError:
+    state = None
+    problems.append(f"missing export receipt: {state_path}")
+except json.JSONDecodeError as exc:
+    state = None
+    problems.append(f"invalid export receipt JSON: {state_path}: {exc}")
+
+if not isinstance(state, dict):
+    state = {}
+if state.get("schema") != "prompt-vault/pi-export-receipt/v2":
+    problems.append(f"unsupported export receipt schema: {state.get('schema')!r}")
+if state.get("policy") != policy.get("policy"):
+    problems.append("receipt projection policy mismatch")
+
+
+def index_unique(items, label):
+    result = {}
+    for item in items if isinstance(items, list) else []:
+        name = item.get("name") if isinstance(item, dict) else None
+        if not isinstance(name, str) or not name:
+            problems.append(f"{label} entry missing name")
+            continue
+        if name in result:
+            problems.append(f"duplicate {label} receipt entry: {name}")
+        result[name] = item
+    return result
+
+receipt_exported = index_unique(state.get("templates", []), "exported")
+receipt_quarantined = index_unique(state.get("quarantined", []), "quarantined")
+expected_exported = {item["name"]: item for item in policy["exported"]}
+expected_quarantined = {item["name"]: item for item in policy["quarantined"] if item.get("name")}
+
+for name, expected in expected_exported.items():
+    path = templates_dir / expected["path"]
+    if not path.is_file():
+        problems.append(f"missing projected template: {path}")
+    else:
+        actual = hashlib.sha256(path.read_bytes()).hexdigest()
+        if actual != expected["projected_sha256"]:
+            problems.append(f"stale projected template: {path} sha256={actual} expected={expected['projected_sha256']}")
+    receipt = receipt_exported.get(name)
+    if receipt is None:
+        problems.append(f"receipt missing exported template: {name}")
+    else:
+        for key, value in (("version", expected["version"]), ("path", expected["path"]), ("sha256", expected["projected_sha256"])):
+            if receipt.get(key) != value:
+                problems.append(f"receipt {key} mismatch for {name}: {receipt.get(key)!r} expected={value!r}")
+
+for name, expected in expected_quarantined.items():
+    if re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]*", name):
+        path = templates_dir / f"{name}.md"
+        if path.exists():
+            problems.append(f"quarantined template has raw projection: {path}")
+    receipt = receipt_quarantined.get(name)
+    if receipt is None:
+        problems.append(f"receipt missing quarantined template: {name}")
+    else:
+        for key, value in (("version", expected["version"]), ("content_sha256", expected["content_sha256"]), ("reason", expected["reason"]), ("facets", expected["facets"])):
+            if receipt.get(key) != value:
+                problems.append(f"quarantine {key} mismatch for {name}: {receipt.get(key)!r} expected={value!r}")
+
+for name in sorted(set(receipt_exported) - set(expected_exported)):
+    problems.append(f"receipt has extra exported template: {name}")
+for name in sorted(set(receipt_quarantined) - set(expected_quarantined)):
+    problems.append(f"receipt has extra quarantined template: {name}")
+if set(receipt_exported) & set(receipt_quarantined):
+    problems.append("receipt names occur in both exported and quarantined sets")
+for key in ("candidate_count", "exported_count", "quarantined_count"):
+    if state.get(key) != policy.get(key):
+        problems.append(f"receipt {key} mismatch: {state.get(key)!r} expected={policy.get(key)!r}")
+
+if problems:
+    print("Pi prompt projection is stale:", file=sys.stderr)
+    for problem in problems:
+        print(f"- {problem}", file=sys.stderr)
+    print("Run: ./scripts/pv export", file=sys.stderr)
+    raise SystemExit(1)
+if not quiet:
+    print(f"OK: Pi prompt projection fresh ({policy['exported_count']} exported, {policy['quarantined_count']} quarantined)")
+PY

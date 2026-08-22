@@ -1,41 +1,45 @@
 ---
-summary: "Operating plan and completion record for the first SG2 company-visibility evidence rollup wave after SG1 stabilization."
+summary: "Operating plan and completion record for the bounded workstation-posture machine-snapshot handoff contract slice after the SG2 company-visibility evidence wave."
 read_when:
-  - "When reviewing the active repo-local wave after SG1 became materially complete"
-  - "When checking which AK task covered the company-visibility evidence rollup slice"
+  - "When reviewing the active repo-local wave after the first SG2 evidence slice completed"
+  - "When checking which AK task covered the workstation-posture machine-snapshot handoff contract"
 ---
 
 # Operating Plan
 
 Active strategic goal: **SG2 — Deepen privacy-safe evidence and downstream usability without collapsing boundaries**
 
-Active tactical goal: **TG5 — Expand aggregate-first evidence surfaces across governed company visibility**
+Active tactical goal: **TG6 — Define bounded downstream handoff contracts for workstation posture machine snapshots**
 
 ## Status
 
 This operating wave is now materially complete:
-- `pv quality rollup visibility_companies` is live as an aggregate-only quality/evidence surface
-- focused bats coverage protects privacy posture and multi-valued company-bucket behavior
-- README + strategic/tactical/operating/handoff docs now describe the promoted SG2/TG5 reality truthfully
+- Prompt Vault now has a repo-native handoff note for workstation posture machine snapshots
+- focused bats coverage protects the Prompt Vault side of the handoff contract
+- tactical/operating/handoff docs now point operators to the exact split between Prompt Vault prompt authority and infra-owned machine posture packets
 
 ## Scope of this operating wave
 
 This wave stays bounded:
-- promote SG2 after SG1 became materially complete
-- add aggregate-only company-visibility rollups using the governed company contract
-- keep private captured output non-previewable while improving downstream evidence usability
-- add focused validation so multi-company bucketing stays deterministic and privacy-safe
-- refresh repo direction/handoff surfaces so operators start from the new SG2/TG5 reality instead of the completed SG1/TG3 wave
+- define the Prompt Vault side of the workstation posture machine-snapshot handoff
+- keep the workstation snapshot transport infra-owned rather than recreating it in Prompt Vault
+- allow downstream repos to carry exact prompt provenance plus machine-state guidance without copying prompt bodies, governance canon, or private outputs into machine-facing packets
+- refresh repo direction/handoff surfaces so operators do not infer a fake combined source of truth
 
 ## Completed operating slice in this wave
 
-### OP1 — Add a governed `visibility_companies` quality rollup for privacy-safe evidence planning
-- **AK task:** `#270`
-- **Why now:** downstream operators could inspect evidence by owner company and router semantics, but not by the governed multi-company visibility boundary that determines who can actually consume a prompt safely.
-- **Deliverable:** add `pv quality rollup visibility_companies`, back it with governed company buckets from `ontology/company-visibility-contract.json`, add focused bats coverage for privacy + multi-bucket behavior, and refresh repo docs/handoff to show SG2/TG5 as the active reality.
-- **Completion evidence:** `./scripts/pv quality rollup visibility_companies`, `tests/pv-quality.bats`, `tests/pv-commands.bats`, and the updated README/strategy/tactical/operating/handoff docs all point to the same aggregate-first company-visibility truth.
+### OP1 — Define Prompt Vault handoff contract for workstation posture machine snapshots
+- **AK task:** `#1717`
+- **Why now:** `infra/workstation` now exposes a versioned posture machine snapshot that downstream runtime-aware consumers can use, but Prompt Vault still needed one repo-native answer for what prompt/provenance facts may travel with that machine packet without collapsing authority boundaries.
+- **Deliverable:** write a Prompt Vault-side handoff note for workstation posture machine snapshots, add focused validation for the no-copy / owner-split rules, and refresh repo handoff docs so cold-start operators can route the next change to the correct repo.
+- **Completion evidence:** `docs/dev/workstation-posture-machine-snapshot-handoff.md`, `tests/pv-workstation-posture-handoff.bats`, `docs/project/tactical_goals.md`, this operating plan, and `next_session_prompt.md` all point to the same boundary truth.
 
 ## Previously completed operating waves
+
+### Company-visibility evidence + teacher-prep prompt-authority confirmation
+- **AK tasks:** `#270`, `#458`
+- **Status:** complete
+- **Completion evidence:** `pv quality rollup visibility_companies` is live, the teacher-prep runner still resolves canonical Prompt Vault template/version truth without creating local shadow prompt canon, and the corresponding docs/handoff/tests point to the same SG2 reality.
 
 ### Procedure-layer expansion for governance-shaped work
 - **AK task:** `#265`
@@ -55,22 +59,20 @@ This wave stays bounded:
 ### Shared runtime registry / execution-observability boundary clarification
 - **AK task:** `#245`
 - **Status:** complete
-- **Completion evidence:** Prompt Vault now has a repo-native boundary note clarifying that shared runtime registry discovery remains process-local, `pi-vault-client` owns local receipt/telemetry bridges, and Prompt Vault exports only schema-governed execution/feedback facts plus privacy-safe aggregate observability.
+- **Completion evidence:** Prompt Vault has a repo-native boundary note clarifying that shared runtime registry discovery remains process-local, `pi-vault-client` owns local receipt/telemetry bridges, and Prompt Vault exports only schema-governed execution/feedback facts plus privacy-safe aggregate observability.
 
 ## Next decision after this wave
 
-Use AK + current docs to decide whether TG5 needs another bounded aggregate-evidence follow-through or whether downstream contract/usability should become the next active slice.
-Do not infer a synthetic next task from this file alone if AK does not currently show one.
+Use AK + current docs to decide whether another downstream contract/usability slice is ready or whether no new repo-local task is currently ready.
+Do **not** infer a synthetic next task from this file alone.
 
 ## Validation expectation for this wave
 
 At minimum, re-run:
 ```bash
-./scripts/pv quality rollup visibility_companies
-./scripts/pv-bats tests/pv-quality.bats
-./scripts/pv-bats tests/pv-commands.bats
+./scripts/pv-bats tests/pv-workstation-posture-handoff.bats
 ./verify.sh
 node ~/ai-society/core/agent-scripts/scripts/docs-list.mjs --docs . --strict
 ```
 
-Add any focused tests needed for future aggregate-evidence or visibility-boundary drift in the same slice.
+Add any focused tests needed for future workstation-snapshot handoff drift in the same slice.

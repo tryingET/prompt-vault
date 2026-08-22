@@ -100,7 +100,7 @@ _pv() {
             ;;
 
         rollback)
-            # rollback template|skill <name> <version>
+            # rollback template|skill <name> <commit-ref>
             case ${COMP_CWORD} in
                 2) COMPREPLY=($(compgen -W "template skill" -- "$cur")) ;;
                 3)

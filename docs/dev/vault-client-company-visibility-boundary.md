@@ -22,6 +22,8 @@ This document defines the exact boundary vault-client should implement against a
 - no prompt tags
 - execution output capture with explicit privacy mode
 
+For term boundaries that are easy to confuse with runtime concepts, read [Prompt Template Ontology / Runtime Boundary](./prompt-template-ontology-runtime-boundary.md).
+
 ## Required schema compatibility
 Vault-client must fail fast unless the connected Prompt Vault schema version is exactly:
 
@@ -90,6 +92,12 @@ What the prompt is:
 - `control_mode`
 - `formalization_level`
 
+Term boundaries:
+- `formalization_level=workflow` means workflow-grade specification, not automatic `workflow_execute(...)` binding.
+- `artifact_kind=session` is reserved until positively defined; do not use it for live Pi sessions, session JSONL, transcripts, receipts, diary entries, KES learnings, evidence-ledger rows, or one-off runtime context.
+- session-related reusable prompts that prescribe action should normally be `artifact_kind=procedure`.
+- `control_mode=loop` is the strongest current signal that execution requires loop semantics, but the exact runtime executor still belongs in an explicit execution binding.
+
 ### 2. Controlled-vocabulary layer
 Governed retrieval/orchestration semantics:
 - `controlled_vocabulary`
@@ -100,6 +108,9 @@ Who owns it and who can see it:
 - `visibility_companies`
 
 Do not collapse these layers into one label system.
+
+### Explicitly missing runtime layer
+Prompt Vault v9 does not yet store a first-class `execution_binding` / `orchestration_contract` field. Clients must not infer one from names or prose alone. If a caller asks to execute a loop/workflow-grade template, the execution-capable runtime should route through an orchestrator gate and either use an explicit binding supplied by that runtime or fail closed / ask for a safe binding.
 
 ## Explicitly absent
 Vault-client must assume these are **not** part of the canonical boundary:

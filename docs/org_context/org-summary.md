@@ -15,7 +15,6 @@ read_when:
 ## Non-negotiables
 
 - No secrets in git
-- MRs only, no direct push to main
 - Run verification before merge
 
 ## Approval/consent notes

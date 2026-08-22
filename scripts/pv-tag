@@ -6,6 +6,9 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 VAULT_DIR="${VAULT_DIR:-$SCRIPT_DIR/../prompt-vault-db}"
 
+# shellcheck disable=SC1091
+source "$SCRIPT_DIR/pv-lib.sh"
+
 cd "$VAULT_DIR"
 
 cmd="${1:-list}"
@@ -63,6 +66,9 @@ case "$cmd" in
         echo "=== Creating Release $tag ==="
         echo ""
         
+        release_notes_file=""
+        make_temp_file release_notes_file .md
+
         # Generate release notes
         {
             echo "# Release $tag"
@@ -87,16 +93,16 @@ case "$cmd" in
             echo "- Skills: $(dolt sql -r csv -q "SELECT COUNT(*) FROM skills WHERE status = 'active'" | tail -1)"
             echo "- Collections: $(dolt sql -r csv -q "SELECT COUNT(*) FROM collections" | tail -1)"
             
-        } > "/tmp/release-notes-$tag.md"
+        } > "$release_notes_file"
         
-        echo "Release notes generated at /tmp/release-notes-$tag.md"
+        echo "Release notes generated at $release_notes_file"
         echo ""
-        cat "/tmp/release-notes-$tag.md"
+        cat "$release_notes_file"
         echo ""
         
-        read -p "Create tag $tag? (y/n): " confirm
+        read -r -p "Create tag $tag? (y/n): " confirm
         if [ "$confirm" = "y" ]; then
-            dolt tag "$tag" -F "/tmp/release-notes-$tag.md"
+            dolt tag "$tag" -F "$release_notes_file"
             echo "✓ Created release: $tag"
         else
             echo "Aborted"
