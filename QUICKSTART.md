@@ -149,7 +149,7 @@ Troubleshooting and selector behavior:
 ```
 ~/source/prompts/          prompt-vault/                 pi
 ┌─────────────┐           ┌────────────────────────┐    ┌──────────────────┐
-│ source set  │  import   │ Dolt DB (schema v9)    │    │ vault-client     │
+│ source set  │  import   │ Dolt DB (schema v10)   │    │ vault-client     │
 │ + prompt IP │ ───────►  │ facets + vocabulary +  │───►│ picker + tools + │
 │             │           │ visibility + evidence  │    │ diagnostics      │
 └─────────────┘           └────────────────────────┘    └──────────────────┘

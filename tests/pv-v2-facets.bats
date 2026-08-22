@@ -21,10 +21,10 @@ setup() {
     [[ "$output" != *"tags"* ]]
 }
 
-@test "schema version is 9 after execution output capture cutover" {
+@test "schema version is 10 after retrievals analytics cutover" {
     run dolt --data-dir "$VAULT_DIR" sql -r csv -q "SELECT MAX(version) FROM schema_version"
     [ "$status" -eq 0 ]
-    [[ "$output" == *$'9' ]]
+    [[ "$output" == *$'10' ]]
 }
 
 @test "feedback enforces one row per execution at schema level" {
