@@ -24,6 +24,49 @@ success() { echo -e "${GREEN}✓${NC} $1"; }
 warn() { echo -e "${YELLOW}!${NC} $1"; }
 error() { echo -e "${RED}✗${NC} $1" >&2; }
 
+usage_error() {
+    local usage="${1:-}"
+    shift || true
+    local detail
+
+    for detail in "$@"; do
+        [ -n "$detail" ] || continue
+        error "$detail"
+    done
+
+    if [ -n "$usage" ]; then
+        error "Usage: $usage"
+    fi
+
+    exit 1
+}
+
+require_option_value() {
+    local option="${1:-option}"
+    local value="${2-}"
+    local usage="${3:-}"
+
+    if [ -z "${value:-}" ]; then
+        usage_error "$usage" "$option requires a value"
+    fi
+}
+
+require_allowed_value() {
+    local label="${1:-value}"
+    local value="${2:-}"
+    local usage="${3:-}"
+    shift 3 || true
+
+    local allowed
+    for allowed in "$@"; do
+        if [ "$value" = "$allowed" ]; then
+            return 0
+        fi
+    done
+
+    usage_error "$usage" "Unsupported $label: $value"
+}
+
 # Ensure vault is initialized
 ensure_vault() {
     if [ ! -d "$VAULT_DIR/.dolt" ]; then
@@ -86,11 +129,19 @@ terminal_safe_preview() {
     sanitize_terminal_text | python3 -c "import sys; max_len = int(sys.argv[1]); text = sys.stdin.read(); text = text[:max_len] + ('…' if len(text) > max_len else ''); print(text, end='')" "$max_len"
 }
 
+base64_no_wrap() {
+    if [ "$#" -gt 0 ]; then
+        base64 < "$1" | tr -d '\r\n'
+    else
+        base64 | tr -d '\r\n'
+    fi
+}
+
 # Alternative: Use base64 encoding for complex content
 # Decodes in SQL with: FROM_BASE64('<encoded>')
 sql_escape_base64() {
     local content="$1"
-    printf '%s' "$content" | base64 -w0
+    printf '%s' "$content" | base64_no_wrap
 }
 
 # Decode base64 in bash (for round-trip testing)
@@ -131,6 +182,22 @@ json_rows_base64() {
 json_decode_base64() {
     local encoded="$1"
     printf '%s' "$encoded" | base64 -d
+}
+
+dolt_sql_from_string() {
+    local sql="${1:-}"
+    local tmp_file status
+
+    make_temp_file tmp_file .sql
+    printf '%s' "$sql" > "$tmp_file"
+
+    if ! dolt sql < "$tmp_file"; then
+        status=$?
+        rm -f -- "$tmp_file"
+        return "$status"
+    fi
+
+    rm -f -- "$tmp_file"
 }
 
 json_array_from_csv() {
@@ -819,5 +886,5 @@ run_with_signal_forwarding() {
 }
 
 # Export functions and variables for sourcing scripts
-export -f info success warn error ensure_vault check_deps sql_escape require_numeric float_gt sanitize_terminal_text terminal_safe_preview sql_escape_base64 sql_decode_base64 dolt_json_query json_first_field json_first_field_record json_all_field json_rows_base64 json_decode_base64 cleanup_temp_paths register_temp_path make_temp_file parse_template_var_tokens template_valid_vars template_unsupported_vars template_position_indexes expand_template_content run_with_signal_forwarding
+export -f info success warn error usage_error require_option_value require_allowed_value ensure_vault check_deps sql_escape require_numeric float_gt sanitize_terminal_text terminal_safe_preview base64_no_wrap sql_escape_base64 sql_decode_base64 dolt_json_query json_first_field json_first_field_record json_all_field json_rows_base64 json_decode_base64 dolt_sql_from_string cleanup_temp_paths register_temp_path make_temp_file parse_template_var_tokens template_valid_vars template_unsupported_vars template_position_indexes expand_template_content run_with_signal_forwarding
 export SCRIPTS_DIR VAULT_DIR RED GREEN YELLOW BLUE NC

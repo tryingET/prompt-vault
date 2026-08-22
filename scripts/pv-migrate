@@ -1,44 +1,101 @@
 #!/usr/bin/env bash
 # pv-migrate - Run database migrations
-# Usage: pv-migrate [up|down|status|create]
+# Usage: pv-migrate [up|status|create|rollback]
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 VAULT_DIR="${VAULT_DIR:-$SCRIPT_DIR/../prompt-vault-db}"
-MIGRATIONS_DIR="$SCRIPT_DIR/../migrations"
+MIGRATIONS_DIR="${MIGRATIONS_DIR:-$SCRIPT_DIR/../migrations}"
 
-cd "$VAULT_DIR"
+# shellcheck disable=SC1091
+source "$SCRIPT_DIR/pv-lib.sh"
+
+ensure_vault
 
 cmd="${1:-status}"
+
+migration_current_version() {
+    local current_version
+    current_version=$(dolt sql -r csv -q "SELECT MAX(version) FROM schema_version" 2>/dev/null | tail -1)
+    current_version=${current_version:-0}
+    if [ "$current_version" = "NULL" ] || [ -z "$current_version" ]; then
+        current_version=0
+    fi
+    printf '%s' "$current_version"
+}
+
+migration_max_version() {
+    local max_version=1
+    local migration filename prefix version
+
+    if [ ! -d "$MIGRATIONS_DIR" ]; then
+        printf '%s' "$max_version"
+        return 0
+    fi
+
+    while IFS= read -r migration; do
+        filename=$(basename "$migration")
+        prefix=$(printf '%s' "$filename" | grep -o '^[0-9]\+' || true)
+        [ -n "$prefix" ] || continue
+        version=$((10#$prefix))
+        if [ "$version" -gt "$max_version" ]; then
+            max_version="$version"
+        fi
+    done < <(find "$MIGRATIONS_DIR" -maxdepth 1 -type f -name '*.sql' | sort)
+
+    printf '%s' "$max_version"
+}
+
+migration_next_number() {
+    printf '%03d' $(( $(migration_max_version) + 1 ))
+}
+
+table_has_column() {
+    local table="${1:-}"
+    local column="${2:-}"
+    local field
+
+    field=$(dolt sql -r csv -q "SHOW COLUMNS FROM $table LIKE '$column'" 2>/dev/null | tail -n +2 | head -1 | cut -d',' -f1)
+    [ "$field" = "$column" ]
+}
+
+schema_looks_current() {
+    table_has_column prompt_templates artifact_kind &&
+    table_has_column prompt_templates control_mode &&
+    table_has_column prompt_templates formalization_level &&
+    table_has_column prompt_templates owner_company &&
+    table_has_column prompt_templates visibility_companies &&
+    table_has_column prompt_templates controlled_vocabulary &&
+    table_has_column prompt_templates export_to_pi &&
+    table_has_column executions output_capture_mode &&
+    table_has_column executions output_text
+}
 
 case "$cmd" in
     status)
         echo "=== Migration Status ==="
-        
-        # Check if schema_version table exists
+
         EXISTS=$(dolt sql -r csv -q "SHOW TABLES LIKE 'schema_version'" 2>/dev/null | tail -1)
-        
+
         if [ "$EXISTS" != "schema_version" ]; then
             echo "Schema version table not found (v0 or uninitialized)"
             echo ""
             echo "Run 'pv migrate up' to initialize"
             exit 0
         fi
-        
+
         echo "Current schema version:"
         dolt sql -q "SELECT version, description, applied_at FROM schema_version ORDER BY id DESC LIMIT 1" -r tabular
         echo ""
         echo "Migration history:"
         dolt sql -q "SELECT id, version, description, applied_at FROM schema_version ORDER BY id" -r tabular
-        
-        # Check for pending migrations
-        CURRENT_VERSION=$(dolt sql -r csv -q "SELECT MAX(version) FROM schema_version" 2>/dev/null | tail -1)
-        CURRENT_VERSION=${CURRENT_VERSION:-0}
-        
+
+        CURRENT_VERSION=$(migration_current_version)
+
         echo ""
         echo "Available migration files:"
         if [ -d "$MIGRATIONS_DIR" ]; then
-            ls -1 "$MIGRATIONS_DIR"/*.sql 2>/dev/null | while read f; do
+            find "$MIGRATIONS_DIR" -maxdepth 1 -type f -name '*.sql' | sort | while IFS= read -r f; do
                 basename "$f"
             done || echo "  (none)"
         else
@@ -47,7 +104,6 @@ case "$cmd" in
         ;;
 
     up)
-        # Create schema_version table if needed
         dolt sql -q "
             CREATE TABLE IF NOT EXISTS schema_version (
                 id INT AUTO_INCREMENT PRIMARY KEY,
@@ -57,54 +113,51 @@ case "$cmd" in
                 INDEX idx_version (version)
             )
         " 2>/dev/null || true
-        
-        # Get current version
-        CURRENT_VERSION=$(dolt sql -r csv -q "SELECT MAX(version) FROM schema_version" 2>/dev/null | tail -1)
-        CURRENT_VERSION=${CURRENT_VERSION:-0}
-        if [ "$CURRENT_VERSION" = "NULL" ] || [ -z "$CURRENT_VERSION" ]; then
-            CURRENT_VERSION=0
-        fi
-        
-        # If no version, insert initial baseline
-        if [ "$CURRENT_VERSION" = "NULL" ] || [ -z "$CURRENT_VERSION" ]; then
-            dolt sql -q "INSERT INTO schema_version (version, description) VALUES (1, 'Initial baseline')"
-            CURRENT_VERSION=1
-            echo "Initialized schema at version 1"
-        fi
-        
-        echo "=== Running migrations (current: v$CURRENT_VERSION) ==="
-        
-        # Run any pending migrations from files
-        PENDING=0
-        for migration in $(ls -1 "$MIGRATIONS_DIR"/*.sql 2>/dev/null | sort); do
-            filename=$(basename "$migration")
-            
-            # Extract version from filename (e.g., 002-add-foo.sql -> 2)
-            MIG_VERSION=$(echo "$filename" | grep -o '^[0-9]*' | sed 's/^0*//')
-            MIG_VERSION=${MIG_VERSION:-0}
-            
-            if [ "$MIG_VERSION" -le "$CURRENT_VERSION" ]; then
-                echo "  ✓ $filename (already applied)"
-                continue
-            fi
-            
-            echo "  Running: $filename"
-            PENDING=$((PENDING + 1))
-            
-            # Run migration
-            if dolt sql < "$migration" 2>&1; then
-                # Record migration
-                dolt sql -q "
-                    INSERT INTO schema_version (version, description)
-                    VALUES ($MIG_VERSION, 'Migration: $filename')
-                "
-                echo "  ✓ Applied $filename"
+
+        CURRENT_VERSION=$(migration_current_version)
+        if [ "$CURRENT_VERSION" -eq 0 ]; then
+            LATEST_VERSION=$(migration_max_version)
+            if schema_looks_current; then
+                dolt sql -q "INSERT INTO schema_version (version, description) VALUES ($LATEST_VERSION, 'Backfilled from current schema shape')"
+                CURRENT_VERSION=$LATEST_VERSION
+                echo "Backfilled schema version to v$CURRENT_VERSION from current schema shape"
             else
-                echo "  ✗ Failed: $filename"
-                exit 1
+                dolt sql -q "INSERT INTO schema_version (version, description) VALUES (1, 'Initial baseline')"
+                CURRENT_VERSION=1
+                echo "Initialized schema at version 1"
             fi
-        done
-        
+        fi
+
+        echo "=== Running migrations (current: v$CURRENT_VERSION) ==="
+
+        PENDING=0
+        if [ -d "$MIGRATIONS_DIR" ]; then
+            while IFS= read -r migration; do
+                filename=$(basename "$migration")
+                MIG_VERSION=$(printf '%s' "$filename" | grep -o '^[0-9]*' | sed 's/^0*//')
+                MIG_VERSION=${MIG_VERSION:-0}
+
+                if [ "$MIG_VERSION" -le "$CURRENT_VERSION" ]; then
+                    echo "  ✓ $filename (already applied)"
+                    continue
+                fi
+
+                echo "  Running: $filename"
+                PENDING=$((PENDING + 1))
+
+                if dolt sql < "$migration" 2>&1; then
+                    dolt sql -q "
+                        INSERT INTO schema_version (version, description)
+                        VALUES ($MIG_VERSION, 'Migration: $filename')
+                    "
+                    echo "  ✓ Applied $filename"
+                else
+                    echo "  ✗ Failed: $filename"
+                    exit 1
+                fi
+            done < <(find "$MIGRATIONS_DIR" -maxdepth 1 -type f -name '*.sql' | sort)
+        fi
+
         if [ "$PENDING" -eq 0 ]; then
             echo "No pending migrations"
         else
@@ -117,18 +170,14 @@ case "$cmd" in
 
     create)
         name="${2:-}"
-        [ -z "$name" ] && { echo "Usage: pv-migrate create <name>" >&2; exit 1; }
-        
+        [ -z "$name" ] && usage_error "pv-migrate create <name>"
+
         mkdir -p "$MIGRATIONS_DIR"
-        
-        # Get next number
-        NEXT=$(ls -1 "$MIGRATIONS_DIR"/*.sql 2>/dev/null | wc -l)
-        NEXT=$((NEXT + 2))  # Start at 002 since 001 is baseline
-        NUM=$(printf "%03d" $NEXT)
-        
+
+        NUM=$(migration_next_number)
         filename="${NUM}-${name}.sql"
         filepath="$MIGRATIONS_DIR/$filename"
-        
+
         cat > "$filepath" << 'EOF'
 -- Migration: <description>
 -- Run: pv migrate up (or dolt sql < migrations/<filename>)
@@ -140,25 +189,24 @@ case "$cmd" in
 -- INSERT INTO schema_version (version, description) VALUES (N, 'Description');
 SELECT 'Migration complete' AS status;
 EOF
-        
+
         echo "Created: $filepath"
         ${EDITOR:-nano} "$filepath"
         ;;
 
     rollback)
-        # Rollback last migration
         LAST=$(dolt sql -r csv -q "
             SELECT version, description FROM schema_version ORDER BY id DESC LIMIT 1
         " 2>/dev/null)
-        
+
         if [ -z "$LAST" ] || [ "$LAST" = "version,description" ]; then
             echo "No migrations to rollback"
             exit 0
         fi
-        
+
         VERSION=$(echo "$LAST" | tail -1 | cut -d',' -f1)
         DESC=$(echo "$LAST" | tail -1 | cut -d',' -f2-)
-        
+
         echo "Last migration: v${VERSION} - ${DESC}"
         echo ""
         echo "Rollback requires manual SQL to reverse the changes."
@@ -179,9 +227,6 @@ Commands:
   up        Run all pending migrations
   create    Create new migration file
   rollback  Show rollback instructions (manual)
-
-Migration files are stored in: migrations/
-Naming: NNN-description.sql (e.g., 002-add-indexes.sql)
 EOF
         exit 1
         ;;

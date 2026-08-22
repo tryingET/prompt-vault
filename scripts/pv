@@ -608,8 +608,18 @@ cmd_sql() {
 cmd_push() {
     ensure_vault
     local remote="${1:-origin}"
-    dolt push "$remote" main
-    success "Pushed to $remote"
+    local branch="${2:-}"
+
+    if [ -z "$branch" ]; then
+        branch=$(dolt branch --show-current 2>/dev/null | tr -d '[:space:]')
+    fi
+
+    if [ -z "$branch" ]; then
+        usage_error "pv push [remote] [branch]" "Could not determine current branch"
+    fi
+
+    dolt push "$remote" "$branch"
+    success "Pushed $branch to $remote"
 }
 
 cmd_pull() {
@@ -798,8 +808,33 @@ cmd_tag() {
 
 cmd_cleanup() {
     ensure_vault
-    local days="${1:-30}"
-    local dry_run="${2:-}"
+    local cleanup_usage="pv cleanup [days] [--dry-run]"
+    local days="30"
+    local dry_run="false"
+    local days_set=0
+
+    while [ "$#" -gt 0 ]; do
+        case "$1" in
+            --dry-run)
+                if [ "$dry_run" = "true" ]; then
+                    usage_error "$cleanup_usage" "Duplicate option: --dry-run"
+                fi
+                dry_run="true"
+                shift
+                ;;
+            --*)
+                usage_error "$cleanup_usage" "Unknown option: $1"
+                ;;
+            *)
+                if [ "$days_set" -eq 1 ]; then
+                    usage_error "$cleanup_usage" "Unexpected argument: $1"
+                fi
+                days="$1"
+                days_set=1
+                shift
+                ;;
+        esac
+    done
 
     require_numeric "$days" days
     echo "=== Execution Log Cleanup ==="
@@ -818,7 +853,7 @@ cmd_cleanup() {
     echo "Total executions: $total"
     echo "Older than $days days: $count"
     
-    if [ "$dry_run" = "--dry-run" ]; then
+    if [ "$dry_run" = "true" ]; then
         echo ""
         echo "(dry-run mode - no changes made)"
         echo "To actually delete: pv cleanup $days"
@@ -943,7 +978,8 @@ Version Control:
   merge <branch>           Merge branch to current
   log [type] [name]        View commit history
   diff [from] [to]         Compare versions
-  rollback <t|s> <n> <v>   Rollback to version
+  rollback <template|skill> <name> <commit-ref>
+                           Restore an entity from a Dolt commit ref
 
 Status:
   status                   Working directory status
@@ -960,7 +996,7 @@ Releases:
   tag changelog            Generate changelog
 
 Remote:
-  push [remote]            Push to DoltHub
+  push [remote] [branch]   Push current branch by default, or an explicit branch
   pull [remote]            Pull from DoltHub
 
 Maintenance:
@@ -977,6 +1013,7 @@ Examples:
   pv templates owner_company=core
   pv templates cv.routing_context=review_followup
   pv search review                 # Search for "review"
+  pv rollback template review HEAD~1 # Restore review from previous commit
   pv vars                          # Show all template variables
   pv quality dashboard             # View quality scores + evidence gaps
   pv quality coverage              # Show feedback/capture coverage by entity
