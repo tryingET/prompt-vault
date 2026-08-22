@@ -110,7 +110,7 @@ Notes:
 ./scripts/pv diff main experiment/faster-review
 
 # Ship it
-./scripts/pv checkout main
+(cd prompt-vault-db && dolt checkout main)
 ./scripts/pv merge experiment/faster-review
 ```
 
@@ -182,9 +182,10 @@ grep VAULT_DIR ~/.pi/agent/extensions/vault-client/index.ts
 ### Import fails
 
 ```bash
-# Check triggers directory
-ls ~/steve/prompts/triggers/
+# Check current import source directories
+ls ~/.pi/agent/prompts/
+ls ~/.pi/agent/skills/
 
-# Run import with debug
-bash -x ./scripts/import-cognitive-tools.sh
+# Run the current importer with debug
+bash -x ./scripts/import-from-pi.sh
 ```

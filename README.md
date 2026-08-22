@@ -59,22 +59,20 @@ Dolt is Git for data. You get branches, merges, diffs, and rollback—per prompt
 ## Quick Start
 
 ```bash
-cd scripts
+./scripts/pv init        # Create the database
+./scripts/pv import      # Pull in existing pi templates
+./scripts/pv templates   # List what you have
+./scripts/pv search review                 # Find by content
+./scripts/pv templates visibility_company=software  # What software can see
 
-./pv init        # Create the database
-./pv import      # Pull in existing pi templates
-./pv templates   # List what you have
-./pv search review                 # Find by content
-./pv templates visibility_company=software  # What software can see
+./scripts/pv branch experiment/faster-review   # Try something new
+./scripts/pv edit-template code-review         # Make changes
+./scripts/pv diff main experiment/faster-review # Compare
+./scripts/pv merge experiment/faster-review    # Ship it
 
-./pv branch experiment/faster-review   # Try something new
-./pv edit-template code-review         # Make changes
-./pv diff main experiment/faster-review # Compare
-./pv merge experiment/faster-review    # Ship it
-
-./pv exec code-review "Button.tsx"  # Run with tracking
-./pv rate 42 4 "Good but missed error handling"  # Leave feedback
-./pv stats       # See what's working
+./scripts/pv exec code-review "Button.tsx"  # Run with tracking
+./scripts/pv rate 42 4 "Good but missed error handling"  # Leave feedback
+./scripts/pv stats       # See what's working
 ```
 
 ## Mental Model
@@ -105,10 +103,10 @@ cd scripts
 **Version control at entity level:**
 
 ```bash
-./pv history code-review      # See every version of this prompt
-./pv rollback code-review@5   # Restore a specific version
-./pv diff @~1 code-review     # What changed in last edit
-./pv tag release v1.2.0       # Snapshot for reproducibility
+./scripts/pv history template code-review      # See the tracked history for this prompt
+./scripts/pv rollback template code-review HEAD~1   # Restore from a prior Dolt commit
+./scripts/pv diff HEAD~1 HEAD                  # What changed in the last commit
+./scripts/pv tag release v1.2.0                # Snapshot for reproducibility
 ```
 
 ## Schema
@@ -136,40 +134,40 @@ skills ──► skill_assets
 
 **Daily use:**
 ```bash
-./pv templates              # List all
-./pv show template review   # View one
-./pv search "security"      # Find by content
-./pv edit-template review   # Modify
-./pv commit "clarify steps" # Save
+./scripts/pv templates              # List all
+./scripts/pv show template review   # View one
+./scripts/pv search "security"      # Find by content
+./scripts/pv edit-template review   # Modify
+./scripts/pv commit "clarify steps" # Save
 ```
 
 **Experimentation:**
 ```bash
-./pv branch experiment/x    # Try something
-./pv diff main experiment/x # Compare
-./pv merge experiment/x     # Ship winner
+./scripts/pv branch experiment/x    # Try something
+./scripts/pv diff main experiment/x # Compare
+./scripts/pv merge experiment/x     # Ship winner
 ```
 
 **Analytics:**
 ```bash
-./pv stats                  # Usage overview
-./pv analytics outputs      # Safe output-capture summary + public previews only
-./pv quality dashboard      # Health scores + evidence gaps
-./pv quality coverage       # Feedback/capture coverage by active entity
-./pv quality rollup control_mode  # Aggregate quality/evidence by facet
-./pv quality rollup routing_context  # Aggregate quality/evidence by exact-one router vocabulary
-./pv quality rollup selection_principles  # Aggregate quality/evidence by multi-valued router semantics
-./pv quality rollup visibility_companies  # Aggregate quality/evidence by multi-valued company visibility
-./pv exec x "arg"           # Run with tracking
-./pv rate <id> 4 "notes"    # Record feedback
+./scripts/pv stats                  # Usage overview
+./scripts/pv analytics outputs      # Safe output-capture summary + public previews only
+./scripts/pv quality dashboard      # Health scores + evidence gaps
+./scripts/pv quality coverage       # Feedback/capture coverage by active entity
+./scripts/pv quality rollup control_mode  # Aggregate quality/evidence by facet
+./scripts/pv quality rollup routing_context  # Aggregate quality/evidence by exact-one router vocabulary
+./scripts/pv quality rollup selection_principles  # Aggregate quality/evidence by multi-valued router semantics
+./scripts/pv quality rollup visibility_companies  # Aggregate quality/evidence by multi-valued company visibility
+./scripts/pv exec x "arg"           # Run with tracking
+./scripts/pv rate <id> 4 "notes"    # Record feedback
 ```
 
 **Export:**
 ```bash
-./pv export                    # pi format
-./pv export-fmt typescript     # TS constants
-./pv export-fmt python         # Python module
-./pv integrate langchain out   # LangChain ready
+./scripts/pv export                    # pi format
+./scripts/pv export-fmt typescript     # TS constants
+./scripts/pv export-fmt python         # Python module
+./scripts/pv integrate langchain out   # LangChain ready
 ```
 
 ## Requirements
@@ -182,7 +180,8 @@ skills ──► skill_assets
 ## Verification
 
 ```bash
-./verify.sh                              # quick verification suite
+./verify.sh                              # quick contract smoke suite
+PV_VERIFY_FULL=1 ./verify.sh             # quick suite + full bats suite
 ./scripts/ak.sh --doctor                 # repo-local AK launcher resolution
 ./scripts/pv-verify-evidence-promotion-ledger
 ./scripts/pv-bats tests/                 # full suite with repo-local TMPDIR
@@ -242,11 +241,11 @@ Use `./scripts/pv vocabulary` to inspect ontology facets, controlled vocabulary,
 ## Maintenance
 
 ```bash
-./pv cleanup 30             # Remove executions older than 30 days
-./pv cleanup 30 --dry-run   # Preview cleanup
-./pv migrate status         # Check schema version
-./pv backup create          # Create backup
-./pv backup list            # List backups
+./scripts/pv cleanup 30             # Remove executions older than 30 days
+./scripts/pv cleanup 30 --dry-run   # Preview cleanup
+./scripts/pv migrate status         # Check schema version
+./scripts/pv backup create          # Create backup
+./scripts/pv backup list            # List backups
 ```
 
 ## Philosophy
