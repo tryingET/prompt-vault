@@ -838,6 +838,7 @@ cmd_cleanup() {
 
     require_numeric "$days" days
     echo "=== Execution Log Cleanup ==="
+    echo "(retrievals older than $days days are rolled up to retrieval_rollups, then deleted)"
     
     # Count records to delete
     local count
@@ -849,9 +850,19 @@ cmd_cleanup() {
     # Count total records
     local total
     total=$(dolt sql -r csv -q "SELECT COUNT(*) FROM executions" | tail -1)
-    
+
+    # Retrievals: raw rows past the retention window get folded into rollups
+    local ret_count ret_total
+    ret_count=$(dolt sql -r csv -q "
+        SELECT COUNT(*) FROM retrievals
+        WHERE created_at < DATE_SUB(NOW(), INTERVAL $days DAY)
+    " | tail -1)
+    ret_total=$(dolt sql -r csv -q "SELECT COUNT(*) FROM retrievals" | tail -1)
+
     echo "Total executions: $total"
     echo "Older than $days days: $count"
+    echo "Total retrievals: $ret_total (raw; rollups excluded)"
+    echo "Retrievals older than $days days: $ret_count"
     
     if [ "$dry_run" = "true" ]; then
         echo ""
@@ -860,36 +871,98 @@ cmd_cleanup() {
         return 0
     fi
     
-    if [ "$count" -eq 0 ]; then
+    local did_work=0
+
+    if [ "$count" -gt 0 ]; then
+        echo ""
+        info "Deleting $count old execution records..."
+
+        # Delete old executions (cascades to feedback)
+        dolt sql -q "
+            DELETE FROM executions 
+            WHERE created_at < DATE_SUB(NOW(), INTERVAL $days DAY)
+        "
+
+        # Also clean orphaned feedback
+        dolt sql -q "
+            DELETE FROM feedback 
+            WHERE execution_id NOT IN (SELECT id FROM executions)
+        " 2>/dev/null || true
+        did_work=1
+    fi
+
+    # Retrievals retention: fold raw rows past the window into day-grain
+    # rollups, then delete them. Rollups persist permanently (tiny); raw
+    # intent-telemetry exposure stays bounded by the window length.
+    if [ "$ret_count" -gt 0 ]; then
+        echo ""
+        info "Rolling up and deleting $ret_count old retrieval records..."
+
+        # Aggregated day-grain view of expiring raw rows
+        local ret_agg="
+            SELECT DATE(created_at) AS day, entity_type, entity_id,
+                   COALESCE(company, '') AS company, tool,
+                   COUNT(*) AS retrieval_count,
+                   COALESCE(SUM(selected_rank), 0) AS rank_sum,
+                   COALESCE(SUM(result_count), 0) AS result_count_sum
+            FROM retrievals
+            WHERE created_at < DATE_SUB(NOW(), INTERVAL $days DAY)
+            GROUP BY DATE(created_at), entity_type, entity_id, COALESCE(company, ''), tool
+        "
+
+        # Dolt cannot reference the inserted row in ON DUPLICATE KEY UPDATE,
+        # so the upsert is expressed as an explicit two-step merge:
+        # 1) fold aggregates into existing rollup rows
+        dolt sql -q "
+            UPDATE retrieval_rollups r
+            JOIN ($ret_agg) a
+              ON r.day = a.day AND r.entity_type = a.entity_type AND r.entity_id = a.entity_id
+             AND r.company = a.company AND r.tool = a.tool
+            SET r.retrieval_count = r.retrieval_count + a.retrieval_count,
+                r.rank_sum = r.rank_sum + a.rank_sum,
+                r.result_count_sum = r.result_count_sum + a.result_count_sum
+        "
+
+        # 2) insert rollup rows that don't exist yet
+        dolt sql -q "
+            INSERT INTO retrieval_rollups
+                (day, entity_type, entity_id, company, tool, retrieval_count, rank_sum, result_count_sum)
+            SELECT a.day, a.entity_type, a.entity_id, a.company, a.tool,
+                   a.retrieval_count, a.rank_sum, a.result_count_sum
+            FROM ($ret_agg) a
+            LEFT JOIN retrieval_rollups r
+              ON r.day = a.day AND r.entity_type = a.entity_type AND r.entity_id = a.entity_id
+             AND r.company = a.company AND r.tool = a.tool
+            WHERE r.id IS NULL
+        "
+
+        # 3) expire raw rows past the window
+        dolt sql -q "
+            DELETE FROM retrievals
+            WHERE created_at < DATE_SUB(NOW(), INTERVAL $days DAY)
+        "
+        did_work=1
+    fi
+
+    if [ "$did_work" -eq 0 ]; then
         success "No records to clean up"
         return 0
     fi
-    
-    echo ""
-    info "Deleting $count old execution records..."
-    
-    # Delete old executions (cascades to feedback)
-    dolt sql -q "
-        DELETE FROM executions 
-        WHERE created_at < DATE_SUB(NOW(), INTERVAL $days DAY)
-    "
-    
-    # Also clean orphaned feedback
-    dolt sql -q "
-        DELETE FROM feedback 
-        WHERE execution_id NOT IN (SELECT id FROM executions)
-    " 2>/dev/null || true
-    
+
     # Commit
     dolt add -A
-    dolt commit -m "Cleanup: removed $count executions older than $days days" 2>/dev/null || true
-    
+    dolt commit -m "Cleanup: removed $count executions + rolled up $ret_count retrievals older than $days days" 2>/dev/null || true
+
     success "Cleaned up $count old records"
     
-    # Show new total
-    local new_total
+    # Show new totals
+    local new_total ret_new_total rollup_total
     new_total=$(dolt sql -r csv -q "SELECT COUNT(*) FROM executions" | tail -1)
+    ret_new_total=$(dolt sql -r csv -q "SELECT COUNT(*) FROM retrievals" | tail -1)
+    rollup_total=$(dolt sql -r csv -q "SELECT COUNT(*) FROM retrieval_rollups" | tail -1)
     echo "Remaining executions: $new_total"
+    echo "Remaining raw retrievals: $ret_new_total"
+    echo "Retrieval rollup rows: $rollup_total"
 }
 
 cmd_vocabulary() {

@@ -7,8 +7,10 @@
 -- - Executions/feedback enable the quality feedback loop
 -- - Collections provide logical grouping without hierarchy
 --
--- Schema Version: 9
+-- Schema Version: 11
 -- Changelog:
+--   v11: Add retrieval_rollups table for bounded retrievals retention
+--   v10: Add retrievals table for retrieval-usage analytics
 --   v9: Add optional execution output capture with explicit privacy mode
 --   v8: Enforce one feedback row per execution via schema-level uniqueness
 --   v7: Add owner_company + visibility_companies governance boundary for prompts and skills
@@ -33,6 +35,7 @@ CREATE TABLE IF NOT EXISTS schema_version (
 -- Insert initial version if not exists
 INSERT IGNORE INTO schema_version (version, description) VALUES (9, 'Add optional execution output capture with explicit privacy mode');
 INSERT IGNORE INTO schema_version (version, description) VALUES (10, 'Add retrievals table for retrieval-usage analytics');
+INSERT IGNORE INTO schema_version (version, description) VALUES (11, 'Add retrieval_rollups table for bounded retrievals retention');
 
 -- Core entity: reusable prompt templates
 -- Variables use pi syntax: $1, $2, $@, ${@:N}, ${@:N:M} (N and M must be positive integers)
@@ -137,6 +140,23 @@ CREATE TABLE IF NOT EXISTS retrievals (
     INDEX idx_entity (entity_type, entity_id),
     INDEX idx_tool (tool),
     INDEX idx_created (created_at)
+);
+
+-- Bounded retention: day-grain rollup of expired raw retrievals (see pv cleanup)
+CREATE TABLE IF NOT EXISTS retrieval_rollups (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    day DATE NOT NULL,
+    entity_type ENUM('template', 'skill') NOT NULL DEFAULT 'template',
+    entity_id INT NOT NULL,
+    company VARCHAR(100) NOT NULL DEFAULT '',
+    tool ENUM('vault_query', 'vault_retrieve', 'other') NOT NULL,
+    retrieval_count INT NOT NULL DEFAULT 0,
+    rank_sum BIGINT NOT NULL DEFAULT 0,
+    result_count_sum BIGINT NOT NULL DEFAULT 0,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    UNIQUE KEY uq_rollup_day (day, entity_type, entity_id, company, tool),
+    INDEX idx_rollup_entity (entity_type, entity_id)
 );
 
 -- Human judgment: the "learn" in the feedback loop
