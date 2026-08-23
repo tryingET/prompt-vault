@@ -15,7 +15,7 @@ _pv() {
         templates skills
         new-template new-skill
         edit-template show history
-        search stats analytics
+        search stats analytics retrievals
         exec rate
         collection lint backup integrate tui
         branch merge log diff rollback

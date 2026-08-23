@@ -21,10 +21,10 @@ setup() {
     [[ "$output" != *"tags"* ]]
 }
 
-@test "schema version is 11 after bounded retrieval retention cutover" {
+@test "schema version is 12 after retrieval analytics moved to SQLite sidecar" {
     run dolt --data-dir "$VAULT_DIR" sql -r csv -q "SELECT MAX(version) FROM schema_version"
     [ "$status" -eq 0 ]
-    [[ "$output" == *$'11' ]]
+    [[ "$output" == *$'12' ]]
 }
 
 @test "feedback enforces one row per execution at schema level" {

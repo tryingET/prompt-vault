@@ -12,7 +12,7 @@ Version-controlled prompt templates using Dolt SQL database with Git semantics, 
 
 ## Current State
 - **Verification:** derive current health from `README.md`, `./verify.sh`, and the quality/analytics commands rather than a `status.md` mirror
-- **Schema:** v11 (retrieval analytics + bounded retention) with ontology facets (`artifact_kind` / `control_mode` / `formalization_level`), governed `controlled_vocabulary`, company visibility, and execution output capture
+- **Schema:** v12; retrieval telemetry lives in a SQLite sidecar (`analytics.db`, append-only) rather than the versioned store, alongside ontology facets (`artifact_kind` / `control_mode` / `formalization_level`), governed `controlled_vocabulary`, company visibility, and execution output capture
 
 ## Guardrails
 - No secrets in git.

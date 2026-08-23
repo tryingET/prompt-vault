@@ -885,6 +885,68 @@ run_with_signal_forwarding() {
     return "$status"
 }
 
+# --- Retrieval analytics sidecar (SQLite) -------------------------------
+# Retrieval telemetry is machine-local exhaust, not governed content: it
+# needs none of Dolt's versioning/branching and would otherwise grow the
+# versioned repo's history monotonically. It lives in a WAL-mode SQLite
+# sidecar next to the dolt store, append-only, no retention job needed at
+# realistic volumes (~90MB/year worst case). Escape hatch: plain SQL.
+
+analytics_db_path() {
+    printf '%s/analytics.db' "$VAULT_DIR"
+}
+
+analytics_ensure() {
+    command -v sqlite3 >/dev/null 2>&1 || {
+        error "sqlite3 is required for retrieval analytics"
+        return 1
+    }
+    local db
+    db=$(analytics_db_path)
+    sqlite3 "$db" "
+        PRAGMA journal_mode = WAL;
+        PRAGMA busy_timeout = 5000;
+        CREATE TABLE IF NOT EXISTS retrieval_events (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            entity_type TEXT NOT NULL DEFAULT 'template'
+                CHECK (entity_type IN ('template', 'skill')),
+            entity_id INTEGER NOT NULL,
+            entity_version INTEGER,
+            tool TEXT NOT NULL CHECK (tool IN ('vault_query', 'vault_retrieve', 'other')),
+            query_context TEXT,
+            selected_rank INTEGER,
+            result_count INTEGER,
+            company TEXT,
+            created_at TEXT NOT NULL DEFAULT (datetime('now'))
+        );
+        CREATE INDEX IF NOT EXISTS idx_re_events_entity
+            ON retrieval_events(entity_type, entity_id);
+        CREATE INDEX IF NOT EXISTS idx_re_events_created
+            ON retrieval_events(created_at);
+        CREATE VIEW IF NOT EXISTS v_retrievals_daily AS
+            SELECT date(created_at) AS day,
+                   entity_type, entity_id, COALESCE(company, '') AS company, tool,
+                   COUNT(*) AS retrieval_count,
+                   ROUND(AVG(selected_rank), 2) AS avg_rank,
+                   MAX(result_count) AS last_result_count
+            FROM retrieval_events
+            GROUP BY day, entity_type, entity_id, COALESCE(company, ''), tool;
+        CREATE VIEW IF NOT EXISTS v_retrievals_by_entity AS
+            SELECT entity_type, entity_id, COALESCE(company, '') AS company,
+                   COUNT(*) AS retrieval_count,
+                   ROUND(AVG(selected_rank), 2) AS avg_rank,
+                   SUM(CASE WHEN selected_rank = 1 THEN 1 ELSE 0 END) AS top_rank_count,
+                   MAX(created_at) AS last_retrieved_at
+            FROM retrieval_events
+            GROUP BY entity_type, entity_id, COALESCE(company, '');
+    " >/dev/null
+}
+
+analytics_query() {
+    analytics_ensure || return 1
+    sqlite3 -header -column "$(analytics_db_path)" "$1"
+}
+
 # Export functions and variables for sourcing scripts
-export -f info success warn error usage_error require_option_value require_allowed_value ensure_vault check_deps sql_escape require_numeric float_gt sanitize_terminal_text terminal_safe_preview base64_no_wrap sql_escape_base64 sql_decode_base64 dolt_json_query json_first_field json_first_field_record json_all_field json_rows_base64 json_decode_base64 dolt_sql_from_string cleanup_temp_paths register_temp_path make_temp_file parse_template_var_tokens template_valid_vars template_unsupported_vars template_position_indexes expand_template_content run_with_signal_forwarding
+export -f info success warn error usage_error require_option_value require_allowed_value ensure_vault check_deps sql_escape require_numeric float_gt sanitize_terminal_text terminal_safe_preview base64_no_wrap sql_escape_base64 sql_decode_base64 dolt_json_query json_first_field json_first_field_record json_all_field json_rows_base64 json_decode_base64 dolt_sql_from_string cleanup_temp_paths register_temp_path make_temp_file parse_template_var_tokens template_valid_vars template_unsupported_vars template_position_indexes expand_template_content run_with_signal_forwarding analytics_db_path analytics_ensure analytics_query
 export SCRIPTS_DIR VAULT_DIR RED GREEN YELLOW BLUE NC
