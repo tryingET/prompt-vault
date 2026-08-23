@@ -21,7 +21,7 @@ Prompt Vault treats prompts as structured data in a SQL database with Git-style 
 
 ## Current reality
 
-- Prompt Vault is now facet-native on schema v12 (`artifact_kind`, `control_mode`, `formalization_level`) with governed router vocabulary and company visibility.
+- Prompt Vault is now facet-native on schema v13 (`artifact_kind`, `control_mode`, `formalization_level`) with governed router vocabulary and company visibility.
 - Aggregate-only quality rollups now cover multi-valued router semantics (`selection_principles`) and company visibility (`visibility_companies`) without previewing private captured output.
 - Ontology verification now fails closed if seed-contract metadata starts carrying prompt-body content or if the ontology index stops stating the DB-only authoring boundary explicitly.
 - Reusable procedure coverage now includes `concern-first-review-fanout` and `owner-repo-boundary-note` for recurring governance and authority-boundary workflows.

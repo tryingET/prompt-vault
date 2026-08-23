@@ -34,3 +34,6 @@ Thumbs.db
 # ROCS generated ontology artifacts
 ontology/dist/
 __pycache__/
+
+# Local ROCS runtime state
+.ontology/

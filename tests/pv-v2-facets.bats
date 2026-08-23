@@ -21,10 +21,16 @@ setup() {
     [[ "$output" != *"tags"* ]]
 }
 
-@test "schema version is 12 after retrieval analytics moved to SQLite sidecar" {
+@test "schema version is 13 after compatibility epoch contract cutover" {
     run dolt --data-dir "$VAULT_DIR" sql -r csv -q "SELECT MAX(version) FROM schema_version"
     [ "$status" -eq 0 ]
-    [[ "$output" == *$'12' ]]
+    [[ "$output" == *$'13' ]]
+}
+
+@test "schema contract separates compatibility epoch from migration version" {
+    run dolt --data-dir "$VAULT_DIR" sql -r csv -q "SELECT compatibility_epoch, analytics_schema_version, minimum_client_schema_version FROM schema_contract WHERE id=1"
+    [ "$status" -eq 0 ]
+    [[ "$output" == *$'1,1,9' ]]
 }
 
 @test "feedback enforces one row per execution at schema level" {

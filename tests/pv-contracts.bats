@@ -114,11 +114,11 @@ seed_old_execution() {
 
     run env VAULT_DIR="$TEST_VAULT_DIR" "$SCRIPTS_DIR/pv-migrate" up
     [ "$status" -eq 0 ]
-    [[ "$output" == *"Backfilled schema version to v12 from current schema shape"* ]]
+    [[ "$output" == *"Backfilled schema version to v13 from current schema shape"* ]]
     [[ "$output" == *"No pending migrations"* ]]
 
     current_version=$(dolt --data-dir "$TEST_VAULT_DIR" sql -r csv -q "SELECT MAX(version) FROM schema_version" | tail -1)
-    [ "$current_version" -eq 12 ]
+    [ "$current_version" -eq 13 ]
 }
 
 @test "pv-migrate create uses the highest existing migration number" {
@@ -130,4 +130,10 @@ seed_old_execution() {
     [ "$status" -eq 0 ]
     [[ "$output" == *"010-gamma.sql"* ]]
     [ -f "$MIGRATIONS_TMP_DIR/010-gamma.sql" ]
+}
+
+@test "client compatibility verifier binds owner contract to live schema" {
+    run "$SCRIPTS_DIR/pv-verify-client-compatibility"
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"Client compatibility contract verified"* ]]
 }

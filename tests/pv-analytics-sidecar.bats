@@ -40,9 +40,11 @@ insert_event() {
     analytics_ensure  # second run must be a no-op
     [ -f "$TEST_VAULT_DIR/analytics.db" ]
 
-    local mode
+    local mode version
     mode=$(sqlite3 "$TEST_VAULT_DIR/analytics.db" "PRAGMA journal_mode;")
     [ "$mode" = "wal" ]
+    version=$(sqlite3 "$TEST_VAULT_DIR/analytics.db" "PRAGMA user_version;")
+    [ "$version" -eq 1 ]
 
     local objects
     objects=$(sqlite3 "$TEST_VAULT_DIR/analytics.db" "

@@ -1,0 +1,80 @@
+#!/usr/bin/env bash
+# Verify owner-side client compatibility contract against source + live stores.
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_DIR="$SCRIPT_DIR/.."
+VAULT_DIR="${VAULT_DIR:-$REPO_DIR/prompt-vault-db}"
+CONTRACT="$REPO_DIR/schema/client-compatibility.json"
+SCHEMA="$REPO_DIR/schema/schema.sql"
+MIGRATIONS="$REPO_DIR/migrations"
+
+command -v jq >/dev/null 2>&1 || { echo "jq is required" >&2; exit 1; }
+command -v dolt >/dev/null 2>&1 || { echo "dolt is required" >&2; exit 1; }
+[ -f "$CONTRACT" ] || { echo "Missing compatibility contract: $CONTRACT" >&2; exit 1; }
+
+jq -e '
+  (.schema_version | type == "number" and . >= 1)
+  and (.minimum_supported_schema_version | type == "number" and . >= 1)
+  and (.maximum_tested_schema_version == .schema_version)
+  and (.minimum_supported_schema_version <= .maximum_tested_schema_version)
+  and (.compatibility_epoch | type == "number" and . >= 1)
+  and (.compatibility_epoch_introduced_schema_version | type == "number")
+  and (.compatibility_epoch_introduced_schema_version >= .minimum_supported_schema_version)
+  and (.compatibility_epoch_introduced_schema_version <= .schema_version)
+  and (.analytics_schema_version | type == "number" and . >= 1)
+  and (.required_columns | type == "object")
+  and all(.required_columns[]; type == "array" and length > 0 and all(.[]; type == "string" and length > 0))
+' "$CONTRACT" >/dev/null || { echo "Invalid compatibility contract: $CONTRACT" >&2; exit 1; }
+
+schema_version=$(jq -r '.schema_version' "$CONTRACT")
+minimum_version=$(jq -r '.minimum_supported_schema_version' "$CONTRACT")
+epoch=$(jq -r '.compatibility_epoch' "$CONTRACT")
+analytics_version=$(jq -r '.analytics_schema_version' "$CONTRACT")
+
+grep -q -- "-- Schema Version: $schema_version" "$SCHEMA" || {
+  echo "schema.sql header does not match contract v$schema_version" >&2
+  exit 1
+}
+
+max_migration=$(find "$MIGRATIONS" -maxdepth 1 -type f -name '[0-9][0-9][0-9]_*.sql' -printf '%f\n' \
+  | sed 's/_.*//' | sort -n | tail -1 | sed 's/^0*//')
+[ "${max_migration:-0}" -eq "$schema_version" ] || {
+  echo "Highest migration v${max_migration:-0} != contract v$schema_version" >&2
+  exit 1
+}
+
+[ -d "$VAULT_DIR/.dolt" ] || { echo "Vault not initialized: $VAULT_DIR" >&2; exit 1; }
+actual_version=$(dolt --data-dir "$VAULT_DIR" sql -r csv -q "SELECT MAX(version) FROM schema_version" | tail -1)
+[ "$actual_version" -eq "$schema_version" ] || {
+  echo "Live schema v$actual_version != contract v$schema_version" >&2
+  exit 1
+}
+
+contract_row=$(dolt --data-dir "$VAULT_DIR" sql -r csv -q \
+  "SELECT compatibility_epoch, analytics_schema_version, minimum_client_schema_version FROM schema_contract WHERE id = 1" \
+  | tail -1)
+[ "$contract_row" = "$epoch,$analytics_version,$minimum_version" ] || {
+  echo "Live schema_contract '$contract_row' != '$epoch,$analytics_version,$minimum_version'" >&2
+  exit 1
+}
+
+while IFS=$'\t' read -r table column; do
+  dolt --data-dir "$VAULT_DIR" sql -r csv -q "SHOW COLUMNS FROM $table" \
+    | cut -d, -f1 | grep -Fxq "$column" || {
+      echo "Missing required live column: $table.$column" >&2
+      exit 1
+    }
+done < <(jq -r '.required_columns | to_entries[] | .key as $table | .value[] | [$table, .] | @tsv' "$CONTRACT")
+
+analytics_db="$VAULT_DIR/analytics.db"
+if [ -f "$analytics_db" ]; then
+  command -v sqlite3 >/dev/null 2>&1 || { echo "sqlite3 is required" >&2; exit 1; }
+  actual_analytics=$(sqlite3 "$analytics_db" 'PRAGMA user_version;')
+  [ "$actual_analytics" -eq "$analytics_version" ] || {
+    echo "analytics.db user_version=$actual_analytics != contract=$analytics_version" >&2
+    exit 1
+  }
+fi
+
+echo "Client compatibility contract verified"
