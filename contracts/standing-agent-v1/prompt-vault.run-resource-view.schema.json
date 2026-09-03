@@ -1,0 +1,57 @@
+{
+  "$id": "https://ai-society.local/schemas/prompt-vault-run-resource-view-v1.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "authority_transfer": {
+      "const": false
+    },
+    "expires_at": {
+      "format": "date-time",
+      "type": "string"
+    },
+    "narrowing_only": {
+      "const": true
+    },
+    "permit_id": {
+      "type": "string"
+    },
+    "release_id": {
+      "type": "string"
+    },
+    "resources": {
+      "items": {
+        "$ref": "https://ai-society.local/schemas/provider-qualified-resource-ref-v1.json"
+      },
+      "minItems": 1,
+      "type": "array",
+      "uniqueItems": true
+    },
+    "schema": {
+      "const": "prompt-vault.run-resource-view/1"
+    },
+    "view_id": {
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "visibility_context": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema",
+    "view_id",
+    "release_id",
+    "permit_id",
+    "resources",
+    "narrowing_only",
+    "expires_at",
+    "visibility_context",
+    "authority_transfer"
+  ],
+  "type": "object",
+  "x-schema-dependency": {
+    "owner": "tryingET/core_tpl-template-repo",
+    "schema_id": "https://ai-society.local/schemas/provider-qualified-resource-ref-v1.json",
+    "authority_transfer": false
+  }
+}

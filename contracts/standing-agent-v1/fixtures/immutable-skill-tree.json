@@ -1,0 +1,26 @@
+{
+  "artifact_kind": "skill-tree",
+  "authority_transfer": false,
+  "content_digest": "sha256:5ef65be3f2772fc02d7cb937e47eff82108431bf98b7592de17881c42deceeba",
+  "invocation_policy": {
+    "entrypoints": [
+      "ec-discipline-documentation"
+    ],
+    "model_invocation": "disabled"
+  },
+  "lifecycle": "draft",
+  "logical_name": "agent-adoption-steward/base-tree",
+  "provider": "prompt-vault",
+  "publication": "private",
+  "retention": {
+    "class": "governed-content",
+    "delete_rule": "retire from launch eligibility; retain exact revision while referenced by release or forensic hold"
+  },
+  "revision_id": "sha256:5ef65be3f2772fc02d7cb937e47eff82108431bf98b7592de17881c42deceeba",
+  "schema": "prompt-vault.immutable-revision/1",
+  "tree_digest": "sha256:5ef65be3f2772fc02d7cb937e47eff82108431bf98b7592de17881c42deceeba",
+  "trust": "unreviewed",
+  "visibility": [
+    "society"
+  ]
+}
