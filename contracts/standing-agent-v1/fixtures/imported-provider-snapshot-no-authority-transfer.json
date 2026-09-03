@@ -1,0 +1,32 @@
+{
+  "artifact_kind": "imported-provider-snapshot",
+  "authority_transfer": false,
+  "content_digest": "sha256:3378c5fc0109bd0eb49531520a30fdad5e761adf0d44ceeae168797cf657b69b",
+  "imported_from": {
+    "authority_retained_by": "engineering-core",
+    "provider": "engineering-core",
+    "source_content_digest": "sha256:3378c5fc0109bd0eb49531520a30fdad5e761adf0d44ceeae168797cf657b69b",
+    "source_revision": "git:51fc387556d0873bee61fea18164d707554b6af9"
+  },
+  "invocation_policy": {
+    "entrypoints": [
+      "ec-discipline-documentation"
+    ],
+    "model_invocation": "disabled"
+  },
+  "lifecycle": "draft",
+  "logical_name": "engineering-core/ec-adoption-steward",
+  "provider": "prompt-vault",
+  "publication": "private",
+  "retention": {
+    "class": "governed-content",
+    "delete_rule": "retire from launch eligibility; retain exact revision while referenced by release or forensic hold"
+  },
+  "revision_id": "sha256:3378c5fc0109bd0eb49531520a30fdad5e761adf0d44ceeae168797cf657b69b",
+  "schema": "prompt-vault.immutable-revision/1",
+  "tree_digest": "sha256:5ef65be3f2772fc02d7cb937e47eff82108431bf98b7592de17881c42deceeba",
+  "trust": "unreviewed",
+  "visibility": [
+    "society"
+  ]
+}

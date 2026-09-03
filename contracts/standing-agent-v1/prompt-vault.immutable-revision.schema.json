@@ -1,0 +1,129 @@
+{
+  "$id": "https://ai-society.local/schemas/prompt-vault-immutable-revision-v1.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "artifact_kind": {
+      "enum": [
+        "prompt",
+        "procedure",
+        "skill-tree",
+        "persona-projection",
+        "imported-provider-snapshot"
+      ]
+    },
+    "authority_transfer": {
+      "const": false
+    },
+    "content_digest": {
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "imported_from": {
+      "type": "object"
+    },
+    "invocation_policy": {
+      "additionalProperties": false,
+      "properties": {
+        "entrypoints": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array",
+          "uniqueItems": true
+        },
+        "model_invocation": {
+          "enum": [
+            "enabled",
+            "disabled"
+          ]
+        }
+      },
+      "required": [
+        "model_invocation",
+        "entrypoints"
+      ],
+      "type": "object"
+    },
+    "lifecycle": {
+      "enum": [
+        "draft",
+        "active",
+        "historical",
+        "retired"
+      ]
+    },
+    "logical_name": {
+      "type": "string"
+    },
+    "provider": {
+      "const": "prompt-vault"
+    },
+    "publication": {
+      "enum": [
+        "private",
+        "published"
+      ]
+    },
+    "retention": {
+      "additionalProperties": false,
+      "properties": {
+        "class": {
+          "enum": [
+            "controlled-evidence",
+            "governed-content",
+            "public-content"
+          ]
+        },
+        "delete_rule": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "class",
+        "delete_rule"
+      ],
+      "type": "object"
+    },
+    "revision_id": {
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "schema": {
+      "const": "prompt-vault.immutable-revision/1"
+    },
+    "tree_digest": {
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "trust": {
+      "enum": [
+        "unreviewed",
+        "owner-accepted",
+        "revoked"
+      ]
+    },
+    "visibility": {
+      "items": {
+        "type": "string"
+      },
+      "minItems": 1,
+      "type": "array",
+      "uniqueItems": true
+    }
+  },
+  "required": [
+    "schema",
+    "provider",
+    "artifact_kind",
+    "logical_name",
+    "revision_id",
+    "content_digest",
+    "tree_digest",
+    "lifecycle",
+    "trust",
+    "publication",
+    "visibility",
+    "invocation_policy",
+    "authority_transfer",
+    "retention"
+  ],
+  "type": "object"
+}
