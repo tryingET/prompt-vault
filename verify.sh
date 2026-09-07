@@ -83,6 +83,7 @@ check_output "pv-verify-evidence-promotion-ledger" "Evidence promotion ledger ve
 check_output "pv-verify-client-compatibility" "Client compatibility contract verified" "$SCRIPTS_DIR/pv-verify-client-compatibility"
 check "pv templates controlled-vocabulary filter" bash -c "$SCRIPTS_DIR/pv templates cv.routing_context=analysis_followup >/dev/null"
 check "pv templates company visibility filter" bash -c "$SCRIPTS_DIR/pv templates visibility_company=software >/dev/null"
+check "close-session caller identity and gate contract" "$SCRIPTS_DIR/pv-bats" tests/pv-close-session-template.bats
 if [ "${PV_VERIFY_FULL:-0}" = "1" ]; then
     check "pv-bats full suite" "$SCRIPTS_DIR/pv-bats" tests/
 else
