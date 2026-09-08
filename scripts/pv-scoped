@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+# Local operator surface, intentionally separate from vault_update company policy.
+set -euo pipefail
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR/pv-lib.sh"
+export PYTHONDONTWRITEBYTECODE=1
+exec python3 "$SCRIPT_DIR/pv_scoped.py" "$@"

@@ -974,6 +974,7 @@ Import/Export:
 Templates:
   templates [facet|k=v]    List templates, optionally filtered by ontology facet, owner/visibility field, or cv.<key>=<value>
   new-template <name>      Create new template
+  scoped <update|export|check> Exact-template local publishing (plan unless --apply)
   edit-template <name>     Edit template
   show template <name>     Show template content
   history template <name>  Show version history
@@ -1072,6 +1073,7 @@ EOF
 
 # Main
 case "${1:-}" in
+    scoped) exec "$SCRIPT_DIR/pv-scoped" "${@:2}" ;;
     init) cmd_init "${@:2}" ;;
     import) cmd_import "${@:2}" ;;
     export) cmd_export "${@:2}" ;;

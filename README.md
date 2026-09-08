@@ -162,6 +162,18 @@ skills ──► skill_assets
 ./scripts/pv rate <id> 4 "notes"    # Record feedback
 ```
 
+**Exact-template local operator publishing:**
+```bash
+./scripts/pv scoped export --name commit --name commit-terse --dry-run
+./scripts/pv scoped check --name commit --name commit-terse
+```
+
+`pv scoped update` accepts a whole content file with required expected owner,
+version and source hash; plan is default and `--apply` is explicit. It preserves
+unrelated projections/manifests and records separate scoped receipts, never a
+fabricated global refresh. This does not bypass the client company guard.
+See [scope, update flags and failure recovery](docs/dev/pi-export-projection-boundary.md#exact-template-local-operator-lifecycle).
+
 **Export:**
 ```bash
 ./scripts/pv export                    # pi format
