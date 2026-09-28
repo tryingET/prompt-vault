@@ -1,84 +1,28 @@
 ---
-summary: "Governance work-item structure and lifecycle reference for project planning artifacts."
+summary: "Work authority for prompt-vault: the Agent Kernel DB; the checked-in work-items projection is retired."
 read_when:
-  - "Reviewing work-item model and states"
-  - "Clarifying governance artifact scope"
+  - "Routing active or deferred work for this repo"
+  - "Considering a checked-in work-items file"
 ---
 
-# Project Work Items
+# Governance — prompt-vault
 
-This file tracks project-specific work (features, bugs, improvements).
+Deferred and active work for this repo lives in the **Agent Kernel DB** (`ak task ...`).
+The AK DB is the sole work authority; no checked-in work-items projection exists or should be reintroduced.
 
-## Purpose
+The retired `governance/work-items.json` / `work-items.cue` pair contained only completed
+(`done`) historical task references already recorded in AK; nothing was lost at retirement.
 
-**This is a PLANNING ARTIFACT, not an execution queue.**
+## Optional explicit task-scope snapshots
 
-| Aspect | Status |
-|--------|--------|
-| Structure | ✓ Complete |
-| Validation | ✓ CUE schema |
-| Operational | ✗ No scheduler support |
+When a task needs explicit scope:
 
-Projects may also use:
-- Git issues / milestones
-- FCOS work-items (for cross-repo work)
-- External trackers
+- author/update the scope in AK via `ak task scope show|set|update ...`
+- keep repo-side copies under `governance/task-scopes/AK-<TASK-ID>.snapshot.json` as frozen exports
+- refresh a checked-in snapshot with `mkdir -p governance/task-scopes && ak task scope export <TASK-ID> > governance/task-scopes/AK-<TASK-ID>.snapshot.json`
 
-## Ontology
+## Non-negotiable
 
-```
-Milestone > Issue > Task
-```
-
-## State Machine
-
-```
-triage → queued → doing → review → done
-```
-
-| State | Meaning |
-|-------|---------|
-| triage | Not yet shaped |
-| queued | Ready to start |
-| doing | In progress |
-| review | Awaiting review |
-| done | Complete |
-
-## Structure
-
-| Field | Description |
-|-------|-------------|
-| `id` | Issue ID (e.g., `PROJ-M1-01`) |
-| `title` | Short description |
-| `state` | `triage` \| `queued` \| `doing` \| `review` \| `done` |
-| `tasks` | List of tasks with `text` and `done` |
-| `dod` | Definition of done |
-
-## Validation
-
-```bash
-cue vet governance/work-items.json governance/work-items.cue
-```
-
-## Program vs Project
-
-| Type | Location | Scope | Operational? |
-|------|----------|-------|--------------|
-| **Program** | governance-kernel/governance/programs/ | Cross-company | Yes |
-| **Program** | company-templates/governance/programs/ | Company | No |
-| **Project** | repo/governance/work-items.json (this file) | This repo | No |
-
-## When to Use This vs Alternatives
-
-| Use This When | Use Alternative When |
-|---------------|---------------------|
-| Work is specific to this repo | Work spans multiple repos (→ FCOS) |
-| You want structured tracking | Simple bugs (→ git issues) |
-| You need milestone tracking | Quick tasks (→ TODO comments) |
-
-## Related
-
-- L0 Programs: `governance-kernel/governance/programs/`
-- L1 Programs: `company-templates/governance/programs/`
-- State Machine: `governance-kernel/governance/fcos/state-machine.yaml`
-- Glossary: `governance-kernel/docs/core/glossary.md`
+- Do not leave deferred work as ad-hoc TODO comments or scattered markdown notes.
+- Do not reintroduce a checked-in `governance/work-items.json` projection; the AK DB is authoritative.
+- Do not hand-author `governance/task-scopes/AK-*.snapshot.json` as if it were the live task-scope source of truth.
