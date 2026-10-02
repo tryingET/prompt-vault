@@ -1,11 +1,17 @@
 ---
-summary: "Operating plan and completion record for the bounded workstation-posture machine-snapshot handoff contract slice after the SG2 company-visibility evidence wave."
+summary: "Historical operating-plan completion record; native implementation waves and AK tasks own current work after AK6470."
 read_when:
-  - "When reviewing the active repo-local wave after the first SG2 evidence slice completed"
-  - "When checking which AK task covered the workstation-posture machine-snapshot handoff contract"
+  - "Checking the historical workstation-posture handoff and preceding completion references"
 ---
 
-# Operating Plan
+# Operating Plan — Historical Record
+
+> **Historical only — retired from current authoring on 2026-10-02 (AK6470).**
+> Current implementation waves are native AK `work_wave` rows, not this file.
+> Follow [direction workflow](direction-workflow.md) and exact AK task/evidence
+> reads. Do not import this document or replay its old work order/validation
+> instructions as a current next-session contract. Completion references remain
+> historical evidence, not fresh verification or current task state.
 
 Active strategic goal: **SG2 — Deepen privacy-safe evidence and downstream usability without collapsing boundaries**
 
@@ -32,7 +38,7 @@ This wave stays bounded:
 - **AK task:** `#1717`
 - **Why now:** `infra/workstation` now exposes a versioned posture machine snapshot that downstream runtime-aware consumers can use, but Prompt Vault still needed one repo-native answer for what prompt/provenance facts may travel with that machine packet without collapsing authority boundaries.
 - **Deliverable:** write a Prompt Vault-side handoff note for workstation posture machine snapshots, add focused validation for the no-copy / owner-split rules, and refresh repo handoff docs so cold-start operators can route the next change to the correct repo.
-- **Completion evidence:** `docs/dev/workstation-posture-machine-snapshot-handoff.md`, `tests/pv-workstation-posture-handoff.bats`, `docs/project/tactical_goals.md`, this operating plan, and `next_session_prompt.md` all point to the same boundary truth.
+- **Completion evidence:** [workstation handoff note](../dev/workstation-posture-machine-snapshot-handoff.md), [focused tests](../../tests/pv-workstation-posture-handoff.bats), [historical tactical goals](tactical_goals.md), this operating plan, and [startup contract](../../next_session_prompt.md) all point to the same boundary truth.
 
 ## Previously completed operating waves
 

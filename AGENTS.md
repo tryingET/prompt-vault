@@ -8,7 +8,7 @@ read_when:
 # AGENTS.md — prompt-vault
 
 ## Intent
-Version-controlled prompt templates using Dolt SQL database with Git semantics, analytics, and A/B testing.
+Governed reusable prompts, workflow/loop specifications, and multi-file skills in Dolt, with versioned authoring and privacy-safe evidence. Skill storage support does not imply skills have been imported; runtime executors remain downstream-owned.
 
 ## Current State
 - **Verification:** derive current health from `README.md`, `./verify.sh`, and the quality/analytics commands rather than a `status.md` mirror
@@ -110,15 +110,17 @@ Forbidden:
 
 
 ## Direction workflow
-- When this repo's direction docs under `docs/project/` change, or when current posture needs verification, use `ak direction import|check|export` from the repo root.
-- Treat `ak direction check` as the authority-reconciliation gate between repo direction docs and AK's structured direction substrate.
+- AK-native strategic frames (`strategic_frame`) and implementation waves (`work_wave`) are current direction authority; AK tasks are execution leaves. Use the installed/gated `ak` interface from this repo.
+- Start with `ak strategy list -F json`, `ak wave list -F json`, `ak direction check -F json`, and current task reads. Author explicitly authorized direction changes through `ak direction`, then check/read back.
+- Do not author or import SG/TG/OP as current direction. `strategic_goals.md`, `tactical_goals.md`, and `operating_plan.md` are historical records only. A docs edit does not authorize `ak direction import` or any lifecycle transition.
+- Follow `docs/project/direction-workflow.md`; do not copy live direction/task state into Markdown or treat missing records/an empty queue as completion.
 
 ## Read order
-1) `README.md` — Project overview + current reality
-2) `QUICKSTART.md` — Get started in 5 minutes
-3) `docs/CRYSTALLIZED.md` — Design decisions and patterns
-4) `docs/WORKFLOWS.md` — Team collaboration patterns
-5) `next_session_prompt.md` — Current handoff and next slice
+1) `README.md` — Project overview + current capability boundaries
+2) `docs/project/direction-workflow.md` — Native direction/task authority and read paths
+3) `next_session_prompt.md` — Stable startup into current native records, not a next-task ledger
+4) `QUICKSTART.md` — Vault CLI usage
+5) `docs/CRYSTALLIZED.md`, `docs/WORKFLOWS.md` — Patterns and advanced workflows when needed
 
 ## Quick reference for agents
 

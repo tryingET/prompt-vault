@@ -30,7 +30,7 @@ Prompt Vault treats prompts as structured data in a SQL database with Git-style 
 - The teacher-prep media live runner still points reusable prompt authority back to Prompt Vault: downstream Teaching Packs may record live `entity_version` and optional `execution_id` provenance, but pack-local prompt-like artifacts remain derived output only.
 - Current health should be derived from deterministic checks and analytics commands, not from a separate `status.md` mirror.
 - ROCS repo checks now run through `./scripts/rocs.sh` against workspace-local ontology layer paths; the repo no longer depends on a vendored GitLab-locator compatibility path.
-- Repo-local Agent Kernel task/work-item access now goes through `./scripts/ak.sh`, which prefers vendored or workspace-core Agent Kernel CLI paths before falling back to `ak` on `PATH`.
+- Repo direction uses AK-native strategic frames and implementation waves; tasks remain execution leaves. Use the installed/gated `ak` interface, not a checkout binary or removed repo wrapper. See [native direction workflow](docs/project/direction-workflow.md).
 - Keep repo-level orientation DRY in this `README.md`; keep live execution/task authority in AK or other canonical machine surfaces.
 
 ## The Problem
@@ -111,7 +111,7 @@ Dolt is Git for data. You get branches, merges, diffs, and rollback—per prompt
 
 ## Schema
 
-Six tables. Everything you need, nothing you don't.
+Core content/evidence relationships (not an exhaustive table inventory):
 
 ```
 prompt_templates ──► executions ──► feedback
@@ -129,6 +129,31 @@ skills ──► skill_assets
 | `executions` | Every time a prompt runs |
 | `feedback` | Human ratings and notes |
 | `collections` | Logical groupings |
+
+Skills have a `SKILL.md` body plus supporting `skill_assets`; inspect actual
+population with `./scripts/pv skills` rather than assuming import happened.
+Workflow and loop specifications are template rows classified by
+`control_mode` and `formalization_level`, not a separate executor store.
+`./scripts/pv templates control_mode=loop` lists loop specifications;
+execution bindings and supervision remain downstream Pi/runtime-owned.
+
+## Repo direction and session startup
+
+Read `AGENTS.md`, [native direction workflow](docs/project/direction-workflow.md),
+and [stable startup](next_session_prompt.md), then inspect current authority:
+
+```bash
+ak strategy list -F json       # strategic frames
+ak wave list -F json           # implementation waves
+ak direction check -F json    # native state/link consistency
+ak task ready -F json
+ak task list -F json --verbose
+```
+
+Purpose/vision explain intent; AK owns current direction, tasks and evidence.
+The old SG/TG/OP documents are historical only, not a live planning ladder.
+A passing direction check is not task completion, wave/frame closeout,
+publication permission or proof of runtime adoption.
 
 ## Commands
 
@@ -194,7 +219,7 @@ See [scope, update flags and failure recovery](docs/dev/pi-export-projection-bou
 ```bash
 ./verify.sh                              # quick contract smoke suite
 PV_VERIFY_FULL=1 ./verify.sh             # quick suite + full bats suite
-./scripts/ak.sh --doctor                 # repo-local AK launcher resolution
+ak direction check -F json               # native direction/link consistency
 ./scripts/pv-verify-evidence-promotion-ledger
 ./scripts/pv-bats tests/                 # full suite with repo-local TMPDIR
 ```
@@ -204,6 +229,7 @@ PV_VERIFY_FULL=1 ./verify.sh             # quick suite + full bats suite
 | File | When to Read |
 |------|--------------|
 | [QUICKSTART.md](QUICKSTART.md) | Get started in 5 minutes |
+| [Native direction workflow](docs/project/direction-workflow.md) | Strategic frames, implementation waves, task authority and historical-doc boundary |
 | [CHANGELOG.md](CHANGELOG.md) | Version history and changes |
 | [WORKFLOWS.md](docs/WORKFLOWS.md) | Team collaboration, CI/CD, advanced patterns |
 | [COMPARISON.md](docs/COMPARISON.md) | Deciding vault vs flat files |

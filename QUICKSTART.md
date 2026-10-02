@@ -11,6 +11,23 @@ read_when:
 
 Get started with Prompt Vault in 5 minutes.
 
+## Returning to this repo
+
+This installation walkthrough is not a next-task ledger. Read `AGENTS.md`,
+[the native direction workflow](docs/project/direction-workflow.md), and
+`next_session_prompt.md` before choosing work. Inspect current strategic frames,
+implementation waves and tasks through the installed/gated AK interface:
+
+```bash
+ak strategy list -F json
+ak wave list -F json
+ak direction check -F json
+ak task ready -F json
+```
+
+Do not restart the historical SG/TG/OP ladder or import its Markdown into AK.
+An empty queue or missing direction record is not proof the project is done.
+
 ## Prerequisites
 
 ```bash
@@ -45,9 +62,15 @@ cd prompt-vault
 ./scripts/pv templates control_mode=router          # Just routers
 ./scripts/pv templates formalization_level=workflow # Workflow-grade prompts
 ./scripts/pv templates visibility_company=software  # What software can see
+./scripts/pv templates control_mode=loop            # Stored loop specifications
+./scripts/pv skills                                # Actual stored skill inventory
 ```
 
 ### 2. View a Template
+
+Skills use `skills` + `skill_assets`; loops/workflows are classified template
+rows. These storage capabilities do not prove skill import or runtime binding.
+Do not execute a retrieved workflow/loop without its downstream dispatch check.
 
 ```bash
 ./scripts/pv show template inversion

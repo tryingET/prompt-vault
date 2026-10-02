@@ -1,18 +1,23 @@
 ---
-summary: "Tactical goals for the active SG2 wave after the first company-visibility evidence slice: keep completed evidence work closed and define bounded downstream handoff contracts for workstation posture machine snapshots."
+summary: "Historical tactical-goal completion record; not a current planning layer after AK6470."
 read_when:
-  - "When turning the active strategic goal into medium-sized repo-local waves"
-  - "When deciding which repo-local direction slice should be active now"
+  - "Auditing historical tactical goals and their completion references"
 ---
 
-# Tactical Goals
+# Tactical Goals — Historical Record
+
+> **Historical only — retired from current authoring on 2026-10-02 (AK6470).**
+> There is no current tactical-goal authoring layer. Use AK-native strategic
+> frames, implementation waves and execution tasks through
+> [direction workflow](direction-workflow.md). Do not import this document;
+> “active” and “next” below refer to the earlier planning period only.
 
 Active strategic goal: **SG2 — Deepen privacy-safe evidence and downstream usability without collapsing boundaries**
 
 ## Recently completed tactical goals
 
 ### TG1 — Converge repo direction + handoff surfaces on current schema-v9 truth
-- **Why it mattered:** direction docs were still carrying pre-convergence assumptions and the removed `docs/dev/status.md` mirror path had to stop acting like a live authority surface.
+- **Why it mattered:** direction docs were still carrying pre-convergence assumptions and the removed status mirror (historical path: docs/dev/status.md) had to stop acting like a live authority surface.
 - **Outcome reached:** vision/strategy/handoff docs now point to `README.md`, deterministic validation, and current owner-boundary notes rather than stale mirrors.
 - **Completion signal:** a cold-start operator can read the main direction docs without being told to rely on a removed status mirror.
 
@@ -23,7 +28,7 @@ Active strategic goal: **SG2 — Deepen privacy-safe evidence and downstream usa
 
 ### TG2 — Keep ontology/contracts clean and prompt bodies out of the wrong layers
 - **Why it mattered:** with the router-semantic reporting wave complete, the clearest repo-local follow-through was preventing drift back into ontology-carried prompt bodies or fuzzy boundary docs.
-- **Outcome reached:** ontology verification now rejects prompt-body fields in seed metadata, fails if `ontology/index.md` stops stating the DB-only authoring boundary explicitly, and the docs/handoff/validation story reinforces that split.
+- **Outcome reached:** ontology verification now rejects prompt-body fields in seed metadata, fails if [ontology index](../../ontology/index.md) stops stating the DB-only authoring boundary explicitly, and the docs/handoff/validation story reinforces that split.
 - **Completion signal:** deterministic checks fail closed on DB-vs-ontology boundary regressions and operators are not sent back toward ontology-carried prompt content.
 
 ### TG3 — Expand the reusable procedure layer for recurring governance-shaped work
@@ -41,7 +46,7 @@ Active strategic goal: **SG2 — Deepen privacy-safe evidence and downstream usa
 ### TG6 — Define bounded downstream handoff contracts for workstation posture machine snapshots
 - **Why this is active now:** downstream runtime-aware consumers now have an infra-owned workstation posture machine snapshot to consume, but Prompt Vault still needs one repo-native statement describing what prompt/provenance facts may travel with that machine packet without turning it into prompt canon or private observability.
 - **Outcome:** cold-start operators can combine workstation machine-state gating with Prompt Vault prompt provenance truthfully: machine snapshots remain infra-owned runtime facts, Prompt Vault remains prompt/execution authority, and downstream repos carry only the minimum bounded handoff packet they actually need.
-- **Current status:** the first TG6 slice is now complete; the repo-native handoff note `docs/dev/workstation-posture-machine-snapshot-handoff.md` plus focused validation define the Prompt Vault side of this boundary.
+- **Current status:** the first TG6 slice is now complete; the repo-native handoff note [workstation handoff note](../dev/workstation-posture-machine-snapshot-handoff.md) plus focused validation define the Prompt Vault side of this boundary.
 - **Done when:** downstream runtime-aware consumers can carry bounded Prompt Vault provenance alongside workstation posture snapshots without copying prompt bodies, governance canon, or private outputs into machine-facing packets.
 
 ## Next tactical decision
