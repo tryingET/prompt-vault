@@ -1,0 +1,6 @@
+{
+  "schema": "prompt-vault/procedure-route-policy/v1",
+  "required_callers": ["layer12-000-router"],
+  "route_table_headers": ["Detected state | Selected procedure / read path"],
+  "template_reference_syntax": "backticked-kebab-name-in-selected-procedure-cell"
+}

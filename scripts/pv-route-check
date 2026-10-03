@@ -1,0 +1,99 @@
+#!/usr/bin/env python3
+"""Validate declared procedure selections against current Vault rows, read-only."""
+import argparse
+import json
+import os
+from pathlib import Path
+import re
+import subprocess
+import sys
+
+ROOT = Path(__file__).resolve().parent.parent
+NAME = re.compile(r"`([a-z][a-z0-9]*(?:-[a-z0-9]+)+)`")
+
+
+def route_targets(content, headers):
+    """Only selection cells declare dependencies; prose/history is not a call edge."""
+    selected = False
+    for line in content.splitlines():
+        if not line.strip().startswith("|"):
+            selected = False
+            continue
+        cells = [cell.strip() for cell in line.strip().strip("|").split("|")]
+        if " | ".join(cells) in headers:
+            selected = True
+            continue
+        if selected and len(cells) == 2:
+            for target in NAME.findall(cells[1]):
+                yield cells[0].strip("`"), target
+
+
+def validate(rows, policy, retire=None):
+    by_name = {}
+    errors = []
+    for row in rows:
+        name = row["name"]
+        if name in by_name:
+            errors.append(f"duplicate template name: {name}")
+        by_name[name] = row
+    active = [r for r in rows if r["status"] == "active" and r["export_to_pi"] in (1, True)]
+    if retire in policy["required_callers"]:
+        errors.append(f"{retire} is a required procedure front door; revise the owner route policy before retiring it")
+    callers = []
+    edges = []
+    for row in active:
+        targets = list(route_targets(row["content"], policy["route_table_headers"]))
+        has_table = any(
+            " | ".join(cell.strip() for cell in line.strip().strip("|").split("|"))
+            in policy["route_table_headers"]
+            for line in row["content"].splitlines() if line.strip().startswith("|")
+        )
+        if has_table:
+            callers.append(row["name"])
+        for state, target in targets:
+            edge = {"caller": row["name"], "state": state, "target": target}
+            edges.append(edge)
+            if retire is not None:
+                if target == retire:
+                    errors.append(f"{row['name']} [{state}] still selects {target}; repair the caller before retiring/unexporting it")
+                continue
+            destination = by_name.get(target)
+            if destination is None or destination["status"] != "active" or destination["export_to_pi"] not in (1, True):
+                errors.append(f"{row['name']} [{state}] selects unavailable template {target}")
+                continue
+            source_visibility = row.get("visibility_companies") or []
+            target_visibility = destination.get("visibility_companies") or []
+            if not set(source_visibility).issubset(target_visibility):
+                errors.append(f"{row['name']} [{state}] selects {target} outside caller company visibility")
+    if retire is None:
+        for required in policy["required_callers"]:
+            if required not in callers:
+                errors.append(f"required active/exported caller lacks a declared routing table: {required}")
+    return {"schema": "prompt-vault/procedure-route-check/v1", "ok": not errors,
+            "callers": callers, "edges": edges, "errors": errors,
+            "coverage": "declared selection tables in active exported templates"}
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--retire-template", help="Check inbound references before retirement or removal from Pi export")
+    args = parser.parse_args()
+    try:
+        policy = json.loads((ROOT / "policy/procedure-routes.json").read_text())
+        if policy["schema"] != "prompt-vault/procedure-route-policy/v1":
+            raise ValueError("unsupported route policy")
+        query = "SELECT name,content,status,export_to_pi,visibility_companies FROM prompt_templates ORDER BY name"
+        process = subprocess.run([str(ROOT / "scripts/pv"), "sql", "-r", "json", "-q", query],
+                                 capture_output=True, text=True, env=os.environ.copy())
+        if process.returncode:
+            raise ValueError(process.stderr.strip() or "Vault query failed")
+        result = validate(json.loads(process.stdout)["rows"], policy, args.retire_template)
+    except (OSError, ValueError, KeyError, TypeError) as exc:
+        print(f"Procedure route check failed: {exc}", file=sys.stderr)
+        return 1
+    print(json.dumps(result, indent=2))
+    return 0 if result["ok"] else 1
+
+
+if __name__ == "__main__":
+    sys.exit(main())

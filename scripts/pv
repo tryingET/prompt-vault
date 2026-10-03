@@ -420,13 +420,15 @@ cmd_stats() {
         fi
 
         echo "=== Statistics: $name ==="
+        echo "Evidence: records and supplied success flags; accepted outcomes and demonstrated benefit are not measured."
         dolt sql -q "
             SELECT
                 t.name,
                 t.version,
                 t.status,
                 COALESCE(exec.executions, 0) AS executions,
-                COALESCE(exec.successes, 0) AS successes,
+                COALESCE(exec.successes, 0) AS claimed_success_flags,
+                COALESCE(exec.unknown_outcomes, 0) AS unknown_outcomes,
                 exec.avg_latency_ms,
                 COALESCE(exec.captured_outputs, 0) AS captured_outputs,
                 COALESCE(feed.feedback_rows, 0) AS feedback_rows,
@@ -438,6 +440,7 @@ cmd_stats() {
                     entity_id,
                     COUNT(*) AS executions,
                     SUM(CASE WHEN success THEN 1 ELSE 0 END) AS successes,
+                    SUM(CASE WHEN success IS NULL THEN 1 ELSE 0 END) AS unknown_outcomes,
                     ROUND(AVG(latency_ms), 1) AS avg_latency_ms,
                     SUM(CASE WHEN output_text IS NOT NULL THEN 1 ELSE 0 END) AS captured_outputs,
                     MAX(created_at) AS last_execution_at
@@ -461,6 +464,7 @@ cmd_stats() {
         " -r tabular
     else
         echo "=== Overall Statistics ==="
+        echo "Evidence: invocation/output records are not accepted outcomes or demonstrated benefit."
         dolt sql -q "
             SELECT 
                 'Templates' as type,
@@ -993,6 +997,7 @@ Collections:
   collection add-template  Add template to collection
 
 Search & Analytics:
+  discover <intent>        Reuse preflight across templates, skill snapshots and client skill roots
   search <query>           Search templates and skills
   stats [name]             Usage statistics
   analytics [cmd]          Detailed analytics (including safe output-capture summaries)
@@ -1103,6 +1108,7 @@ case "${1:-}" in
     watch) cmd_watch "${@:2}" ;;
     sql) shift; cmd_sql "$@" ;;
     search) shift; cmd_search "$@" ;;
+    discover) exec "$SCRIPT_DIR/pv-discover" "${@:2}" ;;
     exec) shift; cmd_exec "$@" ;;
     rate) shift; cmd_rate "$@" ;;
     retrievals) cmd_retrievals "${@:2}" ;;

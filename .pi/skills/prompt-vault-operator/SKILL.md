@@ -38,6 +38,15 @@ Provide the correct read order, authority boundary, and operator surface for wor
 - the task is about workstation runtime packets or machine posture -> route to `softwareco/infra/workstation`
 
 ## Core commands to remember
+
+Before recommending a new skill or procedure, run `./scripts/pv discover "<intent>"`.
+This reads both Vault entity tables and explicit active filesystem skill roots.
+Use `--company <company>` when company context is known; otherwise visibility is
+unverified. Retrieve the best existing matches and compare their responsibilities.
+Continuity intent should reach existing next-session, handoff and execution-memory
+methods before a new project-resume package is proposed. Distinguish stored,
+visible, bound, installed and accepted facts; verify runtime gates downstream.
+See `docs/dev/method-discovery.md` for roots and proof limits.
 - `./scripts/pv templates`
 - `./scripts/pv skills`
 - `./scripts/pv templates control_mode=loop`

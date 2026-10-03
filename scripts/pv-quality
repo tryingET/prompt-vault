@@ -881,3 +881,5 @@ case "$cmd" in
         exit 1
         ;;
 esac
+
+echo "Evidence boundary: this score measures metadata, usage and ratings; accepted outcomes and demonstrated benefit are not measured."

@@ -11,6 +11,7 @@ ensure_vault
 
 cmd="${1:-overview}"
 shift || true
+echo "Evidence boundary: execution rows, success flags and ratings do not establish accepted outcomes or demonstrated benefit."
 
 run_query() {
     dolt sql -q "$1" -r tabular

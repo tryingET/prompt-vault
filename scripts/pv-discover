@@ -1,0 +1,155 @@
+#!/usr/bin/env python3
+"""Read-only reuse discovery across Vault methods and explicitly selected skill roots."""
+import argparse
+import hashlib
+import json
+import os
+from pathlib import Path
+import re
+import subprocess
+import sys
+
+ROOT = Path(__file__).resolve().parent.parent
+STOP = {"the", "and", "for", "with", "this", "that", "from", "have", "how", "our", "project", "where", "did", "off", "what"}
+CONTINUITY = ("resume", "continue", "pick up", "left off", "leave off", "next session", "handoff", "fortsetzen")
+CONTINUITY_TERMS = ("next-session", "resume", "execution-memory", "handoff", "continuity")
+
+
+def score(query, name, description, body):
+    query = query.casefold().strip()
+    words = set(re.findall(r"[\w-]{3,}", query)) - STOP
+    name, description, body = name.casefold(), description.casefold(), body.casefold()
+    exact = 100 if query == name else 0
+    value = exact + sum(8 * (word in name) + 4 * (word in description) +
+                        (word in body) for word in words)
+    if any(term in query for term in CONTINUITY):
+        value += 20 * any(term in name for term in CONTINUITY_TERMS)
+        value += 5 * any(term in description for term in CONTINUITY_TERMS)
+    return value
+
+
+def rank_rows(query, templates, skills, company=None):
+    results = []
+    for kind, rows, body_field in (("template", templates, "content"), ("skill_snapshot", skills, "readme")):
+        for row in rows:
+            visibility = row.get("visibility_companies") or []
+            if company is not None and company not in visibility:
+                continue
+            relevance = score(query, row["name"], row.get("description", ""), row.get(body_field, ""))
+            if not relevance:
+                continue
+            active = row["status"] == "active"
+            entry = {
+                "kind": kind, "name": row["name"], "description": row.get("description", ""),
+                "version": row.get("version"), "status": row["status"], "score": relevance,
+                "custody": "vault", "owner_company": row.get("owner_company"),
+                "visibility_companies": visibility, "visible_to_selected_company": True if company else None,
+                "source_sha256": hashlib.sha256(row.get(body_field, "").encode()).hexdigest(),
+                "runtime_binding": "not_checked", "installed": "not_checked", "accepted_outcome": "not_checked",
+            }
+            if kind == "template":
+                published = row.get("export_to_pi") in (1, True)
+                entry.update({
+                    "facets": {k: row.get(k) for k in ("artifact_kind", "control_mode", "formalization_level")},
+                    "export_to_pi": published, "client_lookup_eligible": active and published,
+                    "dispatch_requirement": ("downstream_workflow_or_loop_gate" if row.get("control_mode") == "loop" or
+                                             row.get("formalization_level") == "workflow" else "downstream_classification"),
+                })
+            else:
+                entry["stored_availability"] = active
+            results.append(entry)
+    return results
+
+
+def local_skills(query, roots):
+    import yaml
+    results, diagnostics, by_path = [], [], {}
+    for label, root in roots:
+        if not root.is_dir():
+            diagnostics.append({"root": str(root), "state": "absent"})
+            continue
+        for source in sorted(root.glob("*/SKILL.md")):
+            actual = source.resolve()
+            if actual in by_path:
+                by_path[actual]["client_roots"].append(label)
+                continue
+            try:
+                if source.stat().st_size > 262144:
+                    raise ValueError("SKILL.md exceeds bounded discovery size")
+                raw = source.read_bytes()
+                lines = raw.decode("utf-8-sig").splitlines()
+                if not lines or lines[0] != "---":
+                    raise ValueError("missing YAML frontmatter")
+                end = lines.index("---", 1)
+                meta = yaml.safe_load("\n".join(lines[1:end]))
+                if not isinstance(meta, dict) or not isinstance(meta.get("name"), str) or not isinstance(meta.get("description"), str):
+                    raise ValueError("missing skill name/description")
+                relevance = score(query, meta["name"], meta["description"], "\n".join(lines[end + 1:]))
+                if not relevance:
+                    continue
+                entry = {
+                    "kind": "filesystem_skill", "name": meta["name"], "description": meta["description"],
+                    "source_path": str(actual), "source_sha256": hashlib.sha256(raw).hexdigest(),
+                    "custody": "filesystem_package", "authoring_owner": "not_checked", "client_roots": [label], "score": relevance,
+                    "runtime_binding": "not_applicable", "installed": "not_checked", "accepted_outcome": "not_checked",
+                }
+                by_path[actual] = entry
+                results.append(entry)
+            except (OSError, ValueError, UnicodeError, yaml.YAMLError) as exc:
+                diagnostics.append({"source": str(source), "state": "unreadable", "reason": str(exc)})
+    return results, diagnostics
+
+
+def query_rows(sql):
+    result = subprocess.run([str(ROOT / "scripts/pv"), "sql", "-r", "json", "-q", sql],
+                            text=True, capture_output=True)
+    if result.returncode:
+        raise ValueError(result.stderr.strip() or "Vault query failed")
+    parsed = json.loads(result.stdout)
+    # Dolt renders a successful zero-row result as {}, not {"rows": []}.
+    if parsed == {}:
+        return []
+    if not isinstance(parsed, dict) or not isinstance(parsed.get("rows"), list):
+        raise ValueError("invalid Vault row result")
+    return parsed["rows"]
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("query")
+    parser.add_argument("--company", choices=("core", "software", "finance", "house", "health", "teaching", "holding"))
+    parser.add_argument("--limit", type=int, default=15)
+    parser.add_argument("--skill-root", action="append", type=Path,
+                        help="Explicit filesystem skill root; overrides default active roots")
+    args = parser.parse_args()
+    if not args.query.strip() or not 1 <= args.limit <= 50:
+        parser.error("query must be nonempty and limit must be between 1 and 50")
+    home = Path.home()
+    defaults = [(client, home / folder / "skills") for client, folder in
+                (("pi", ".pi/agent"), ("codex", ".codex"), ("claude", ".claude"), ("agents", ".agents"))]
+    defaults += [(f"repo:{client}", ROOT / folder / "skills") for client, folder in
+                 (("pi", ".pi"), ("codex", ".codex"), ("claude", ".claude"), ("agents", ".agents"))]
+    roots = [(f"explicit:{i}", p) for i, p in enumerate(args.skill_root)] if args.skill_root else defaults
+    try:
+        templates = query_rows("SELECT name,description,content,version,status,artifact_kind,control_mode,formalization_level,owner_company,visibility_companies,export_to_pi FROM prompt_templates ORDER BY name")
+        skills = query_rows("SELECT name,description,readme,version,status,owner_company,visibility_companies FROM skills ORDER BY name")
+        found = rank_rows(args.query, templates, skills, args.company)
+        files, diagnostics = local_skills(args.query, roots)
+        found.extend(files)
+        found.sort(key=lambda r: (-r["score"], r["name"], r["kind"]))
+        print(json.dumps({
+            "schema": "prompt-vault/method-discovery/v1", "query": args.query,
+            "company": args.company, "company_visibility": "checked" if args.company else "not_checked",
+            "coverage": {"template_rows": len(templates), "skill_snapshot_rows": len(skills),
+                         "filesystem_roots": [str(p) for _, p in roots]},
+            "matched_count": len(found), "results": found[:args.limit], "diagnostics": diagnostics,
+            "reuse_preflight": "Retrieve and compare relevant existing methods before proposing creation; verify selected runtime binding and installation downstream. Discovery does not execute, import or publish.",
+        }, indent=2))
+    except (OSError, ValueError, KeyError, ImportError) as exc:
+        print(f"Method discovery failed: {exc}", file=sys.stderr)
+        return 1
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

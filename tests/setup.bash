@@ -2,8 +2,8 @@
 # Shared test setup for BATS tests
 
 export SCRIPTS_DIR="$BATS_TEST_DIRNAME/../scripts"
-export VAULT_DIR="$BATS_TEST_DIRNAME/../prompt-vault-db"
-export TEST_TMP_ROOT="$BATS_TEST_DIRNAME/../.tmp-tests"
+export VAULT_DIR="${PV_TEST_VAULT_DIR:-$BATS_TEST_DIRNAME/../prompt-vault-db}"
+export TEST_TMP_ROOT="${PV_TEST_TMP_ROOT:-$BATS_TEST_DIRNAME/../.tmp-tests}"
 
 mkdir -p "$TEST_TMP_ROOT"
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# pv-bats - Run bats with a repo-local TMPDIR to avoid /tmp inode exhaustion
+# pv-bats - Enforce fixture-only HOME, Vault, temp and projection roots
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -7,4 +7,27 @@ REPO_DIR="$SCRIPT_DIR/.."
 export TMPDIR="${TMPDIR:-$REPO_DIR/.tmp-tests}"
 mkdir -p "$TMPDIR"
 
-exec bats "$@"
+TEST_RUN_ROOT=$(mktemp -d "$TMPDIR/pv-bats-roots.XXXXXX")
+trap 'rm -rf -- "$TEST_RUN_ROOT"' EXIT
+
+# Reuse the existing stable copy helper. The canonical store is a read-only
+# source; even tests that forget their own VAULT_DIR override see a private copy.
+export PV_TEST_VAULT_DIR="${PV_TEST_VAULT_DIR:-${VAULT_DIR:-$REPO_DIR/prompt-vault-db}}"
+export PV_TEST_TMP_ROOT="$TEST_RUN_ROOT/tests"
+export BATS_TEST_DIRNAME="$REPO_DIR/tests"
+source "$REPO_DIR/tests/setup.bash"
+if [ -d "$VAULT_DIR/.dolt" ]; then
+    copy_test_vault "$TEST_RUN_ROOT/vault"
+fi
+
+export HOME="$TEST_RUN_ROOT/home"
+export PV_TEST_VAULT_DIR="$TEST_RUN_ROOT/vault" VAULT_DIR="$TEST_RUN_ROOT/vault"
+export TMPDIR="$TEST_RUN_ROOT/tmp"
+export TEMPLATES_DIR="$TEST_RUN_ROOT/prompts" PI_PROMPTS_DIR="$TEST_RUN_ROOT/prompts"
+export SKILLS_DIR="$TEST_RUN_ROOT/skills"
+mkdir -p "$HOME/.dolt" "$TMPDIR" "$TEMPLATES_DIR" "$SKILLS_DIR"
+printf '%s\n' '{"user.name":"Prompt Vault fixture","user.email":"fixture@example.invalid"}' > "$HOME/.dolt/config_global.json"
+
+# Keep the cleanup trap while forwarding interrupts to the fixture process.
+source "$SCRIPT_DIR/pv-lib.sh"
+run_with_signal_forwarding bats "$@"

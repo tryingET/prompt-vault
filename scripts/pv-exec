@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# pv-exec - Execute a prompt template with tracking
+# pv-exec - Prepare a prompt; optionally record caller-supplied output with unknown outcome
 # Usage: pv-exec <template-name> [args...] [--model <model>] [--output-file <path>|--output-text <text>] [--public-output]
 set -euo pipefail
 
@@ -15,11 +15,13 @@ shift || true
 MODEL=""
 OUTPUT_TEXT=""
 OUTPUT_CAPTURE_MODE="none"
+OUTPUT_SUPPLIED=false
 PUBLIC_OUTPUT=false
 ARGS=()
 while [[ $# -gt 0 ]]; do
     case $1 in
         --model|-m)
+            [ $# -ge 2 ] || { echo "Error: --model requires a label" >&2; exit 1; }
             MODEL="$2"
             shift 2
             ;;
@@ -27,11 +29,13 @@ while [[ $# -gt 0 ]]; do
             [ $# -ge 2 ] || { echo "Error: --output-file requires a path" >&2; exit 1; }
             [ -f "$2" ] || { echo "Error: output file not found: $2" >&2; exit 1; }
             OUTPUT_TEXT=$(<"$2")
+            OUTPUT_SUPPLIED=true
             shift 2
             ;;
         --output-text)
             [ $# -ge 2 ] || { echo "Error: --output-text requires a value" >&2; exit 1; }
             OUTPUT_TEXT="$2"
+            OUTPUT_SUPPLIED=true
             shift 2
             ;;
         --public-output)
@@ -54,26 +58,26 @@ if [ -z "$TEMPLATE" ]; then
     exit 1
 fi
 
-if [ -n "$OUTPUT_TEXT" ]; then
+if [ "$OUTPUT_SUPPLIED" = true ]; then
     OUTPUT_CAPTURE_MODE="private"
 fi
 
 if [ "$PUBLIC_OUTPUT" = true ]; then
-    if [ -z "$OUTPUT_TEXT" ]; then
+    if [ "$OUTPUT_SUPPLIED" != true ]; then
         echo "Error: --public-output requires --output-file or --output-text" >&2
         exit 1
     fi
     OUTPUT_CAPTURE_MODE="public"
 fi
 
-MODEL="${MODEL:-claude-3-sonnet}"
-ARGS_JSON=$(printf '%s\n' "${ARGS[@]}" | jq -Rs 'split("\n") | map(select(length > 0))')
-if [ -n "$OUTPUT_TEXT" ]; then
+ARGS_JSON=$(python3 -c 'import json,sys; print(json.dumps(sys.argv[1:]))' "${ARGS[@]}")
+if [ "$OUTPUT_SUPPLIED" = true ]; then
     OUTPUT_TEXT_SQL="'$(sql_escape "$OUTPUT_TEXT")'"
 else
     OUTPUT_TEXT_SQL="NULL"
 fi
 
+VAULT_DIR=$(cd "$VAULT_DIR" && pwd)
 cd "$VAULT_DIR"
 check_deps jq python3
 
@@ -98,12 +102,9 @@ CONTENT=$(echo "$RESULT" | jq -r '.rows[0].content // ""')
 # Substitute variables using the shared template semantics
 CONTENT=$(expand_template_content "$CONTENT" "${ARGS[@]}")
 
-# Time execution
-START=$(date +%s%3N)
-
-# Output the prompt (in real usage, this would go to the LLM)
-echo "=== Executing template: $TEMPLATE (v$TEMPLATE_VERSION) ==="
-echo "Model: $MODEL"
+# Preparing text does not invoke a model, dispatch a workflow, or assess an outcome.
+echo "=== Prepared template: $TEMPLATE (v$TEMPLATE_VERSION) ==="
+echo "Model: ${MODEL:-not invoked} (no model call performed)"
 echo "Args: ${ARGS[*]}"
 echo ""
 echo "--- Prompt ---"
@@ -111,25 +112,34 @@ echo "$CONTENT"
 echo "--- End Prompt ---"
 echo ""
 
-# Simulate execution (replace with actual LLM call)
-# In production, you'd call pi or another LLM here
-SUCCESS=true
-OUTPUT_TOKENS=0
-INPUT_TOKENS=0
+# Default preparation is read-only. An explicit supplied-output option records
+# caller-provided observation, not model execution or successful requested work.
+if [ "$OUTPUT_SUPPLIED" != true ]; then
+    echo "Preparation only: no execution record created; outcome not assessed."
+    exit 0
+fi
 
-END=$(date +%s%3N)
-LATENCY=$((END - START))
+python3 - "$VAULT_DIR" "$SCRIPT_DIR" <<'PY'
+import sys
+from pathlib import Path
+sys.path.insert(0, sys.argv[2])
+from pv_scoped_db import preflight
+preflight(Path(sys.argv[1]).resolve())
+PY
+MODEL_SQL="NULL"
+if [ -n "$MODEL" ]; then MODEL_SQL="'$(sql_escape "$MODEL")'"; fi
+ESCAPED_ARGS=$(sql_escape "$ARGS_JSON")
+OBSERVATION='{"schema":"prompt-vault/execution-observation/v1","event":"caller_supplied_output","accepted_outcome":"not_assessed","model_execution":"not_verified"}'
 
-# Log execution
 EXEC_ID=$(dolt sql -r csv -q "
-    INSERT INTO executions (entity_type, entity_id, entity_version, input_args, model, output_capture_mode, output_text, latency_ms, success, input_tokens, output_tokens)
-    VALUES ('template', $TEMPLATE_ID, $TEMPLATE_VERSION, '$ARGS_JSON', '$MODEL', '$OUTPUT_CAPTURE_MODE', $OUTPUT_TEXT_SQL, $LATENCY, $SUCCESS, $INPUT_TOKENS, $OUTPUT_TOKENS);
+    INSERT INTO executions (entity_type, entity_id, entity_version, input_args, input_context, model, output_capture_mode, output_text, latency_ms, success, input_tokens, output_tokens)
+    VALUES ('template', $TEMPLATE_ID, $TEMPLATE_VERSION, '$ESCAPED_ARGS', '$OBSERVATION', $MODEL_SQL, '$OUTPUT_CAPTURE_MODE', $OUTPUT_TEXT_SQL, NULL, NULL, NULL, NULL);
     SELECT LAST_INSERT_ID();
 " | tail -1)
 
-echo "=== Execution logged ==="
+echo "=== Caller-supplied output recorded ==="
 echo "Execution ID: $EXEC_ID"
-echo "Latency: ${LATENCY}ms"
+echo "Outcome: unknown; model execution and accepted work were not verified."
 echo "Output capture: $OUTPUT_CAPTURE_MODE"
 echo ""
 echo "Rate this execution: pv-rate $EXEC_ID <1-5> [notes]"

@@ -444,6 +444,13 @@ set_entity_status() {
         return 0
     fi
 
+    if [ "$type" = template ] && [ "$target_status" != active ]; then
+        VAULT_DIR="$VAULT_DIR" "$SCRIPTS_DIR/pv-route-check" --retire-template "$name" >/dev/null || {
+            error "Cannot retire referenced template '$name'; run scripts/pv-route-check --retire-template '$name' for caller details"
+            return 1
+        }
+    fi
+
     dolt sql -q "UPDATE $table SET status = '$target_status' WHERE name = '$escaped_name'"
     updated_status=$(json_first_field "SELECT status FROM $table WHERE name = '$escaped_name' LIMIT 1" status)
     if [ "$updated_status" != "$target_status" ]; then
@@ -479,6 +486,13 @@ set_template_export_flag() {
     if [ "$current_export" = "$export_enabled" ]; then
         info "template '$name' export_to_pi already $export_enabled"
         return 0
+    fi
+
+    if [ "$export_enabled" != true ]; then
+        VAULT_DIR="$VAULT_DIR" "$SCRIPTS_DIR/pv-route-check" --retire-template "$name" >/dev/null || {
+            error "Cannot unexport referenced template '$name'; repair its callers first"
+            return 1
+        }
     fi
 
     if [ "$export_enabled" = "true" ]; then

@@ -76,6 +76,10 @@ echo ""
 # Quality & lint
 echo -e "${YELLOW}Quality & Lint:${NC}"
 check_output "pv quality check" "Quality checks passed" "$SCRIPTS_DIR/pv" quality check
+check "declared procedure routes resolve to available templates" "$SCRIPTS_DIR/pv-route-check"
+check "procedure route regression contracts" python3 tests/pv-route-integrity.py
+check "method discovery regression contracts" python3 tests/pv-discover-reuse.py
+check "referenced template retirement is guarded" "$SCRIPTS_DIR/pv-bats" tests/pv-route-retirement.bats
 check_output "pv analytics outputs" "Output Capture Analytics" "$SCRIPTS_DIR/pv" analytics outputs
 check_output "pv-lint targeted smoke" "=== Template: inversion ===" "$SCRIPTS_DIR/pv-lint" inversion
 check_output "pv-verify-ontology-contract" "Ontology contract verified" "$SCRIPTS_DIR/pv-verify-ontology-contract"
