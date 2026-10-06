@@ -72,6 +72,12 @@ Skills use `skills` + `skill_assets`; loops/workflows are classified template
 rows. These storage capabilities do not prove skill import or runtime binding.
 Do not execute a retrieved workflow/loop without its downstream dispatch check.
 
+For source-owned multi-file skill snapshots, use the read-only
+`pv skill-bundle plan` and exact-name `inspect` paths described in
+[skill snapshot boundary](docs/dev/skill-snapshot-boundary.md).
+Review the whole plan and pass real backup preflight before an explicit import;
+a stored/projection-ready snapshot does not relocate original authoring ownership.
+
 ```bash
 ./scripts/pv show template inversion
 ./scripts/pv show template meta-orchestration

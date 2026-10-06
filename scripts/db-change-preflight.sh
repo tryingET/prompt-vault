@@ -1,22 +1,38 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 STAGE=""
 EXCEPTION_FILE=""
+RECEIPT="${PV_BACKUP_ASSURANCE_RECEIPT:-}"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --stage)
-      STAGE="${2:-}"; shift 2 ;;
+      [[ -z "$STAGE" ]] || {
+        echo "--stage may be supplied only once" >&2; exit 2;
+      }
+      [[ $# -ge 2 && -n "$2" && "$2" != --* ]] || {
+        echo "--stage requires a value" >&2; exit 2;
+      }
+      STAGE="$2"; shift 2 ;;
     --exception-file)
-      EXCEPTION_FILE="${2:-}"; shift 2 ;;
+      [[ $# -ge 2 && -n "$2" && "$2" != --* ]] || {
+        echo "--exception-file requires a value" >&2; exit 2;
+      }
+      EXCEPTION_FILE="$2"; shift 2 ;;
+    --assurance-receipt)
+      [[ $# -ge 2 && -n "$2" && "$2" != --* ]] || {
+        echo "--assurance-receipt requires a value" >&2; exit 2;
+      }
+      RECEIPT="$2"; shift 2 ;;
     *)
       echo "unknown arg: $1" >&2; exit 2 ;;
   esac
 done
 
 if [[ -z "$STAGE" ]]; then
-  echo "usage: $0 --stage <db-dev|db-test|db-stage|db-prod> [--exception-file <path>]" >&2
+  echo "usage: $0 --stage <db-dev|db-test|db-stage|db-prod> [--assurance-receipt <path>] [--exception-file <path>]" >&2
   exit 2
 fi
 
@@ -26,22 +42,6 @@ case "$STAGE" in
 esac
 
 ok=true
-warn=false
-
-check_path() {
-  local label="$1" path="$2" required="$3"
-  if [[ -e "$path" ]]; then
-    echo "OK   $label: $path"
-  else
-    if [[ "$required" == "yes" ]]; then
-      echo "FAIL $label missing: $path" >&2
-      ok=false
-    else
-      echo "WARN $label missing (optional): $path" >&2
-      warn=true
-    fi
-  fi
-}
 
 echo "== Prompt Vault DB preflight =="
 echo "stage: $STAGE"
@@ -54,33 +54,44 @@ else
   ok=false
 fi
 
-# Backup quorum (required beyond db-dev)
-LOCAL_PATH="${PV_BACKUP_LOCAL_PATH:-./backups/local}"
-DS1621_PATH="${PV_BACKUP_DS1621_PATH:-/mnt/ds1621/prompt-vault}"
-OFFSITE_PATH="${PV_BACKUP_OFFSITE_PATH:-/mnt/offsite-nas/prompt-vault}"
-IMMUTABLE_PATH="${PV_BACKUP_IMMUTABLE_PATH:-/mnt/immutable/prompt-vault}"
-
+# Beyond db-dev, only a verified exact-state receipt admits (schema/backup-assurance-v1.json).
+# Filesystem paths, copies, flags and generic pass rows never do.
 if [[ "$STAGE" == "db-dev" ]]; then
   echo "OK   db-dev mode: backup quorum not required"
   echo "INFO low-risk exact-name row/content updates may proceed in db-dev with Dolt history"
 else
-  check_path "local backup" "$LOCAL_PATH" "yes"
-  check_path "DS1621 backup" "$DS1621_PATH" "yes"
-  check_path "offsite backup" "$OFFSITE_PATH" "yes"
-fi
-
-if [[ "$STAGE" == "db-prod" ]]; then
-  if [[ -e "$IMMUTABLE_PATH" ]]; then
-    echo "OK   immutable backup path present"
-  else
-    echo "WARN immutable backup missing (best-effort mode)" >&2
-    warn=true
-    if [[ -n "$EXCEPTION_FILE" && -f "$EXCEPTION_FILE" ]]; then
-      echo "OK   exception file present: $EXCEPTION_FILE"
+  verified=""
+  reason="no assurance receipt supplied (--assurance-receipt or PV_BACKUP_ASSURANCE_RECEIPT)"
+  if [[ -n "$RECEIPT" && -d "prompt-vault-db/.dolt" ]]; then
+    # The verifier prints JSON on success and one reason line on refusal.
+    if result="$(python3 "$SCRIPT_DIR/pv_backup_assurance.py" verify --receipt "$RECEIPT" --vault prompt-vault-db 2>&1)"; then
+      verified="$result"
     else
-      echo "FAIL exception file required for prod best-effort mode" >&2
+      reason="${result#backup assurance unable_to_verify: }"
+    fi
+  elif [[ -n "$RECEIPT" ]]; then
+    reason="exact-state assurance needs a Dolt vault (prompt-vault-db/.dolt)"
+  fi
+  if [[ -n "$verified" ]]; then
+    echo "OK   backup assurance verified: exact captured state, primary and offsite recovery records"
+    echo "ASSURED_IDENTITY $(python3 -c 'import json,sys; print(json.dumps(json.loads(sys.argv[1])["identity"], sort_keys=True))' "$verified")"
+    case "$STAGE" in
+      db-stage) gates="Gate B (restore smoke test and migration rehearsal)" ;;
+      db-prod) gates="Gate B (restore smoke test and migration rehearsal) and Gate C (change record and window)" ;;
+      *) gates="" ;;
+    esac
+    if [[ -n "$gates" ]]; then
+      echo "FAIL $STAGE also needs $gates; these owner actions are not verified by this script" >&2
       ok=false
     fi
+  else
+    echo "FAIL backup assurance unable_to_verify: $reason; no admission granted" >&2
+    echo "INFO path variables are not recovery evidence; absent mounts do not prove absent backups" >&2
+    echo "INFO primary recovery, offsite propagation, offsite recovery and exact-state admission are separate claims" >&2
+    if [[ -n "$EXCEPTION_FILE" ]]; then
+      echo "INFO exception file cannot substitute for required local/primary/offsite recovery evidence" >&2
+    fi
+    ok=false
   fi
 fi
 
@@ -89,8 +100,4 @@ if [[ "$ok" == false ]]; then
   exit 1
 fi
 
-if [[ "$warn" == true ]]; then
-  echo "result: PASS_WITH_WARNINGS"
-else
-  echo "result: PASS"
-fi
+echo "result: PASS"

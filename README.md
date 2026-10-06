@@ -137,6 +137,20 @@ Workflow and loop specifications are template rows classified by
 `./scripts/pv templates control_mode=loop` lists loop specifications;
 execution bindings and supervision remain downstream Pi/runtime-owned.
 
+Use `./scripts/pv skill-bundle plan|import|inspect|export|check` for exact,
+source-hashed skill snapshots and full text/binary/executable bundle readback.
+Original packages remain authoring owners; plans are read-only and `--apply` is
+explicit. Multi-skill adoption requires real `db-test` backup quorum. The initial
+[first-party catalogue](.pi/skill-snapshot-catalogue.json) is an approved selection,
+not proof its rows were imported. See [snapshot scope and failure contract](docs/dev/skill-snapshot-boundary.md).
+Do not use the legacy bulk importer to populate this catalogue: it also changes
+prompts/governance and commits the whole working set.
+
+Multi-skill and other `db-test` mutations need a verified backup assurance receipt:
+`./scripts/pv backup-assurance bind|verify` checks AK primary and offsite recovery
+records against the live vault's exact state. See the
+[stage/backup policy](docs/reference/db-stage-backup-policy.md).
+
 ## Repo direction and session startup
 
 Read `AGENTS.md`, [native direction workflow](docs/project/direction-workflow.md),
@@ -213,6 +227,7 @@ See [scope, update flags and failure recovery](docs/dev/pi-export-projection-bou
 - bash 4.0+
 - jq
 - fzf (optional, for TUI)
+- PyYAML (for `pv skill-bundle` YAML frontmatter parsing; commands never auto-install it)
 
 ## Verification
 
@@ -230,6 +245,7 @@ ak direction check -F json               # native direction/link consistency
 |------|--------------|
 | [QUICKSTART.md](QUICKSTART.md) | Get started in 5 minutes |
 | [Native direction workflow](docs/project/direction-workflow.md) | Strategic frames, implementation waves, task authority and historical-doc boundary |
+| [Skill snapshot boundary](docs/dev/skill-snapshot-boundary.md) | Source-owned skill catalogue, guarded import, complete bundle projections and backup-gated live adoption |
 | [CHANGELOG.md](CHANGELOG.md) | Version history and changes |
 | [WORKFLOWS.md](docs/WORKFLOWS.md) | Team collaboration, CI/CD, advanced patterns |
 | [COMPARISON.md](docs/COMPARISON.md) | Deciding vault vs flat files |

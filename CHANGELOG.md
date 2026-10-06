@@ -15,6 +15,10 @@ All notable changes to prompt-vault are documented here.
 
 ### Added
 
+- `pv skill-bundle plan|import|inspect|export|check`: exact source-hashed skill snapshots, version/asset CAS and no-op semantics, and complete text/binary/executable-intent bundle projections. Plans are read-only; apply is explicit. Original packages remain authoring owners; no prompt import/export or implicit commit. Multi-skill adoption requires real `db-test` backup quorum.
+- `pv backup-assurance bind|verify` and `schema/backup-assurance-v1.json`: exact-state backup assurance. A receipt binds a capture manifest, a Restic snapshot and AK primary/offsite `prompt-vault/recovery-record/v1` evidence; verification recomputes the live roots and table digests. `db-change-preflight.sh --assurance-receipt` admits `db-test` only on an exact match; `db-stage`/`db-prod` still need owner Gates B/C. The skill import transaction also guards the verified staged and working roots.
+- Curated first-party skill catalogue and isolated real-Dolt regressions. Live population is a separate backup-gated operation, not established by fixture success. The optional command requires installed PyYAML; no schema migration, compatibility-epoch change, new executor binding or package auto-install.
+
 - `docs/dev/fzf-spike-slice0.md` with cross-context fzf viability evidence for ADR-0001.
 - `docs/dev/slice4-validation-matrix.md` with mixed-session smoke and failure-mode evidence.
 - `pv analytics outputs` for privacy-safe output-capture analytics: aggregate private/public coverage, per-entity capture counts, and public-only preview rows.

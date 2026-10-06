@@ -1,0 +1,61 @@
+{
+  "schema": "prompt-vault/skill-catalogue/v1",
+  "authority": "original_source_package",
+  "scope": "Curated first-party snapshots only; no third-party or synced packages. Live adoption is separate and requires db-test backup quorum.",
+  "skills": [
+    {
+      "name": "prompt-vault-operator",
+      "root": "repo",
+      "path": ".pi/skills/prompt-vault-operator",
+      "source_owner": "core/prompt-vault",
+      "owner_company": "core",
+      "visibility_companies": ["core", "software", "finance", "house", "health", "teaching", "holding"]
+    },
+    {
+      "name": "ai-society-core-repo-router",
+      "root": "agent",
+      "path": "ai-society-core-repo-router",
+      "source_owner": "AI Society core repo routing skill package",
+      "owner_company": "core",
+      "visibility_companies": ["core", "software", "finance", "house", "health", "teaching", "holding"]
+    },
+    {
+      "name": "softwareco-owned-repo-router",
+      "root": "agent",
+      "path": "softwareco-owned-repo-router",
+      "source_owner": "softwareco owned repo routing skill package",
+      "owner_company": "software",
+      "visibility_companies": ["core", "software"]
+    },
+    {
+      "name": "softwareco-infra-repo-router",
+      "root": "agent",
+      "path": "softwareco-infra-repo-router",
+      "source_owner": "softwareco infra repo routing skill package",
+      "owner_company": "software",
+      "visibility_companies": ["core", "software"]
+    },
+    {
+      "name": "agent-skill-engineer",
+      "root": "agent",
+      "path": "agent-skill-engineer",
+      "source_owner": "procesio-cli maintainers (original skill metadata)",
+      "owner_company": "software",
+      "visibility_companies": ["core", "software"]
+    }
+  ],
+  "excluded_from_initial_catalogue": [
+    {
+      "name": "refactorops",
+      "reason": "ASE audit found packaged evaluator-only evals/evals.json; do not copy it into consumed Vault snapshots or change its source package from this repo."
+    },
+    {
+      "name": "pi-session-jsonl",
+      "reason": "ASE delivery audit reports nested fixture resources and deliberately malformed fixture parsing; requires source-owner adjudication rather than silently excluding or rewriting regression fixtures."
+    },
+    {
+      "name": "ai-society-runtime-recipes",
+      "reason": "ASE audit resolves AK-owned script references as package-local missing resources; requires explicit external-resource adjudication rather than source-owner mutation here."
+    }
+  ]
+}

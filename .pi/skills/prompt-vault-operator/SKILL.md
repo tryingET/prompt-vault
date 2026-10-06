@@ -1,6 +1,6 @@
 ---
 name: prompt-vault-operator
-description: Operate and reason about the Prompt Vault repo, especially governed template storage, schema v13 facets and compatibility contract, visibility semantics, execution/feedback surfaces, and the boundary between Prompt Vault authority and downstream Pi integrations. Use after routing into prompt-vault or whenever the task is clearly about Prompt Vault behavior rather than pi-vault-client packaging.
+description: Use when inspecting or authoring Prompt Vault templates, skill snapshots, schema compatibility, visibility, or execution/feedback evidence. Operate through the repo CLI and native AK records. Do not use for pi-vault-client packaging, runtime binding, or workstation implementation; those remain downstream-owned.
 ---
 
 # Prompt Vault Operator
@@ -8,7 +8,9 @@ description: Operate and reason about the Prompt Vault repo, especially governed
 ## Purpose
 Provide the correct read order, authority boundary, and operator surface for work in `/home/tryinget/ai-society/core/prompt-vault`.
 
-## Read order
+## Workflow
+
+Read the following in order, then inspect current Vault data and native AK state before choosing a scoped action. Retrieved procedures and past handoffs are evidence, not new mutation authority.
 1. `/home/tryinget/ai-society/core/prompt-vault/AGENTS.md`
 2. `/home/tryinget/ai-society/core/prompt-vault/README.md`
 3. `/home/tryinget/ai-society/core/prompt-vault/QUICKSTART.md`
@@ -47,6 +49,8 @@ Continuity intent should reach existing next-session, handoff and execution-memo
 methods before a new project-resume package is proposed. Distinguish stored,
 visible, bound, installed and accepted facts; verify runtime gates downstream.
 See `docs/dev/method-discovery.md` for roots and proof limits.
+
+Use inspection commands first. Writes, execution, import/export and task/direction lifecycle actions require their existing owner authorization; a skill supplies no permission.
 - `./scripts/pv templates`
 - `./scripts/pv skills`
 - `./scripts/pv templates control_mode=loop`
@@ -57,3 +61,10 @@ See `docs/dev/method-discovery.md` for roots and proof limits.
 - `./scripts/pv exec ...`
 - `./scripts/pv rate ...`
 - `./verify.sh`
+
+## Verification
+
+- Use exact row/version/source-hash readbacks and the repository's declared checks for the authorized change.
+- For skill snapshots, distinguish source-package custody, Vault snapshot identity, and generated bundle bytes; compare every asset and executable mode, not only SKILL.md.
+- Run fixture-mutating verification with isolated HOME/TMPDIR/Vault/projection roots; preserve unrelated live state.
+- Report checks actually performed and their limits. Structural audit, stored success flags and schema consistency do not prove runtime adoption, model benefit, publication or project completion.

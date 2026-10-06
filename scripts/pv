@@ -986,6 +986,8 @@ Templates:
 
 Skills:
   skills                   List all skills
+  skill-bundle <cmd>        Exact snapshot plan/import/inspect/export/check (plan by default)
+  backup-assurance <cmd>    Bind/verify an exact-state backup receipt (db-test admission)
   new-skill <name>         Create new skill
   show skill <name>        Show skill details
   history skill <name>     Show version history
@@ -1079,6 +1081,8 @@ EOF
 # Main
 case "${1:-}" in
     scoped) exec "$SCRIPT_DIR/pv-scoped" "${@:2}" ;;
+    skill-bundle) exec "$SCRIPT_DIR/pv-skill-bundle" "${@:2}" ;;
+    backup-assurance) exec "$SCRIPT_DIR/pv-backup-assurance" "${@:2}" ;;
     init) cmd_init "${@:2}" ;;
     import) cmd_import "${@:2}" ;;
     export) cmd_export "${@:2}" ;;
