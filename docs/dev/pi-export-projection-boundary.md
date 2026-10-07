@@ -176,10 +176,12 @@ is required, including each owner when selecting across owners. It is not a
 new autonomous cross-company client tool. Prompt bodies remain DB-only canon;
 input files and installed projections are temporary/derived, not repo sources.
 
-This bounded version supports only existing, active, Pi-export-enabled,
-text-safe `one_shot` + `bounded` templates. It reuses
+This scoped version supports only existing, active, Pi-export-enabled,
+text-safe `one_shot` templates: `bounded` entries, and cognitive entries with
+`napkin` or `structured` formalization. Non-cognitive entries remain bounded-only.
+It reuses
 `scripts/pv-export-policy.py` and refuses gated, unbound, malformed, unknown,
-router, other formalization, unpublished and inactive selections. No delete,
+router, unsupported formalization, unpublished and inactive selections. No delete,
 unpublish, skill publishing, or broad-export fallback is provided.
 
 ### Plan, apply, check

@@ -30,9 +30,13 @@ def selected_name(name):
 def projection(row):
     selected_name(row['name'])
     item = policy.classify(row, DIMENSIONS, REQUIRED)
+    # Add only text-safe cognitive napkin/structured authoring. Procedures retain the bounded-only
+    # restriction; shared raw-export classification still refuses gated/unknown content.
+    supported_level = row['formalization_level'] == 'bounded' or (
+        row['artifact_kind'] == 'cognitive' and row['formalization_level'] in ('napkin', 'structured'))
     if (row['status'] != 'active' or row['export_to_pi'] not in (True, 1) or
             item['disposition'] != 'exported' or row['control_mode'] != 'one_shot' or
-            row['formalization_level'] != 'bounded'):
+            not supported_level):
         raise ValueError(f'projection policy refused {row["name"]}: '
                          f'{item.get("reason", "requires active published bounded one_shot")}')
     return item

@@ -196,6 +196,23 @@ class Publishing(unittest.TestCase):
         self.command(*self.update_args(), '--apply', status=1)
         self.assertEqual(db.get_row('commit'), self.rows['commit'])
 
+    def test_cognitive_napkin_and_structured_exact_update(self):
+        for level in ('napkin', 'structured'):
+            with self.subTest(level=level):
+                self.content.write_text('---\ndescription: preserve\n---\nCognitive repair ' + level + '\n')
+                db.query(f"UPDATE prompt_templates SET artifact_kind='cognitive', formalization_level={db.literal(level)} WHERE name='commit';", write=True)
+                self.rows['commit'] = db.get_row('commit')
+                before = self.unrelated()
+                self.command(*self.update_args(), '--dry-run')
+                self.command(*self.update_args(), '--apply')
+                after = db.get_row('commit')
+                self.assertEqual(after['version'], self.rows['commit']['version'] + 1)
+                self.assertEqual(after['content'], self.content.read_text())
+                self.assertEqual(after['owner_company'], 'core')
+                self.assertEqual(after['formalization_level'], level)
+                self.assertEqual(self.unrelated(), before)
+                self.command('check', '--name', 'commit')
+
     def test_gate_and_unpublished_refusal(self):
         before = self.snapshot()
         for field, value in [('formalization_level', 'workflow'), ('control_mode', 'loop'),
