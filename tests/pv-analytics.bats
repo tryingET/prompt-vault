@@ -77,7 +77,8 @@ teardown() {
 }
 
 @test "pv-analytics overview counts unique entities by typed identity" {
-    colliding_id=$(dolt --data-dir "$TEST_VAULT_DIR" sql -r csv -q "SELECT MIN(entity_id) FROM executions WHERE entity_type = 'template'" | tail -1)
+    # A template execution id that no stored skill uses yet: the new skill shares the id, not the row.
+    colliding_id=$(dolt --data-dir "$TEST_VAULT_DIR" sql -r csv -q "SELECT MIN(entity_id) FROM executions WHERE entity_type = 'template' AND entity_id NOT IN (SELECT id FROM skills)" | tail -1)
     [ -n "$colliding_id" ]
 
     baseline_typed=$(dolt --data-dir "$TEST_VAULT_DIR" sql -r csv -q "SELECT COUNT(DISTINCT CONCAT(entity_type, ':', entity_id)) FROM executions" | tail -1)
