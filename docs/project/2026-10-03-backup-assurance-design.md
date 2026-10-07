@@ -8,6 +8,12 @@ type: reference
 
 # Backup assurance: exact-state requirement, accepted interface and containment
 
+## Superseded offsite rule, 2026-10-07
+
+[ADR-0002](../decisions/ADR-0002-backup-assurance-offsite-drill.md) replaces the per-change
+offsite restore with an offsite drill no older than 90 days; the primary recovery stays exact.
+The contract is now `schema/backup-assurance.json` (v2). The sections below record v1.
+
 ## Accepted interface, 2026-10-06
 
 The owner instructed completion on 2026-10-06 (AK6505 evidence14192). The
@@ -19,7 +25,7 @@ down; the sections after it are kept as the record of the containment step.
 | Source identity | `scripts/pv_backup_assurance.py`: live branch, HEAD, staged/working roots, schema version and all table/schema digests, with the workstation's exact serialization |
 | Stable capture | Workstation capture manifest (`workstation/dolt-stable-capture/v1`), bound by path and SHA-256 in the receipt |
 | Local/primary and offsite recovery | `prompt-vault/recovery-record/v1`, written by the workstation helper's `byteproof`, `probe` and `record` subcommands after a verified restore, stored as AK `backup_recovery_record` evidence by the owning repo |
-| Producer verification | `schema/backup-assurance-v1.json` fixes the record schema, owner repos, origins and restore flags; the verifier re-reads AK on every check |
+| Producer verification | `schema/backup-assurance.json` fixes the record schema, owner repos, origins and restore flags; the verifier re-reads AK on every check |
 | Exact mutation binding | Preflight prints the verified identity; the skill import transaction adds `DOLT_HASHOF_DB('STAGED')` and `DOLT_HASHOF_DB('WORKING')` to its guard and writes nothing on a mismatch |
 | Validity and invalidation | Exact state only: any change to the live roots or table digests invalidates the receipt; time never does |
 

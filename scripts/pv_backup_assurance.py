@@ -1,11 +1,13 @@
-"""Exact-state backup assurance: bind and verify a receipt against AK recovery records and the live vault.
+"""Backup assurance (ADR-0002): bind and verify a receipt against AK recovery records and the live vault.
 
-Contract: schema/backup-assurance-v1.json. A receipt names one workstation capture manifest, one Restic
-snapshot and two AK evidence records (primary and offsite recovery). Verification re-reads all of them
-and recomputes the vault's native identity and every table/schema digest; any difference refuses.
+Contract: schema/backup-assurance.json. A receipt names one workstation capture manifest, one Restic
+snapshot and two AK evidence records: a primary recovery of exactly that capture and an offsite
+recovery drill of the same vault, no older than the contract's limit. Verification re-reads both and
+recomputes the vault's native identity and every table/schema digest; any difference refuses.
 No backup, restore, import or AK write happens here.
 """
 import argparse
+from datetime import datetime, timezone
 import hashlib
 import json
 import os
@@ -15,7 +17,7 @@ import subprocess
 import sys
 
 SCRIPTS = Path(__file__).resolve().parent
-CONTRACT = json.loads((SCRIPTS.parent / 'schema/backup-assurance-v1.json').read_text(encoding='utf-8'))
+CONTRACT = json.loads((SCRIPTS.parent / 'schema/backup-assurance.json').read_text(encoding='utf-8'))
 ALGORITHM = CONTRACT['digest_algorithm']
 RECEIPT = CONTRACT['receipt_schema']
 IDENTIFIER = re.compile(r'^[A-Za-z_][A-Za-z0-9_]*$')
@@ -96,7 +98,20 @@ def evidence(number):
         raise Unverified(f'AK evidence {number} is not JSON') from exc
 
 
+def drill_age_days(row):
+    """Age of an AK evidence row from its checked_at; None when unreadable."""
+    try:
+        stamp = re.sub(r'(\.\d{6})\d+', r'\1', str(row.get('checked_at')))
+        checked = datetime.fromisoformat(stamp.replace('Z', '+00:00'))
+    except ValueError:
+        return None
+    if checked.tzinfo is None:
+        return None
+    return (datetime.now(timezone.utc) - checked).total_seconds() / 86400
+
+
 def check_record(kind, row, receipt, manifest, manifest_sha):
+    """Primary records bind the exact capture; offsite records are a recent drill of the same vault."""
     rule = CONTRACT['required_records'][kind]
     details = row.get('details') if isinstance(row, dict) else None
     checks = [
@@ -109,18 +124,27 @@ def check_record(kind, row, receipt, manifest, manifest_sha):
         probe = details.get('native_probe') or {}
         checks += [
             (details.get('kind') == kind and details.get('origin') == rule['origin'], 'kind/origin mismatch'),
-            (details.get('snapshot_id') == receipt['snapshot_id'], 'other snapshot'),
             (details.get('vault') == receipt['vault'], 'other vault'),
-            (details.get('capture_manifest_sha256') == manifest_sha, 'other capture manifest'),
-            (details.get('restored_manifest_sha256') == manifest_sha, 'restored manifest differs'),
+            (HEX64.fullmatch(str(details.get('capture_manifest_sha256'))) is not None, 'no capture manifest hash'),
+            (details.get('restored_manifest_sha256') == details.get('capture_manifest_sha256'),
+             'restored manifest differs from its capture'),
             (details.get('restored_files_match_manifest') is True, 'restored files not matched'),
             (details.get('restore') == CONTRACT['restore'], 'restore not exit 0 with --verify and --overwrite never'),
             (probe.get('fsck_ok') is True, 'native fsck not clean'),
             (probe.get('digest_algorithm') == ALGORITHM, 'other digest algorithm'),
-            (probe.get('identity') == manifest['source_identity'], 'recovered identity differs from capture'),
-            (probe.get('tables_sha256') == digest(manifest['tables']), 'recovered tables differ from capture'),
             (bool(details.get('repository')), 'repository missing'),
         ]
+        if kind == 'primary':
+            checks += [
+                (details.get('snapshot_id') == receipt['snapshot_id'], 'other snapshot'),
+                (details.get('capture_manifest_sha256') == manifest_sha, 'other capture manifest'),
+                (probe.get('identity') == manifest['source_identity'], 'recovered identity differs from capture'),
+                (probe.get('tables_sha256') == digest(manifest['tables']), 'recovered tables differ from capture'),
+            ]
+        else:
+            age, limit = drill_age_days(row), CONTRACT['offsite_drill_max_age_days']
+            checks += [(age is not None, 'drill time unreadable'),
+                       (age is not None and age <= limit, f'drill older than {limit} days; run a new offsite drill')]
     for ok, reason in checks:
         if not ok:
             raise Unverified(f'{kind} recovery record {receipt["evidence"][kind]}: {reason}')

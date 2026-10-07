@@ -84,9 +84,9 @@ bypass its stage, invent backup paths, or treat fixture directories as live back
 Pass a verified backup assurance receipt (`PV_BACKUP_ASSURANCE_RECEIPT` or the
 preflight's `--assurance-receipt`); without one the preflight refuses with
 `unable_to_verify`. Directory copies, immutable paths, exception notes and
-arbitrary JSON cannot grant admission. The operator selected exact captured-state
-local/primary and independent offsite recovery, with zero accepted drift at
-mutation admission. Follow the [stage/backup policy](../reference/db-stage-backup-policy.md)
+arbitrary JSON cannot grant admission. Per ADR-0002 the receipt binds an exact
+primary recovery of the current state and an offsite drill no older than 90 days,
+with zero accepted drift at mutation admission. Follow the [stage/backup policy](../reference/db-stage-backup-policy.md)
 and [assurance design](../project/2026-10-03-backup-assurance-design.md).
 The transaction guard binds selected rows/assets, branch/HEAD and, for a `db-test`
 import, the verified staged and working roots. A refused guard writes nothing.

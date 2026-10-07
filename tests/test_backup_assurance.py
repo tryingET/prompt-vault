@@ -2,6 +2,7 @@
 
 AK evidence comes from a fixture `ak` on PATH; no live Vault, AK record or backup is touched.
 """
+from datetime import datetime, timedelta, timezone
 import hashlib
 import json
 import os
@@ -103,9 +104,11 @@ class Assurance(unittest.TestCase):
         value.update(changes)
         return value
 
-    def save_evidence(self, number, kind, details, **changes):
+    def save_evidence(self, number, kind, details, age_days=1, **changes):
+        checked = datetime.now(timezone.utc) - timedelta(days=age_days)
         row = {'id': number, 'task_id': number, 'repo': {'primary': WORKSTATION, 'offsite': DS1621}[kind],
-               'check_type': 'backup_recovery_record', 'result': 'pass', 'details': details}
+               'check_type': 'backup_recovery_record', 'result': 'pass', 'details': details,
+               'checked_at': checked.isoformat().replace('+00:00', '123+00:00')}
         row.update(changes)
         (self.evidence / f'{number}.json').write_text(json.dumps(row))
 
@@ -194,9 +197,31 @@ class Assurance(unittest.TestCase):
         self.manifest.write_text(self.manifest.read_text() + ' ')
         self.refused('capture manifest')
 
-    def test_given_offsite_record_for_other_snapshot_or_capture_when_bound_then_refused(self):
+    def test_given_primary_record_for_other_snapshot_or_capture_when_bound_then_refused(self):
         for changes in ({'snapshot_id': '8' * 64}, {'capture_manifest_sha256': 'f' * 64},
                         {'restored_manifest_sha256': 'f' * 64}):
+            with self.subTest(changes=changes):
+                self.save_evidence(101, 'primary', self.record('primary', **changes))
+                self.assertIn('primary', self.bind(status=1).stderr)
+
+    def test_given_offsite_drill_of_an_earlier_capture_within_90_days_when_bound_then_admitted(self):
+        earlier = dict(self.manifest_value['source_identity'], working_root='0' * 32)
+        drill = self.record('offsite', snapshot_id='8' * 64, capture_manifest_sha256='f' * 64,
+                            restored_manifest_sha256='f' * 64,
+                            native_probe=dict(self.records['offsite']['native_probe'], identity=earlier,
+                                              tables_sha256='e' * 64))
+        self.save_evidence(202, 'offsite', drill, age_days=89)
+        self.bind()
+        self.assertIn('result: PASS', self.preflight('db-test', 0))
+
+    def test_given_offsite_drill_older_than_90_days_when_bound_then_refused(self):
+        self.save_evidence(202, 'offsite', self.records['offsite'], age_days=91)
+        self.assertIn('older than 90 days', self.bind(status=1).stderr)
+        self.save_evidence(202, 'offsite', self.records['offsite'], checked_at='not a time')
+        self.assertIn('offsite', self.bind(status=1).stderr)
+
+    def test_given_offsite_drill_for_another_vault_or_inconsistent_when_bound_then_refused(self):
+        for changes in ({'vault': '/elsewhere/prompt-vault-db'}, {'restored_manifest_sha256': 'f' * 64}):
             with self.subTest(changes=changes):
                 self.save_evidence(202, 'offsite', self.record('offsite', **changes))
                 self.assertIn('offsite', self.bind(status=1).stderr)

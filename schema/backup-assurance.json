@@ -1,0 +1,37 @@
+{
+  "schema": "prompt-vault/backup-assurance-contract/v2",
+  "owner": "core/prompt-vault (consumer); producers: softwareco/infra/workstation (capture, primary recovery), softwareco/infra/ds1621-admin (offsite recovery)",
+  "decision": "ADR-0002, 2026-10-07 (owner: the per-mutation offsite restore is too heavy). A db-test mutation needs the exact captured state recovered from the primary repository, and an offsite recovery drill of the same vault no older than offsite_drill_max_age_days. Replaces the 2026-10-03 rule that also required an offsite restore of the exact state for every mutation.",
+  "digest_algorithm": "sql-hex-json-array-row-sha256/ordered-native-rows-json/v1",
+  "receipt_schema": "prompt-vault/backup-assurance-receipt/v1",
+  "record_schema": "prompt-vault/recovery-record/v1",
+  "evidence_check_type": "backup_recovery_record",
+  "required_records": {
+    "primary": {
+      "owner_repo": "/home/tryinget/ai-society/softwareco/infra/workstation",
+      "origin": "primary_repository",
+      "binding": "exact: same snapshot and capture manifest as the receipt; recovered identity and tables equal the capture"
+    },
+    "offsite": {
+      "owner_repo": "/home/tryinget/ai-society/softwareco/infra/ds1621-admin",
+      "origin": "offsite_archive_export",
+      "binding": "drill: same vault, any earlier capture; restored manifest equals its own capture manifest; AK checked_at no older than offsite_drill_max_age_days"
+    }
+  },
+  "offsite_drill_max_age_days": 90,
+  "restore": {
+    "exit": 0,
+    "verify": true,
+    "overwrite": "never"
+  },
+  "validity": "A receipt verifies only while the live vault's branch, HEAD, staged root, working root and every table/schema digest equal the captured manifest, and while its offsite drill is no older than offsite_drill_max_age_days.",
+  "accepted_risk": "Between drills, changes reach the offsite archive only through the nightly Hyper Backup run, which this verifier does not observe; a broken offsite job is caught at the next drill at the latest.",
+  "admits_stages": [
+    "db-test"
+  ],
+  "owner_gates_not_verified": {
+    "db-stage": "Gate B: restore smoke test and migration rehearsal on a restored copy",
+    "db-prod": "Gates B and C: rehearsal plus change record and change window"
+  },
+  "mutation_binding": "The admitted transaction re-checks branch, HEAD, staged root and working root against the verified identity before any write and admits nothing on a mismatch."
+}

@@ -147,8 +147,9 @@ Do not use the legacy bulk importer to populate this catalogue: it also changes
 prompts/governance and commits the whole working set.
 
 Multi-skill and other `db-test` mutations need a verified backup assurance receipt:
-`./scripts/pv backup-assurance bind|verify` checks AK primary and offsite recovery
-records against the live vault's exact state. See the
+`./scripts/pv backup-assurance bind|verify` checks an exact primary recovery record
+and an offsite drill no older than 90 days ([ADR-0002](docs/decisions/ADR-0002-backup-assurance-offsite-drill.md))
+against the live vault's exact state. See the
 [stage/backup policy](docs/reference/db-stage-backup-policy.md).
 
 ## Repo direction and session startup

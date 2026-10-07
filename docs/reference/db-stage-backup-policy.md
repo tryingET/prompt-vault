@@ -37,26 +37,28 @@ Escalate to `db-test` or beyond for bulk mutations, destructive changes, migrati
 ### Gate A (required for all stages beyond `db-dev`)
 - Database identity verified (`prompt-vault.db` or `prompt-vault-db/.dolt` exists)
 - Working tree clean enough for audit (`git status` reviewed)
-- Actual recoverability of the exact captured Dolt state is verified locally,
-  from primary NAS (DS1621), and from an independent offsite failure domain.
-- Branch/HEAD, staged/working roots and complete schema/row fingerprints bind
-  that recovery to the admitted mutation. Zero state drift is accepted.
+- The exact captured Dolt state is recovered from the primary NAS (DS1621), and an
+  offsite recovery drill of the same vault is no older than 90 days
+  ([ADR-0002](../decisions/ADR-0002-backup-assurance-offsite-drill.md), 2026-10-07; it
+  replaces the 2026-10-03 rule that required an offsite restore for every change).
+- Branch/HEAD, staged/working roots and complete schema/row fingerprints bind the
+  primary recovery to the admitted mutation. Zero state drift is accepted.
 - A selected share, successful job, readable archive, mounted path, local copy,
   or generic evidence `pass` row is not sufficient recovery or admission proof.
 
-The operator selected this exact-state requirement on 2026-10-03. Since
-2026-10-06 the shared preflight verifies it through a **backup assurance receipt**
-(contract: [`schema/backup-assurance-v1.json`](../../schema/backup-assurance-v1.json)):
+The shared preflight verifies this through a **backup assurance receipt**
+(contract: [`schema/backup-assurance.json`](../../schema/backup-assurance.json)):
 
 - The receipt names the vault, one workstation capture manifest (by path and
-  SHA-256), one Restic snapshot and two AK evidence rows.
-- Each AK row must be a `backup_recovery_record` from its owner repo:
-  `prompt-vault/recovery-record/v1` from the workstation for primary recovery and
-  from ds1621-admin for offsite recovery.
-- Each record must show the same snapshot and capture, a restore that exited 0 with
-  `--verify` and `--overwrite never`, every restored byte matching, a clean native
-  fsck, and recovered roots and table digests equal to the capture. The two records
-  must name different repositories.
+  SHA-256), one Restic snapshot and two AK evidence rows of check type
+  `backup_recovery_record` (`prompt-vault/recovery-record/v1`).
+- The **primary** record (workstation) must show the same snapshot and capture,
+  a restore that exited 0 with `--verify` and `--overwrite never`, every restored
+  byte matching, a clean native fsck, and recovered roots and table digests equal
+  to the capture.
+- The **offsite** record (ds1621-admin) may be a drill of any earlier capture of
+  the same vault. It must show the same restore and fsck guarantees for its own
+  capture, name another repository, and have been recorded in AK within 90 days.
 - At preflight time the verifier recomputes the live branch, HEAD, staged root,
   working root and every table/schema digest. Any difference refuses: a receipt is
   valid only while the vault still holds exactly the captured state.
@@ -96,10 +98,12 @@ this script does not verify them merely because an argument is supplied.
 # Low-risk local content edit
 ./scripts/db-change-preflight.sh --stage db-dev
 
-# Bind a receipt once the capture's primary and offsite recovery records are in AK
+# 1. Fresh capture + primary recovery record of the current state (workstation; about a minute)
+~/ai-society/softwareco/infra/workstation/scripts/backup/prompt-vault-primary-assurance.sh --task "$AK_TASK"
+# 2. Bind it with the latest offsite drill record (AK evidence id, at most 90 days old)
 ./scripts/pv backup-assurance bind --vault prompt-vault-db \
   --capture-manifest "$CAPTURE/capture-manifest.json" --snapshot-id "$SNAPSHOT_ID" \
-  --primary-evidence "$PRIMARY_EVIDENCE_ID" --offsite-evidence "$OFFSITE_EVIDENCE_ID" \
+  --primary-evidence "$PRIMARY_EVIDENCE_ID" --offsite-evidence "$OFFSITE_DRILL_EVIDENCE_ID" \
   --out "$RECEIPT"
 
 # Beyond db-dev: db-test passes only while the receipt verifies against the live vault
@@ -107,10 +111,11 @@ this script does not verify them merely because an argument is supplied.
 ./scripts/db-change-preflight.sh --stage db-stage --assurance-receipt "$RECEIPT"   # still refuses: Gate B
 ```
 
-Producers write the records with the workstation helper
-(`softwareco/infra/workstation/scripts/backup/prompt-vault-recovery-proof.py
-byteproof|probe|record`) after a verified restore into fresh scratch, then record
-them with `ak evidence record --check-type backup_recovery_record`.
+Offsite drills (ds1621-admin): the owner exports the Hyper Backup archive with DSM
+`Copy to…` into a temporary share; an agent restores snapshot bytes from it with
+`--no-lock --no-cache --verify`, writes `record --kind offsite` with the workstation
+helper and records it in AK. The runbook is
+`softwareco/infra/ds1621-admin/docs/project/2026-10-04-prompt-vault-offsite-recovery-proof.md`.
 
 ## Legacy location hints are not admission
 

@@ -17,6 +17,7 @@ See [CRYSTALLIZED.md](../CRYSTALLIZED.md) for the full set of patterns and desig
 | Schema versioning | Enables safe migrations |
 | Optional output capture with explicit privacy mode | Preserve privacy-by-default while allowing auditable execution evidence when explicitly captured |
 | [ADR-0001: Unified FZF Selection](./ADR-0001-unified-fzf-selection-ptx-vault-client.md) | Eliminate PTX/vault-client editor conflicts with shared fuzzy selection flow |
+| [ADR-0002: Backup assurance with offsite drill](./ADR-0002-backup-assurance-offsite-drill.md) | Bulk changes need exact primary recovery each time and an offsite drill no older than 90 days |
 
 ## Template
 

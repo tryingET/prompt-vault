@@ -54,7 +54,7 @@ else
   ok=false
 fi
 
-# Beyond db-dev, only a verified exact-state receipt admits (schema/backup-assurance-v1.json).
+# Beyond db-dev, only a verified receipt admits (schema/backup-assurance.json, ADR-0002).
 # Filesystem paths, copies, flags and generic pass rows never do.
 if [[ "$STAGE" == "db-dev" ]]; then
   echo "OK   db-dev mode: backup quorum not required"
@@ -73,7 +73,7 @@ else
     reason="exact-state assurance needs a Dolt vault (prompt-vault-db/.dolt)"
   fi
   if [[ -n "$verified" ]]; then
-    echo "OK   backup assurance verified: exact captured state, primary and offsite recovery records"
+    echo "OK   backup assurance verified: exact captured state recovered from primary, offsite drill current"
     echo "ASSURED_IDENTITY $(python3 -c 'import json,sys; print(json.dumps(json.loads(sys.argv[1])["identity"], sort_keys=True))' "$verified")"
     case "$STAGE" in
       db-stage) gates="Gate B (restore smoke test and migration rehearsal)" ;;
